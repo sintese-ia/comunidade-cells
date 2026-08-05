@@ -42,6 +42,35 @@ jobs:
           echo "easypanel → HTTP $code"
           [ "$code" = "200" ] || { echo "::error::painel inacessível também do runner (HTTP $code)"; exit 1; }
 
+      - name: env vars
+        if: ${{ !inputs.apenas_deploy }}
+        env:
+          DB_PASS: ${{ secrets.DB_PASS }}
+          META_TOKEN: ${{ secrets.META_TOKEN }}
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+          META_VERIFY_TOKEN: ${{ secrets.META_VERIFY_TOKEN }}
+          META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
+          PANEL_SENHA: ${{ secrets.PANEL_SENHA }}
+        run: |
+          # META_APP_SECRET pode estar vazio: sem ele o webhook de story recusa POST de propósito,
+          # mas o resto do painel funciona. Assim que o secret existir, rodar de novo.
+          [ -n "$META_APP_SECRET" ] || echo "::warning::META_APP_SECRET vazio — webhook de story vai recusar POST"
+          ENV=$(printf '%s\n' \
+            "DATABASE_URL=postgresql://claude_b2b:${DB_PASS}@bancodados:5432/dadoscells" \
+            "META_TOKEN=${META_TOKEN}" \
+            "APIFY_TOKEN=${APIFY_TOKEN}" \
+            "META_VERIFY_TOKEN=${META_VERIFY_TOKEN}" \
+            "META_APP_SECRET=${META_APP_SECRET}" \
+            "IG_USER_ID=17841405730329135" \
+            "SENHA=${PANEL_SENHA}" \
+            "CACHE_MIN=5" "PORT=3000" "NODE_ENV=production")
+          jq -n --arg p "$PROJ" --arg s "$SVC" --arg e "$ENV" \
+            '{json:{projectName:$p,serviceName:$s,env:$e}}' > /tmp/env.json
+          curl -sS -X POST "$BASE/services.app.updateEnv" \
+            -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+            -d @/tmp/env.json -o /dev/null -w 'HTTP %{http_code}\n'
+          rm -f /tmp/env.json
+
       - name: origem do código
         if: ${{ !inputs.apenas_deploy }}
         run: |

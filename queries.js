@@ -43,13 +43,22 @@ module.exports = {
              max(publicado_em)::date                     AS ultima_marcacao
       FROM creator.publicacao GROUP BY 1
     ),
+    -- ATENÇÃO: existe MAIS DE UMA linha de métrica por publicação — uma por dia de coleta e uma
+    -- por fonte (tags_api e apify). Somar a tabela direto multiplica tudo. O LATERAL colapsa
+    -- para um valor por publicação ANTES de somar; max() porque contador de rede só cresce,
+    -- então o maior já observado é o melhor que temos.
     met AS (
       SELECT lower(u.instagram_handle) AS h,
-             sum(m.curtidas)      AS curtidas_marc,
-             sum(m.comentarios)   AS coment_marc,
-             sum(m.visualizacoes) AS views_marc
+             sum(x.curtidas)      AS curtidas_marc,
+             sum(x.comentarios)   AS coment_marc,
+             sum(x.visualizacoes) AS views_marc,
+             sum(x.reproducoes)   AS plays_marc
       FROM creator.publicacao u
-      JOIN creator.publicacao_metrica m ON m.publicacao_id = u.publicacao_id
+      JOIN LATERAL (
+        SELECT max(curtidas) AS curtidas, max(comentarios) AS comentarios,
+               max(visualizacoes) AS visualizacoes, max(reproducoes) AS reproducoes
+        FROM creator.publicacao_metrica m WHERE m.publicacao_id = u.publicacao_id
+      ) x ON true
       GROUP BY 1
     )
     SELECT
@@ -61,7 +70,7 @@ module.exports = {
       COALESCE(p.reels,0) AS reels, COALESCE(p.carrossel,0) AS carrossel,
       COALESCE(p.stories,0) AS stories, COALESCE(p.feed,0) AS feed,
       p.ultima_marcacao,
-      m.curtidas_marc, m.coment_marc, m.views_marc,
+      m.curtidas_marc, m.coment_marc, m.views_marc, m.plays_marc,
       pa.parceiro_id, pa.status AS status_parceiro, pa.nome AS nome_cadastro
     FROM snap s
     FULL OUTER JOIN pub p ON p.h = s.h
@@ -116,6 +125,12 @@ module.exports = {
     FROM creator.custo
     WHERE competencia = date_trunc('month', current_date)::date
     GROUP BY 1 ORDER BY 2 DESC
+  `,
+
+  // ---- saúde dos jobs de coleta ----
+  jobs: `
+    SELECT DISTINCT ON (job) job, sucesso, itens, detalhe, rodou_em
+    FROM creator.job_log ORDER BY job, rodou_em DESC
   `,
 
   // ---- publicações recentes, para a aba de conteúdo ----

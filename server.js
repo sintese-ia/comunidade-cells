@@ -9,8 +9,10 @@ const http  = require('http');
 const https = require('https');
 const fs    = require('fs');
 const path  = require('path');
+const crypto = require('crypto');
 const { Pool } = require('pg');
 const Q = require('./queries');
+const J = require('./jobs');
 
 const PORT    = process.env.PORT || 3000;
 const SENHA   = process.env.SENHA || 'cells';
@@ -18,6 +20,9 @@ const TTL     = (+process.env.CACHE_MIN || 5) * 60 * 1000;
 const IG_ID   = process.env.IG_USER_ID || '17841405730329135';   // @cellsoficial
 const META    = process.env.META_TOKEN || '';
 const GRAPH_V = process.env.GRAPH_VERSION || 'v21.0';
+const APIFY   = process.env.APIFY_TOKEN || '';
+const APP_SECRET   = process.env.META_APP_SECRET || '';
+const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN || '';
 const COOKIE  = 'cc_sess';
 const TOKEN   = require('crypto').createHash('sha256').update('cc|' + SENHA).digest('hex').slice(0, 32);
 
@@ -227,6 +232,52 @@ http.createServer(async (req, res) => {
 
   if (u.pathname === '/healthz') { res.writeHead(200, {'content-type':'text/plain'}); return res.end('ok'); }
 
+  // ---- webhook da Meta (story mention) — ANTES da parede de senha, é a Meta que chama ----
+  if (u.pathname === '/webhook/meta') {
+    // handshake de verificação da assinatura
+    if (req.method === 'GET') {
+      const ok = u.searchParams.get('hub.mode') === 'subscribe' &&
+                 u.searchParams.get('hub.verify_token') === VERIFY_TOKEN && VERIFY_TOKEN;
+      if (ok) { res.writeHead(200, {'content-type':'text/plain'});
+                return res.end(u.searchParams.get('hub.challenge') || ''); }
+      res.writeHead(403, {'content-type':'text/plain'}); return res.end('verify_token inválido');
+    }
+    if (req.method !== 'POST') { res.writeHead(405); return res.end(); }
+
+    // Sem APP_SECRET não dá para provar que o POST veio da Meta. Um endpoint aberto que grava
+    // no banco é um convite — então recusa em vez de aceitar dado não verificado.
+    if (!APP_SECRET) {
+      console.error('[webhook] META_APP_SECRET ausente — POST recusado');
+      res.writeHead(503, {'content-type':'text/plain'});
+      return res.end('META_APP_SECRET não configurado');
+    }
+
+    const chunks = [];
+    req.on('data', c => { chunks.push(c); if (chunks.length > 400) req.destroy(); });
+    return req.on('end', async () => {
+      const raw = Buffer.concat(chunks);
+      const esperado = 'sha256=' + crypto.createHmac('sha256', APP_SECRET).update(raw).digest('hex');
+      const veio = req.headers['x-hub-signature-256'] || '';
+      const bateu = veio.length === esperado.length &&
+        crypto.timingSafeEqual(Buffer.from(veio), Buffer.from(esperado));
+      if (!bateu) {
+        console.error('[webhook] assinatura inválida');
+        res.writeHead(401, {'content-type':'text/plain'}); return res.end('assinatura inválida');
+      }
+      // Responder 200 rápido: a Meta re-entrega se demorar, e o download da mídia é lento.
+      res.writeHead(200, {'content-type':'text/plain'}); res.end('ok');
+      try {
+        const body = JSON.parse(raw.toString('utf8'));
+        const stories = J.extrairStories(body);
+        for (const s of stories) await J.guardarStory(pool, s);
+        if (stories.length) {
+          console.log('[webhook] story mentions gravados:', stories.length);
+          await J.logJob(pool, 'story', true, 'webhook', stories.length);
+        }
+      } catch (e) { console.error('[webhook]', e.message); J.logJob(pool, 'story', false, e.message, 0); }
+    });
+  }
+
   const autenticado = (req.headers.cookie || '').includes(`${COOKIE}=${TOKEN}`);
 
   if (req.method === 'POST' && u.pathname === '/') {
@@ -263,6 +314,27 @@ http.createServer(async (req, res) => {
     }
   }
 
+  // disparo manual de job (o agendador roda sozinho; isto é para não esperar o ciclo)
+  if (u.pathname === '/api/job' && req.method === 'POST') {
+    const nome = u.searchParams.get('n');
+    const fns = { tags:  () => J.syncTags(pool, META),
+                  perfis:() => J.syncPerfis(pool, META),
+                  apify: () => J.syncApify(pool, APIFY) };
+    if (!fns[nome]) return json(400, { erro: 'job desconhecido: use tags, perfis ou apify' });
+    try {
+      const r = await fns[nome]();
+      await J.logJob(pool, nome, true, JSON.stringify(r), r.novas ?? r.atualizados ?? r.coletados ?? 0);
+      return json(200, { ok: true, job: nome, resultado: r });
+    }
+    catch (e) { await J.logJob(pool, nome, false, e.message, 0); return json(200, { ok: false, erro: e.message }); }
+  }
+
+  if (u.pathname === '/api/jobs') {
+    const r = await pool.query(
+      `SELECT job, sucesso, itens, detalhe, rodou_em FROM creator.job_log ORDER BY rodou_em DESC LIMIT 40`);
+    return json(200, r.rows);
+  }
+
   if (u.pathname === '/api/dados') {
     try { return json(200, await dados()); }
     catch (e) { return json(503, { erro: e.message }); }
@@ -282,5 +354,7 @@ http.createServer(async (req, res) => {
 }).listen(PORT, () => {
   console.log('comunidade-cells on :' + PORT + (META ? '' : '  [AVISO: META_TOKEN vazio — busca ao vivo desligada]'));
   recarregar().catch(e => console.error('[boot]', e.message));
+  J.agendar(pool, { META_TOKEN: META, APIFY_TOKEN: APIFY });
+  if (!APP_SECRET) console.log('  [aviso] META_APP_SECRET vazio — webhook de story recusa POST');
   setInterval(() => recarregar().catch(() => {}), Math.max(60000, TTL / 2)).unref();
 });

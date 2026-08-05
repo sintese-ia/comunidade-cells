@@ -192,13 +192,14 @@
           <th>Reels/Carr./Feed</th>
           <th data-s="ultima_marcacao">Última marc.</th>
           <th data-s="views_marc">Views</th>
+          <th data-s="plays_marc">Reprod.</th>
           <th>Curadoria</th>
         </tr></thead>
         <tbody id="tbody"></tbody>
       </table></div>
       <div class="empty">
         <span class="tg">ainda sem dado</span>
-        <p><b>Views, cliques, CPC e vendas.</b> Views entram quando o job do Apify rodar. Cliques, CPC e vendas só existem depois do primeiro cupom nominal emitido — e nenhum foi. As colunas ficam vazias em vez de receber número estimado.</p>
+        <p><b>Views já entram</b> — job do Apify, semanal, só em reels (carrossel e foto não têm contador público). <b>Views ≠ reprodução</b>: reprodução conta cada replay e fica ~3× maior. Nenhuma das duas é alcance, que continua impossível para post de terceiro.<br><b>Cliques, CPC e vendas</b> só existem depois do primeiro cupom nominal emitido — e nenhum foi. Ficam vazios em vez de receber número estimado.</p>
       </div>
     </div>
     <div class="note" id="critNote"></div>
@@ -326,9 +327,10 @@ function render(){
       '<td>'+(p.marcacoes||'—')+'</td>'+
       '<td class="mix">'+p.reels+' <i>/ '+p.carrossel+' / '+p.feed+'</i></td>'+
       '<td class="dim">'+dt(p.ultima_marcacao)+'</td>'+
-      '<td class="dim">'+(p.views_marc?n(p.views_marc):'—')+'</td>'+
+      '<td'+(p.views_marc?'':' class="dim"')+'>'+(p.views_marc?n(p.views_marc):'—')+'</td>'+
+      '<td class="dim">'+(p.plays_marc?n(p.plays_marc):'—')+'</td>'+
       '<td><span class="chip '+cls+'">'+txt+'</span></td></tr>';
-  }).join('') || '<tr><td colspan="10" class="h dim" style="padding:20px 15px">Nenhum perfil com esse filtro.</td></tr>';
+  }).join('') || '<tr><td colspan="11" class="h dim" style="padding:20px 15px">Nenhum perfil com esse filtro.</td></tr>';
   document.querySelectorAll('th[data-s]').forEach(t=>{
     t.innerHTML=t.textContent.replace(/[▲▼]\s*$/,'').trim()+(t.dataset.s===ordem.c?' <span class="ar">'+(ordem.d<0?'▼':'▲')+'</span>':'');
   });
@@ -374,10 +376,25 @@ document.getElementById('bars').innerHTML=M.map(m=>
 document.getElementById('blab').innerHTML=M.map(m=>
   '<span>'+(m.mes.slice(5)==='01'?m.mes.slice(2,4)+'/':'')+m.mes.slice(5)+'</span>').join('');
 
+const JB=D.jobs||[];
+if(JB.length){
+  const nomes={tags:'marcações (/tags)',perfis:'perfis (business_discovery)',apify:'views (Apify)',story:'stories (webhook)'};
+  document.getElementById('ft').insertAdjacentHTML('beforebegin',
+    '<section><div class="hd"><span class="eb">Coleta</span><h2>Saúde dos jobs</h2></div>'+
+    '<p class="lede">Rodam dentro deste app, não no n8n. Se um parar, some daqui — log com timestamp não apodrece como alerta de lista fixa.</p>'+
+    '<div class="panel"><div class="scroll"><table><thead><tr><th>Job</th><th>Última</th><th>Itens</th><th>Estado</th><th>Detalhe</th></tr></thead><tbody>'+
+    JB.map(j=>'<tr><td class="h"><b>'+(nomes[j.job]||j.job)+'</b></td>'+
+      '<td class="dim">'+String(j.rodou_em).slice(0,16).replace('T',' ')+'</td>'+
+      '<td>'+(j.itens??'—')+'</td>'+
+      '<td><span class="chip '+(j.sucesso?'ok':'cr')+'">'+(j.sucesso?'ok':'falhou')+'</span></td>'+
+      '<td class="h dim" style="white-space:normal;max-width:340px">'+String(j.detalhe||'').slice(0,160)+'</td></tr>').join('')+
+    '</tbody></table></div></div></section>');
+}
 document.getElementById('ft').innerHTML=
   '<b>Busca ao vivo</b> — chama a Graph API da Meta no servidor. O token nunca chega ao browser. Toda busca grava snapshot em <code>creator.perfil_snapshot</code>.<br>'+
   '<b>Engajamento</b> — média de (curtidas + comentários) por post sobre os últimos 12 posts, dividida por seguidores. Não é janela de 30 dias: quem não posta há meses continua tendo número, por isso a coluna Último post existe.<br>'+
-  '<b>Alcance</b> — não aparece em lugar nenhum porque a Meta não entrega insight de post de terceiro. Só com tag de Parceria Paga. Views de reels dependem do job do Apify.';
+  '<b>Views vs reprodução vs alcance</b> — três coisas. View é a "visualização" que o Instagram mostra; reprodução conta cada replay (~3× maior); alcance é conta única e <b>não existe aqui</b>, porque a Meta não entrega insight de post de terceiro. Só com tag de Parceria Paga.<br>'+
+  '<b>Story</b> — capturado por webhook a partir da ativação, sem histórico. A mídia é baixada no ato: o CDN da Meta expira em 24h.';
 </script>
 </body>
 </html>
