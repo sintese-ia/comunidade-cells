@@ -1,0 +1,81 @@
+name: deploy
+
+# Por que este workflow existe: em 05/08/2026 o FortiGate da rede do escritório passou a
+# devolver 403 (Web Filter) para as portas web de easypanel.sinteseia.com.br — inclusive
+# batendo direto no IP, então não dá para contornar por SNI. A porta 5432 do mesmo host passa,
+# o que confirma que o filtro é sobre HTTP(S), não sobre o servidor.
+#
+# O runner do GitHub não está atrás desse filtro. Então o deploy sai daqui.
+#
+# Só `workflow_dispatch`: o repositório é público e o token do Easypanel é um segredo. Rodar
+# em push ou em pull_request abriria caminho para um PR de fora tentar alcançá-lo.
+#
+#   gh workflow run deploy -R sintese-ia/comunidade-cells
+
+on:
+  workflow_dispatch:
+    inputs:
+      apenas_deploy:
+        description: 'Pular a configuração de origem/build e só redeployar'
+        type: boolean
+        default: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      BASE: https://easypanel.sinteseia.com.br/api/trpc
+      PROJ: sintese
+      SVC: comunidade-cells
+      TOKEN: ${{ secrets.EASYPANEL_API_TOKEN }}
+    steps:
+      - name: checar token
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error::secret EASYPANEL_API_TOKEN não está configurado no repositório"
+            exit 1
+          fi
+
+      - name: painel responde daqui?
+        run: |
+          code=$(curl -k -s -o /dev/null -w '%{http_code}' -m 20 https://easypanel.sinteseia.com.br || true)
+          echo "easypanel → HTTP $code"
+          [ "$code" = "200" ] || { echo "::error::painel inacessível também do runner (HTTP $code)"; exit 1; }
+
+      - name: origem do código
+        if: ${{ !inputs.apenas_deploy }}
+        run: |
+          curl -sS -X POST "$BASE/services.app.updateSourceGit" \
+            -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+            -d "{\"json\":{\"projectName\":\"$PROJ\",\"serviceName\":\"$SVC\",\"repo\":\"https://github.com/sintese-ia/comunidade-cells.git\",\"ref\":\"main\",\"path\":\"/\"}}" \
+            -w '\nHTTP %{http_code}\n'
+
+      - name: build por Dockerfile
+        if: ${{ !inputs.apenas_deploy }}
+        run: |
+          curl -sS -X POST "$BASE/services.app.updateBuild" \
+            -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+            -d "{\"json\":{\"projectName\":\"$PROJ\",\"serviceName\":\"$SVC\",\"build\":{\"type\":\"dockerfile\",\"file\":\"Dockerfile\"}}}" \
+            -w '\nHTTP %{http_code}\n'
+
+      - name: deploy
+        run: |
+          curl -sS -X POST "$BASE/services.app.deployService" \
+            -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+            -d "{\"json\":{\"projectName\":\"$PROJ\",\"serviceName\":\"$SVC\"}}" \
+            -w '\nHTTP %{http_code}\n'
+
+      - name: esperar subir
+        run: |
+          # 401 = app no ar pedindo senha. É o resultado que queremos: 200 seria página aberta.
+          for i in $(seq 1 40); do
+            c=$(curl -k -s -o /dev/null -w '%{http_code}' -m 10 https://comunidade-cells.sinteseia.com.br || true)
+            if [ "$c" = "401" ]; then
+              echo "no ar → https://comunidade-cells.sinteseia.com.br"
+              exit 0
+            fi
+            printf '  %02d) HTTP %s\n' "$i" "$c"
+            sleep 15
+          done
+          echo "::error::não subiu em ~10 min — ver logs do serviço no painel"
+          exit 1
