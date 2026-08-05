@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Comunidade Cells — painel de creators</title>
+<style>
+  :root{
+    --bg:#FFFFFF; --sub:#FAFBFB; --ink:#14181A; --ink2:#3E4749; --mut:#6C7679; --fnt:#98A0A2;
+    --line:#E4E9E8; --line2:#F0F3F2;
+    --ac:#0B5FFF; --ac-s:#EEF4FF;
+    --ok:#0F7A4E; --ok-s:#E6F5EE; --wa:#8F5B00; --wa-s:#FCF2DF; --cr:#B23A2B; --cr-s:#FBEAE7;
+    --vo:#98A0A2; --vo-s:#F2F5F4;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+       font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1180px;margin:0 auto;padding:30px 20px 80px}
+
+  header.top{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;justify-content:space-between;
+             padding-bottom:16px;border-bottom:2px solid var(--ink)}
+  .top h1{font-size:24px;margin:0;letter-spacing:-.024em;font-weight:660}
+  .top h1 em{font-style:normal;color:var(--ac)}
+  .top p{margin:5px 0 0;color:var(--mut);font-size:13px}
+  .stamp{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+         color:var(--fnt);text-align:right;line-height:1.8;white-space:nowrap}
+
+  .strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;
+         background:var(--line);border:1px solid var(--line);margin-top:22px;border-radius:3px;overflow:hidden}
+  .cel{background:var(--bg);padding:14px 15px}
+  .cel .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--mut)}
+  .cel .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:26px;font-weight:520;
+          letter-spacing:-.022em;line-height:1;margin-top:7px}
+  .cel .v.z{font-size:17px;color:var(--vo);letter-spacing:0}
+  .cel .n{font-size:11px;color:var(--fnt);margin-top:6px;line-height:1.4}
+
+  section{margin-top:36px}
+  .hd{display:flex;align-items:baseline;gap:11px;flex-wrap:wrap}
+  .eb{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+      color:var(--ac);font-weight:600}
+  h2{font-size:18px;margin:0;letter-spacing:-.015em;font-weight:640}
+  .lede{margin:6px 0 16px;color:var(--mut);font-size:13px;max-width:76ch}
+
+  .panel{border:1px solid var(--line);border-radius:3px;overflow:hidden}
+
+  /* busca */
+  .sb{display:flex;gap:9px;align-items:center;padding:12px 14px;background:var(--sub);
+      border-bottom:1px solid var(--line)}
+  .sb .at{font-family:var(--mono);color:var(--fnt);font-size:15px}
+  .sb input{flex:1;border:0;background:transparent;font-family:var(--mono);font-size:15px;
+            color:var(--ink);padding:4px 0;min-width:0}
+  .sb input:focus{outline:2px solid var(--ac);outline-offset:3px;border-radius:2px}
+  .bt{font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
+      background:var(--ink);color:#fff;border:0;border-radius:2px;padding:9px 15px;cursor:pointer}
+  .bt:disabled{background:var(--fnt);cursor:wait}
+  .bt:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+
+  #res{padding:0}
+  .rhead{display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between;align-items:flex-start;
+         padding:16px 15px 12px}
+  .rhead .nm{font-size:17px;font-weight:620;letter-spacing:-.012em}
+  .rhead .hh{font-family:var(--mono);font-size:12px;color:var(--mut);margin-top:2px}
+  .rhead .bio{font-size:12.5px;color:var(--mut);margin-top:7px;max-width:60ch;white-space:pre-line}
+  .quad{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:1px;
+        background:var(--line2);border-top:1px solid var(--line2)}
+  .quad>div{background:var(--bg);padding:13px 15px}
+  .quad .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--mut)}
+  .quad .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:23px;font-weight:520;
+           margin-top:7px;line-height:1;letter-spacing:-.02em}
+  .quad .n{font-size:11px;color:var(--fnt);margin-top:5px}
+  .msg{padding:16px 15px;font-size:13px;color:var(--mut);line-height:1.6}
+  .msg.err{background:var(--cr-s);color:var(--cr)}
+  .msg.idle{color:var(--fnt)}
+
+  /* tabela */
+  .tools{display:flex;flex-wrap:wrap;gap:9px;align-items:center;padding:11px 14px;
+         background:var(--sub);border-bottom:1px solid var(--line)}
+  .tools input{border:1px solid var(--line);border-radius:2px;padding:6px 9px;font-size:13px;
+               font-family:var(--mono);min-width:170px}
+  .tools input:focus{outline:2px solid var(--ac);outline-offset:1px}
+  .fil{font-family:var(--mono);font-size:10px;letter-spacing:.07em;text-transform:uppercase;
+       border:1px solid var(--line);background:var(--bg);color:var(--mut);border-radius:2px;
+       padding:6px 10px;cursor:pointer}
+  .fil[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .cnt{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--mut)}
+
+  .scroll{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:900px}
+  th{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);
+     font-weight:600;text-align:right;padding:10px 9px;border-bottom:1px solid var(--line);
+     background:var(--sub);white-space:nowrap;cursor:pointer;user-select:none;position:sticky;top:0}
+  th:first-child,td:first-child{text-align:left;padding-left:15px}
+  th:last-child,td:last-child{padding-right:15px}
+  th[data-s]:hover{color:var(--ink)}
+  th .ar{color:var(--ac)}
+  td{padding:9px;border-bottom:1px solid var(--line2);text-align:right;font-family:var(--mono);
+     font-variant-numeric:tabular-nums;white-space:nowrap}
+  tbody tr:hover td{background:var(--sub)}
+  td.h{font-size:12px;text-align:left}
+  td.h b{font-weight:620}
+  td.h a{color:inherit;text-decoration:none;border-bottom:1px solid var(--line)}
+  td.h a:hover{border-color:var(--ac);color:var(--ac)}
+  .sub2{display:block;font-size:10.5px;color:var(--fnt);font-family:var(--sans);margin-top:1px}
+  .dim{color:var(--fnt)}
+  .mix{font-size:11px;color:var(--ink2)}
+  .mix i{font-style:normal;color:var(--fnt)}
+
+  .chip{display:inline-block;font-family:var(--mono);font-size:9px;letter-spacing:.07em;
+        text-transform:uppercase;padding:3px 7px;border-radius:2px;font-weight:600}
+  .ok{background:var(--ok-s);color:var(--ok)} .wa{background:var(--wa-s);color:var(--wa)}
+  .cr{background:var(--cr-s);color:var(--cr)} .vo{background:var(--vo-s);color:var(--vo)}
+
+  .empty{padding:17px 15px;background:var(--sub);border-top:1px dashed var(--line);
+         display:flex;gap:12px;align-items:flex-start}
+  .empty .tg{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;
+             background:var(--vo-s);color:var(--vo);padding:4px 8px;border-radius:2px;font-weight:600;flex:none}
+  .empty p{margin:0;font-size:12.5px;color:var(--mut);line-height:1.6}
+  .empty p b{color:var(--ink2)}
+
+  .note{margin-top:13px;padding:13px 15px;border-left:2px solid var(--ac);background:var(--ac-s);border-radius:0 3px 3px 0}
+  .note p{margin:0;font-size:12.5px;color:var(--ink2);line-height:1.6}
+  .note p+p{margin-top:7px}
+  .note b{color:var(--ink)}
+  .note.al{border-color:var(--wa);background:var(--wa-s)}
+
+  /* barras por mês */
+  .bars{display:flex;align-items:flex-end;gap:3px;height:96px;padding:16px 15px 0}
+  .bars div{flex:1;background:var(--ac);border-radius:1px 1px 0 0;min-height:2px;position:relative}
+  .bars div:hover{background:var(--ink)}
+  .blab{display:flex;gap:3px;padding:6px 15px 14px}
+  .blab span{flex:1;font-family:var(--mono);font-size:8px;color:var(--fnt);text-align:center;
+             overflow:hidden;white-space:nowrap}
+
+  footer{margin-top:44px;padding-top:16px;border-top:1px solid var(--line);font-size:11.5px;
+         color:var(--fnt);line-height:1.75}
+  footer b{color:var(--mut);font-weight:600}
+  @media(max-width:640px){.wrap{padding:22px 13px 60px}.top h1{font-size:20px}.stamp{text-align:left}}
+  @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div>
+      <h1>comunidade <em>cells</em></h1>
+      <p>Painel interno de creators — busca ao vivo e base coletada.</p>
+    </div>
+    <div class="stamp" id="stamp"></div>
+  </header>
+
+  <div class="strip" id="strip"></div>
+
+  <!-- 01 BUSCA -->
+  <section>
+    <div class="hd"><span class="eb">Módulo 01</span><h2>Buscar creator</h2></div>
+    <p class="lede">Digita qualquer @ do Instagram. O servidor consulta a Graph API da Meta na hora — não precisa estar cadastrado nem ter relação com a Cells. Toda busca vira snapshot no banco.</p>
+    <div class="panel">
+      <form class="sb" id="frm">
+        <span class="at">@</span>
+        <input id="q" value="gabrielrodrigueso" spellcheck="false" autocomplete="off"
+               aria-label="handle do Instagram" placeholder="handle sem o arroba">
+        <button class="bt" id="go" type="submit">Buscar</button>
+      </form>
+      <div id="res"><div class="msg idle">Busque um @ para ver seguidores, engajamento, curtidas e cadência de publicação.</div></div>
+    </div>
+  </section>
+
+  <!-- 02 BASE -->
+  <section>
+    <div class="hd"><span class="eb">Módulo 02</span><h2>Gestão — quem marca a Cells</h2></div>
+    <p class="lede">Todo perfil já coletado. Marcações vêm da Graph API; engajamento é média por post sobre os últimos 12 posts de cada um.</p>
+    <div class="panel">
+      <div class="tools">
+        <input id="bq" placeholder="filtrar por @ ou nome" aria-label="Filtrar">
+        <button class="fil" data-f="todos" aria-pressed="true">Todos</button>
+        <button class="fil" data-f="marca" aria-pressed="false">Já marcou</button>
+        <button class="fil" data-f="ok" aria-pressed="false">Aprova no critério</button>
+        <button class="fil" data-f="cad" aria-pressed="false">Cadastrado</button>
+        <span class="cnt" id="cnt"></span>
+      </div>
+      <div class="scroll"><table id="tb">
+        <thead><tr>
+          <th data-s="handle">Creator</th>
+          <th data-s="seguidores">Seguidores</th>
+          <th data-s="engajamento_pct">Eng.</th>
+          <th data-s="posts_30d">Posts 30d</th>
+          <th data-s="ultimo_post">Último post</th>
+          <th data-s="marcacoes">Marcações</th>
+          <th>Reels/Carr./Feed</th>
+          <th data-s="ultima_marcacao">Última marc.</th>
+          <th data-s="views_marc">Views</th>
+          <th>Curadoria</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table></div>
+      <div class="empty">
+        <span class="tg">ainda sem dado</span>
+        <p><b>Views, cliques, CPC e vendas.</b> Views entram quando o job do Apify rodar. Cliques, CPC e vendas só existem depois do primeiro cupom nominal emitido — e nenhum foi. As colunas ficam vazias em vez de receber número estimado.</p>
+      </div>
+    </div>
+    <div class="note" id="critNote"></div>
+  </section>
+
+  <!-- 03 CADASTRADOS -->
+  <section>
+    <div class="hd"><span class="eb">Módulo 03</span><h2>Cadastrados — fila de curadoria</h2></div>
+    <p class="lede">Quem preencheu o formulário e ainda não foi aprovado. A coluna que importa é a última.</p>
+    <div class="panel">
+      <div class="scroll"><table>
+        <thead><tr>
+          <th>Pessoa</th><th>Cadastro</th><th>Seguidores</th><th>Eng.</th>
+          <th>Posts 30d</th><th>Último post</th><th>Já marcou a Cells?</th>
+        </tr></thead>
+        <tbody id="cad"></tbody>
+      </table></div>
+    </div>
+    <div class="note al" id="gapNote"></div>
+  </section>
+
+  <!-- 04 VOLUME -->
+  <section>
+    <div class="hd"><span class="eb">Módulo 04</span><h2>Volume de marcações por mês</h2></div>
+    <p class="lede">Quanto a Cells é marcada espontaneamente, sem programa nenhum rodando. É a linha de base contra a qual o piloto vai ser medido.</p>
+    <div class="panel">
+      <div class="bars" id="bars"></div>
+      <div class="blab" id="blab"></div>
+    </div>
+  </section>
+
+  <footer id="ft"></footer>
+</div>
+
+<script>
+const D = __DATA__;
+const n  = v => v==null ? '—' : Number(v).toLocaleString('pt-BR');
+const pc = v => v==null ? '—' : Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'%';
+const dt = s => s ? s.slice(8,10)+'/'+s.slice(5,7)+'/'+s.slice(2,4) : '—';
+const el = (h)=>{const d=document.createElement('div');d.innerHTML=h;return d.firstElementChild};
+
+// Critério de curadoria: engajamento >= 2% E pelo menos 4 posts nos últimos 30 dias.
+// Sem piso de seguidores — micro engajado vale mais que conta grande e parada.
+function verdito(p){
+  if(p.engajamento_pct==null) return ['vo','sem dado'];
+  if(p.engajamento_pct>=2 && p.posts_30d>=4) return ['ok','aprova'];
+  if(p.engajamento_pct<1) return ['cr','corta'];
+  return ['wa','revisar'];
+}
+
+/* ---------- topo ---------- */
+const r = D.resumo[0]||{};
+document.getElementById('stamp').innerHTML =
+  'Cells · canal influencer<br>base de '+dt(r.desde)+' a '+dt(r.ate)+'<br>atualizado '+(D.ger||'');
+document.getElementById('strip').innerHTML = [
+  ['Marcações', n(r.publicacoes), 'coletadas da Graph API'],
+  ['Perfis que marcam', n(r.perfis), 'contas distintas'],
+  ['Cadastrados', n(r.cadastrados), (r.ativos||0)+' aprovados · '+((r.cadastrados||0)-(r.ativos||0))+' na fila'],
+  ['Cupons ativos', r.cupons ? n(r.cupons) : 'nenhum', r.cupons?'nominais':'sem atribuição de venda ainda'],
+  ['Vendas atribuídas', r.vendas ? n(r.vendas) : 'sem dado', r.vendas?'no período':'depende do cupom'],
+].map(([k,v,nn])=>'<div class="cel"><div class="k">'+k+'</div><div class="v'+
+  (/^(sem dado|nenhum)$/.test(v)?' z':'')+'">'+v+'</div><div class="n">'+nn+'</div></div>').join('');
+
+/* ---------- busca ao vivo ---------- */
+const res=document.getElementById('res'), go=document.getElementById('go');
+document.getElementById('frm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const h=document.getElementById('q').value.trim().replace(/^@/,'');
+  if(!h) return;
+  go.disabled=true; go.textContent='Buscando';
+  res.innerHTML='<div class="msg">Consultando a Meta…</div>';
+  try{
+    const j=await (await fetch('/api/buscar?h='+encodeURIComponent(h))).json();
+    if(!j.ok){ res.innerHTML='<div class="msg err">'+j.erro+'</div>'; return; }
+    const p=j.perfil, c=j.cells||{}, [cls,txt]=verdito({engajamento_pct:p.eng,posts_30d:p.posts_30d});
+    res.innerHTML =
+      '<div class="rhead"><div><div class="nm">'+(p.nome||'@'+p.handle)+'</div>'+
+      '<div class="hh">@'+p.handle+' · '+n(p.total_posts)+' posts no perfil</div>'+
+      (p.bio?'<div class="bio">'+p.bio.replace(/[<>]/g,'')+'</div>':'')+'</div>'+
+      '<span class="chip '+cls+'">'+txt+'</span></div>'+
+      '<div class="quad">'+
+        cel('Seguidores', n(p.seguidores), 'followers_count') +
+        cel('Engajamento', pc(p.eng), 'média por post · últimos '+p.base_calculo) +
+        cel('Curtidas', n(p.likes_medios), 'média por post · +'+n(p.coment_medios)+' coment.') +
+        cel('Publicações', p.posts_30d+(p.piso_30d?'+':''), 'últimos 30 dias'+(p.piso_30d?' (piso — amostra de 12)':'')) +
+        cel('Último post', dt(p.ultimo_post), p.posts_90d+' nos últimos 90d') +
+        cel('Marcou a Cells', c.total?n(c.total)+'×':'nunca',
+            c.total?(c.reels+'R · '+c.carrossel+'C · '+c.feed+'F · última '+dt(c.ultima)):'sem histórico na base') +
+      '</div>'+
+      (c.cadastrado?'<div class="empty"><span class="tg">cadastrado</span><p><b>'+
+        c.cadastrado.nome+'</b> já está na base, status <b>'+c.cadastrado.status+'</b>.</p></div>':'');
+  }catch(err){ res.innerHTML='<div class="msg err">Falhou: '+err.message+'</div>'; }
+  finally{ go.disabled=false; go.textContent='Buscar'; }
+});
+const cel=(k,v,nn)=>'<div><div class="k">'+k+'</div><div class="v">'+v+'</div><div class="n">'+nn+'</div></div>';
+
+/* ---------- tabela ---------- */
+let ordem={c:'engajamento_pct',d:-1}, filtro='todos', busca='';
+function linhas(){
+  let L=D.perfis.slice();
+  if(filtro==='marca') L=L.filter(p=>p.marcacoes>0);
+  if(filtro==='ok')    L=L.filter(p=>verdito(p)[1]==='aprova');
+  if(filtro==='cad')   L=L.filter(p=>p.parceiro_id);
+  if(busca) L=L.filter(p=>((p.handle||'')+' '+(p.nome||'')).toLowerCase().includes(busca));
+  const c=ordem.c;
+  L.sort((a,b)=>{
+    let x=a[c], y=b[c];
+    if(x==null) return 1; if(y==null) return -1;
+    if(typeof x==='string') return x.localeCompare(y)*ordem.d;
+    return (x-y)*ordem.d;
+  });
+  return L;
+}
+function render(){
+  const L=linhas();
+  document.getElementById('cnt').textContent=L.length+' de '+D.perfis.length+' perfis';
+  document.getElementById('tbody').innerHTML=L.map(p=>{
+    const [cls,txt]=verdito(p);
+    return '<tr><td class="h"><b><a href="https://instagram.com/'+p.handle+'" target="_blank" rel="noopener">@'+
+      p.handle+'</a></b>'+(p.nome?'<span class="sub2">'+p.nome+'</span>':'')+'</td>'+
+      '<td>'+n(p.seguidores)+'</td>'+
+      '<td'+(p.engajamento_pct>=2?' style="color:var(--ok)"':p.engajamento_pct<1?' style="color:var(--cr)"':'')+'>'+pc(p.engajamento_pct)+'</td>'+
+      '<td>'+(p.posts_30d==null?'—':p.posts_30d)+'</td>'+
+      '<td class="dim">'+dt(p.ultimo_post)+'</td>'+
+      '<td>'+(p.marcacoes||'—')+'</td>'+
+      '<td class="mix">'+p.reels+' <i>/ '+p.carrossel+' / '+p.feed+'</i></td>'+
+      '<td class="dim">'+dt(p.ultima_marcacao)+'</td>'+
+      '<td class="dim">'+(p.views_marc?n(p.views_marc):'—')+'</td>'+
+      '<td><span class="chip '+cls+'">'+txt+'</span></td></tr>';
+  }).join('') || '<tr><td colspan="10" class="h dim" style="padding:20px 15px">Nenhum perfil com esse filtro.</td></tr>';
+  document.querySelectorAll('th[data-s]').forEach(t=>{
+    t.innerHTML=t.textContent.replace(/[▲▼]\s*$/,'').trim()+(t.dataset.s===ordem.c?' <span class="ar">'+(ordem.d<0?'▼':'▲')+'</span>':'');
+  });
+}
+document.querySelectorAll('th[data-s]').forEach(t=>t.addEventListener('click',()=>{
+  const c=t.dataset.s;
+  ordem = ordem.c===c ? {c,d:-ordem.d} : {c,d:(c==='handle'?1:-1)};
+  render();
+}));
+document.querySelectorAll('.fil').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.fil').forEach(x=>x.setAttribute('aria-pressed','false'));
+  b.setAttribute('aria-pressed','true'); filtro=b.dataset.f; render();
+}));
+document.getElementById('bq').addEventListener('input',e=>{busca=e.target.value.trim().toLowerCase();render()});
+render();
+
+const aprova=D.perfis.filter(p=>verdito(p)[1]==='aprova').length;
+const corta =D.perfis.filter(p=>verdito(p)[1]==='corta').length;
+document.getElementById('critNote').innerHTML=
+  '<p><b>Critério da coluna Curadoria:</b> engajamento ≥ 2% <em>e</em> pelo menos 4 publicações nos últimos 30 dias. Sem piso de seguidores.</p>'+
+  '<p>Na base atual: <b>'+aprova+' aprovam</b>, '+corta+' cortam, o resto fica para revisão manual. '+
+  'Seguidor sozinho engana — ordene por Seguidores e depois por Eng. para ver o quanto.</p>';
+
+/* ---------- cadastrados ---------- */
+document.getElementById('cad').innerHTML=(D.cadastrados||[]).map(c=>
+  '<tr><td class="h"><b>'+(c.nome||'—')+'</b><span class="sub2">@'+(c.instagram_handle||'—')+'</span></td>'+
+  '<td class="dim">'+dt(c.cadastro)+'</td><td>'+n(c.seguidores)+'</td><td>'+pc(c.engajamento_pct)+'</td>'+
+  '<td>'+(c.posts_30d==null?'—':c.posts_30d)+'</td><td class="dim">'+dt(c.ultimo_post)+'</td>'+
+  '<td><span class="chip '+(c.ja_marcou?'ok':'vo')+'">'+(c.ja_marcou?'sim':'nunca')+'</span></td></tr>'
+).join('') || '<tr><td colspan="7" class="h dim" style="padding:20px 15px">Nenhum cadastro ainda.</td></tr>';
+
+const marcam=r.cadastrados_que_marcam||0;
+document.getElementById('gapNote').innerHTML=
+  '<p><b>O buraco que a base revelou:</b> dos '+n(r.cadastrados)+' cadastrados, apenas <b>'+marcam+
+  '</b> já marcaram a Cells alguma vez. E dos '+n(r.perfis)+' perfis que marcam de verdade, quase nenhum se cadastrou.</p>'+
+  '<p>São dois grupos quase sem interseção. Recrutar pela lista de cadastro é começar do zero com gente que nunca postou; '+
+  'os '+n(r.perfis)+' do Módulo 02 já fazem de graça. <b>O piloto deveria sair daí.</b></p>';
+
+/* ---------- barras ---------- */
+const M=D.porMes||[]; const mx=Math.max(1,...M.map(m=>m.total));
+document.getElementById('bars').innerHTML=M.map(m=>
+  '<div style="height:'+Math.round(m.total/mx*100)+'%" title="'+m.mes+': '+m.total+' marcações"></div>').join('');
+document.getElementById('blab').innerHTML=M.map(m=>
+  '<span>'+(m.mes.slice(5)==='01'?m.mes.slice(2,4)+'/':'')+m.mes.slice(5)+'</span>').join('');
+
+document.getElementById('ft').innerHTML=
+  '<b>Busca ao vivo</b> — chama a Graph API da Meta no servidor. O token nunca chega ao browser. Toda busca grava snapshot em <code>creator.perfil_snapshot</code>.<br>'+
+  '<b>Engajamento</b> — média de (curtidas + comentários) por post sobre os últimos 12 posts, dividida por seguidores. Não é janela de 30 dias: quem não posta há meses continua tendo número, por isso a coluna Último post existe.<br>'+
+  '<b>Alcance</b> — não aparece em lugar nenhum porque a Meta não entrega insight de post de terceiro. Só com tag de Parceria Paga. Views de reels dependem do job do Apify.';
+</script>
+</body>
+</html>
