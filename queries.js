@@ -189,6 +189,13 @@ module.exports = {
     GROUP BY 1 ORDER BY 2 DESC
   `,
 
+  // ---- visão 360 por parceiro ----
+  p360: `SELECT * FROM creator.vw_parceiro_360
+         WHERE NOT arquivado AND (pedidos_cupom > 0 OR publicacoes > 0 OR cliques > 0)
+         ORDER BY receita_cupom DESC NULLS LAST, publicacoes DESC`,
+
+  conflitos: `SELECT * FROM creator.vw_conflito_atribuicao ORDER BY pedido_em DESC LIMIT 50`,
+
   // ---- vendas por parceiro (cupom nominal) ----
   // ⚠️ Só atribuição por CUPOM. Clique/UTM e assistida ainda não existem — quando existirem,
   // ficam em colunas separadas e NUNCA somadas com esta.
@@ -216,6 +223,9 @@ module.exports = {
            round(avg(v.receita_liquida),2)    AS ticket,
            count(*) FILTER (WHERE v.pedido_em >= current_date - 90)::int AS pedidos_90d,
            round(sum(v.receita_liquida) FILTER (WHERE v.pedido_em >= current_date - 90),2) AS receita_90d,
+           count(*) FILTER (WHERE v.cliente_novo)::int AS clientes_novos,
+           round(sum(v.receita_liquida) FILTER (WHERE v.cliente_novo),2) AS receita_novos,
+           count(*) FILTER (WHERE v.cliente_novo IS NULL)::int AS sem_flag,
            min(v.pedido_em)::date AS de, max(v.pedido_em)::date AS ate
     FROM creator.venda v
   `,

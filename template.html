@@ -584,6 +584,11 @@ function abreFicha(id){
   ].map(([k,v,nn]) => '<div><div class="k">'+k+'</div><div class="v">'+v+'</div>'
       + (nn?'<div class="n" style="font-size:10.5px;color:var(--fnt);margin-top:4px">'+nn+'</div>':'')+'</div>').join('');
 
+  const p3 = (D.p360||[]).find(x => x.parceiro_id === id) || {};
+  document.getElementById('fcupom').value = p3.cupom || '(sem cupom)';
+  document.getElementById('flink').value = p3.utm_slug
+    ? 'https://cells.com.br/?utm_source=creator&utm_medium=organic&utm_campaign=' + p3.utm_slug
+    : '(sem slug)';
   document.getElementById('ftags').value = (f.tags||[]).join(', ');
   pintaEnvios(id);
 
@@ -630,6 +635,14 @@ document.getElementById('ecriar').addEventListener('click', async () => {
   const f = FILA.find(x=>x.parceiro_id===fichaId); if (f) f.envios = (f.envios||0)+1;
   eitens.value=''; evalor.value=''; pintaEnvios(fichaId); pintaFila();
 });
+async function copia(el, btn){
+  const v = document.getElementById(el).value;
+  try { await navigator.clipboard.writeText(v); } catch(e) { document.getElementById(el).select(); document.execCommand('copy'); }
+  const b = document.getElementById(btn), o = b.textContent;
+  b.textContent = 'copiado'; setTimeout(() => b.textContent = o, 1400);
+}
+document.getElementById('copiacupom').addEventListener('click', () => copia('fcupom','copiacupom'));
+document.getElementById('copialink').addEventListener('click', () => copia('flink','copialink'));
 document.getElementById('fsalvatags').addEventListener('click', async () => {
   await acao(fichaId, 'tags', {tags: document.getElementById('ftags').value});
 });
@@ -657,7 +670,9 @@ document.getElementById('ledeVendas').innerHTML =
     ? 'Operação de cupom nominal que já rodava na Shopify desde ' + dt(CN.de) + ', importada em 06/08. '
       + '<b>' + n(CN.pedidos) + ' pedidos</b> · <b>R$ ' + n(CN.receita) + '</b> · ticket R$ ' + n(CN.ticket)
       + ' · ' + n(CN.pessoas_que_venderam) + ' pessoas venderam. '
-      + 'Nos últimos 90 dias: ' + n(CN.pedidos_90d) + ' pedidos · R$ ' + n(CN.receita_90d) + '.'
+      + '<br><b>' + n(CN.clientes_novos) + ' clientes novos</b> (R$ ' + n(CN.receita_novos) + '). '
+      + 'Últimos 90 dias: ' + n(CN.pedidos_90d) + ' pedidos · R$ ' + n(CN.receita_90d) + '. '
+      + (CN.sem_flag ? '<span style="color:var(--wa)">' + n(CN.sem_flag) + ' pedidos sem marcação de cliente novo — são anteriores à atribuição v5.</span>' : '')
     : 'Nenhuma venda atribuída ainda.';
 document.getElementById('tbvendas').innerHTML = VD.map(v =>
   '<tr><td class="h"><b>'+(v.nome||'—')+'</b>'
@@ -708,6 +723,15 @@ document.getElementById('ft').innerHTML=
   </div>
   <div class="fbody">
     <div class="fq" id="fquad"></div>
+    <div class="fsec"><h4>Cupom e link</h4>
+      <div class="frm">
+        <input id="fcupom" readonly style="width:170px" aria-label="cupom">
+        <button class="acbt" id="copiacupom">copiar cupom</button>
+        <input id="flink" readonly style="flex:1;min-width:260px" aria-label="link">
+        <button class="acbt" id="copialink">copiar link</button>
+      </div>
+      <p class="obs" style="margin-top:7px">O link carrega <span style="font-family:var(--mono);font-size:11px">utm_campaign</span> do creator. Cupom e link são atribuições <b>diferentes</b> — quando as duas apontam para pessoas diferentes no mesmo pedido, o cupom ganha a comissão e o link fica como assistida.</p>
+    </div>
     <div class="fsec"><h4>Tags</h4>
       <div class="frm"><input id="ftags" placeholder="nutri, sp, alto-engajamento" style="flex:1;min-width:220px">
         <button class="acbt" id="fsalvatags">salvar tags</button></div></div>
