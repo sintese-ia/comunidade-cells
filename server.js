@@ -102,7 +102,7 @@ async function buscarPerfil(handle) {
   const r = await getJSON(url);
   if (r.error) {
     const m = r.error.message || 'erro da Meta';
-    if (/does not exist|cannot be loaded/i.test(m))
+    if (/does not exist|cannot be loaded|invalid user id|unsupported get request/i.test(m))
       throw new Error(`@${h} não foi encontrado como conta Business ou Creator pública. ` +
                       `Perfil pessoal e perfil privado não são visíveis pela API da Meta.`);
     throw new Error(m);
@@ -305,10 +305,15 @@ http.createServer(async (req, res) => {
     if (!h.trim()) return json(400, { erro: 'informe um @' });
     try {
       const p = await buscarPerfil(h);
-      let cells = null;
+      let cells = null, aviso = null;
       try { cells = await historicoCells(p.handle); await salvarSnapshot(p); }
-      catch (e) { console.error('[snapshot]', e.message); }   // busca funciona mesmo se o banco falhar
-      return json(200, { ok: true, perfil: p, cells });
+      catch (e) {
+        // A busca continua útil sem o banco, mas o usuário precisa saber que não foi gravada —
+        // senão parece que a base está crescendo quando não está.
+        console.error('[snapshot]', e.message);
+        aviso = 'consulta feita, mas não foi gravada no banco: ' + e.message;
+      }
+      return json(200, { ok: true, perfil: p, cells, aviso });
     } catch (e) {
       return json(200, { ok: false, erro: e.message });
     }
@@ -354,6 +359,16 @@ http.createServer(async (req, res) => {
 }).listen(PORT, () => {
   console.log('comunidade-cells on :' + PORT + (META ? '' : '  [AVISO: META_TOKEN vazio — busca ao vivo desligada]'));
   recarregar().catch(e => console.error('[boot]', e.message));
+
+  // Checagem de ESCRITA no boot. Em 06/08 o app subiu conectando como um usuário read-only:
+  // a página funcionava, a busca funcionava, e todo job falhava em silêncio porque o erro
+  // era engolido pelo try/catch. Ler não prova nada — o app precisa gravar.
+  pool.query(`INSERT INTO creator.job_log (job,sucesso,detalhe) VALUES ('boot',true,$1)`,
+             ['app subiu e consegue gravar'])
+    .then(() => console.log('  [ok] escrita no Postgres confirmada'))
+    .catch(e => console.error('  [FALHA GRAVE] o app NÃO consegue gravar no Postgres:', e.message,
+                              '\n  Nenhum job vai funcionar. Confira o usuário em DATABASE_URL.'));
+
   J.agendar(pool, { META_TOKEN: META, APIFY_TOKEN: APIFY });
   if (!APP_SECRET) console.log('  [aviso] META_APP_SECRET vazio — webhook de story recusa POST');
   setInterval(() => recarregar().catch(() => {}), Math.max(60000, TTL / 2)).unref();

@@ -289,6 +289,7 @@ document.getElementById('frm').addEventListener('submit', async e=>{
         cel('Marcou a Cells', c.total?n(c.total)+'×':'nunca',
             c.total?(c.reels+'R · '+c.carrossel+'C · '+c.feed+'F · última '+dt(c.ultima)):'sem histórico na base') +
       '</div>'+
+      (j.aviso?'<div class="msg err">'+j.aviso+'</div>':'')+
       (c.cadastrado?'<div class="empty"><span class="tg">cadastrado</span><p><b>'+
         c.cadastrado.nome+'</b> já está na base, status <b>'+c.cadastrado.status+'</b>.</p></div>':'');
   }catch(err){ res.innerHTML='<div class="msg err">Falhou: '+err.message+'</div>'; }

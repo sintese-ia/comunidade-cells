@@ -45,6 +45,7 @@ jobs:
       - name: env vars
         if: ${{ !inputs.apenas_deploy }}
         env:
+          DB_USER: ${{ secrets.DB_USER }}
           DB_PASS: ${{ secrets.DB_PASS }}
           META_TOKEN: ${{ secrets.META_TOKEN }}
           APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
@@ -56,7 +57,7 @@ jobs:
           # mas o resto do painel funciona. Assim que o secret existir, rodar de novo.
           [ -n "$META_APP_SECRET" ] || echo "::warning::META_APP_SECRET vazio — webhook de story vai recusar POST"
           ENV=$(printf '%s\n' \
-            "DATABASE_URL=postgresql://claude_b2b:${DB_PASS}@bancodados:5432/dadoscells" \
+            "DATABASE_URL=postgresql://${DB_USER}:${DB_PASS}@bancodados:5432/dadoscells" \
             "META_TOKEN=${META_TOKEN}" \
             "APIFY_TOKEN=${APIFY_TOKEN}" \
             "META_VERIFY_TOKEN=${META_VERIFY_TOKEN}" \
