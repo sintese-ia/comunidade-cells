@@ -136,6 +136,56 @@
   footer{margin-top:44px;padding-top:16px;border-top:1px solid var(--line);font-size:11.5px;
          color:var(--fnt);line-height:1.75}
   footer b{color:var(--mut);font-weight:600}
+
+  /* ---- fila de curadoria ---- */
+  .abas{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:11px 14px;background:var(--sub);
+        border-bottom:1px solid var(--line)}
+  .aba{font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;border:1px solid var(--line);
+       background:var(--bg);color:var(--mut);border-radius:2px;padding:6px 11px;cursor:pointer}
+  .aba[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .aba b{font-variant-numeric:tabular-nums}
+  .abas input{border:1px solid var(--line);border-radius:2px;padding:6px 9px;font-size:12.5px;
+              font-family:var(--mono);min-width:150px;margin-left:auto}
+  .acbt{font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;border:1px solid var(--line);
+        background:var(--bg);color:var(--mut);border-radius:2px;padding:5px 9px;cursor:pointer;white-space:nowrap}
+  .acbt:hover{border-color:var(--ink);color:var(--ink)}
+  .acbt.ok:hover{background:var(--ok);color:#fff;border-color:var(--ok)}
+  .acbt.no:hover{background:var(--cr);color:#fff;border-color:var(--cr)}
+  .acbt:disabled{opacity:.4;cursor:wait}
+  .acs{display:flex;gap:4px;justify-content:flex-end}
+  .tagchip{display:inline-block;font-size:10px;background:var(--ac-s);color:var(--ac);
+           padding:2px 6px;border-radius:2px;margin-right:3px;font-family:var(--mono)}
+  .lnk{background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer;text-align:left;
+       border-bottom:1px solid var(--line)}
+  .lnk:hover{color:var(--ac);border-color:var(--ac)}
+
+  dialog.ficha{border:1px solid var(--line);border-radius:4px;padding:0;width:min(880px,94vw);
+               background:var(--bg);color:var(--ink)}
+  dialog.ficha::backdrop{background:rgba(20,24,26,.5)}
+  .fhd{padding:17px 19px 13px;border-bottom:1px solid var(--line);display:flex;
+       justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap}
+  .fhd h3{margin:0;font-size:18px;font-weight:640}
+  .fhd .hh{font-family:var(--mono);font-size:12px;color:var(--mut);margin-top:2px}
+  .fhd .bio{font-size:12.5px;color:var(--mut);margin-top:7px;max-width:58ch;white-space:pre-line}
+  .fbody{max-height:min(66vh,620px);overflow:auto}
+  .fq{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:1px;background:var(--line2)}
+  .fq>div{background:var(--bg);padding:12px 14px}
+  .fq .k{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut)}
+  .fq .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:20px;margin-top:6px;font-weight:520}
+  .fsec{padding:14px 19px;border-top:1px solid var(--line2)}
+  .fsec h4{margin:0 0 9px;font-size:12px;font-family:var(--mono);letter-spacing:.1em;
+           text-transform:uppercase;color:var(--mut);font-weight:600}
+  .pub{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--line2);font-size:12.5px;align-items:baseline}
+  .pub:last-child{border-bottom:0}
+  .pub .t{font-family:var(--mono);font-size:9px;text-transform:uppercase;padding:2px 6px;
+          border-radius:2px;background:var(--vo-s);color:var(--mut);flex:none}
+  .pub .d{font-family:var(--mono);font-size:11px;color:var(--fnt);flex:none;width:76px}
+  .pub .l{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink2)}
+  .pub .m{font-family:var(--mono);font-size:11px;color:var(--mut);flex:none}
+  .frm{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+  .frm input,.frm select{border:1px solid var(--line);border-radius:2px;padding:7px 9px;
+                         font-size:12.5px;font-family:var(--mono)}
+  .fft{padding:12px 19px;border-top:1px solid var(--line);display:flex;gap:7px;justify-content:flex-end;flex-wrap:wrap}
   @media(max-width:640px){.wrap{padding:22px 13px 60px}.top h1{font-size:20px}.stamp{text-align:left}}
   @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -206,18 +256,31 @@
     <div class="note" id="critNote"></div>
   </section>
 
-  <!-- 03 CADASTRADOS -->
+  <!-- 03 FILA DE CURADORIA -->
   <section>
-    <div class="hd"><span class="eb">Módulo 03</span><h2>Cadastrados — fila de curadoria</h2></div>
-    <p class="lede">Quem preencheu o formulário e ainda não foi aprovado. A coluna que importa é a última.</p>
+    <div class="hd"><span class="eb">Módulo 03</span><h2>Fila de curadoria</h2></div>
+    <p class="lede">Quem se cadastrou, com os números do perfil na mesma linha. Aprovar, reprovar ou arquivar sem sair daqui — e sem abrir o Instagram de ninguém.</p>
     <div class="panel">
-      <div class="scroll"><table>
+      <div class="abas">
+        <button class="aba" data-fl="pendente" aria-pressed="true">pendentes <b id="c-pendente">0</b></button>
+        <button class="aba" data-fl="ativo" aria-pressed="false">aprovados <b id="c-ativo">0</b></button>
+        <button class="aba" data-fl="reprovado" aria-pressed="false">reprovados <b id="c-reprovado">0</b></button>
+        <button class="aba" data-fl="arquivado" aria-pressed="false">arquivados <b id="c-arquivado">0</b></button>
+        <button class="aba" data-fl="semtag" aria-pressed="false">sem tag <b id="c-semtag">0</b></button>
+        <input id="fq" placeholder="filtrar por nome, @ ou tag" aria-label="Filtrar fila">
+      </div>
+      <div class="scroll"><table id="tfila">
         <thead><tr>
           <th>Pessoa</th><th>Cadastro</th><th>Seguidores</th><th>Eng.</th>
-          <th>Posts 30d</th><th>Último post</th><th>Já marcou a Cells?</th>
+          <th>Posts 30d</th><th>Último post</th><th>Views/seg.</th>
+          <th>Marcações</th><th>Envios</th><th>Tags</th><th>Ações</th>
         </tr></thead>
-        <tbody id="cad"></tbody>
+        <tbody id="tbfila"></tbody>
       </table></div>
+      <div class="empty">
+        <span class="tg">como decidir</span>
+        <p>O critério sugerido é <b>engajamento ≥ 2%</b> e <b>4+ publicações nos últimos 30 dias</b>, sem piso de seguidores. As linhas que passam vêm com o engajamento em verde. <b>Views/seg.</b> ajuda a separar conta grande e parada de conta pequena e viva.</p>
+      </div>
     </div>
     <div class="note al" id="gapNote"></div>
   </section>
@@ -367,13 +430,199 @@ document.getElementById('critNote').innerHTML=
   '<p>Na base atual: <b>'+aprova+' aprovam</b>, '+corta+' cortam, o resto fica para revisão manual. '+
   'Seguidor sozinho engana — ordene por Seguidores e depois por Eng. para ver o quanto.</p>';
 
-/* ---------- cadastrados ---------- */
-document.getElementById('cad').innerHTML=(D.cadastrados||[]).map(c=>
-  '<tr><td class="h"><b>'+(c.nome||'—')+'</b><span class="sub2">@'+(c.instagram_handle||'—')+'</span></td>'+
-  '<td class="dim">'+dt(c.cadastro)+'</td><td>'+n(c.seguidores)+'</td><td>'+pc(c.engajamento_pct)+'</td>'+
-  '<td>'+(c.posts_30d==null?'—':c.posts_30d)+'</td><td class="dim">'+dt(c.ultimo_post)+'</td>'+
-  '<td><span class="chip '+(c.ja_marcou?'ok':'vo')+'">'+(c.ja_marcou?'sim':'nunca')+'</span></td></tr>'
-).join('') || '<tr><td colspan="7" class="h dim" style="padding:20px 15px">Nenhum cadastro ainda.</td></tr>';
+
+/* ================= FILA DE CURADORIA ================= */
+const FILA = D.fila || [];
+const ENVIOS = D.envios || [];
+const PUBS  = D.fichaPubs || [];
+let flAba = 'pendente', flBusca = '';
+
+// mesmo critério da coluna Curadoria do módulo 02 — um só lugar decide o que é "aprova"
+const passaCriterio = f => f.engajamento_pct != null && f.engajamento_pct >= 2 && (f.posts_30d||0) >= 4;
+
+function contaFila(){
+  const c = {pendente:0, ativo:0, reprovado:0, arquivado:0, semtag:0};
+  FILA.forEach(f => {
+    if (f.arquivado) { c.arquivado++; return; }
+    if (c[f.status] != null) c[f.status]++;
+    if (!f.tags || !f.tags.length) c.semtag++;
+  });
+  for (const k in c) { const el = document.getElementById('c-'+k); if (el) el.textContent = c[k]; }
+}
+
+function filtraFila(){
+  return FILA.filter(f => {
+    if (flAba === 'arquivado') { if (!f.arquivado) return false; }
+    else if (flAba === 'semtag') { if (f.arquivado || (f.tags && f.tags.length)) return false; }
+    else { if (f.arquivado || f.status !== flAba) return false; }
+    if (flBusca) {
+      const alvo = ((f.nome||'') + ' ' + (f.instagram_handle||'') + ' ' + (f.tags||[]).join(' ')).toLowerCase();
+      if (!alvo.includes(flBusca)) return false;
+    }
+    return true;
+  });
+}
+
+function pintaFila(){
+  contaFila();
+  const L = filtraFila();
+  document.getElementById('tbfila').innerHTML = L.map(f => {
+    const okc = passaCriterio(f);
+    const eng = f.perfil_indisponivel ? '<span class="chip vo" title="perfil pessoal ou privado — a Meta não expõe">perfil pessoal</span>'
+      : f.engajamento_pct == null ? '<span class="dim">—</span>'
+      : '<span style="color:var(--'+(okc?'ok':f.engajamento_pct<1?'cr':'ink')+');font-weight:'+(okc?600:400)+'">'
+        + pc(f.engajamento_pct) + '</span>';
+    const acoes = f.arquivado
+      ? '<button class="acbt" data-ac="desarquivar" data-id="'+f.parceiro_id+'">desarquivar</button>'
+      : (f.status === 'pendente'
+          ? '<button class="acbt ok" data-ac="aprovar" data-id="'+f.parceiro_id+'">aprovar</button>'
+            + '<button class="acbt no" data-ac="reprovar" data-id="'+f.parceiro_id+'">reprovar</button>'
+            + '<button class="acbt" data-ac="arquivar" data-id="'+f.parceiro_id+'">arquivar</button>'
+          : '<button class="acbt" data-ficha="'+f.parceiro_id+'">abrir ficha</button>');
+    return '<tr>'
+      + '<td class="h"><button class="lnk" data-ficha="'+f.parceiro_id+'"><b>'+(f.nome||'—')+'</b></button>'
+        + '<span class="sub2">@'+(f.instagram_handle||'—')+'</span></td>'
+      + '<td class="dim">'+dt(f.cadastro)+'</td>'
+      + '<td>'+n(f.seguidores)+'</td>'
+      + '<td>'+eng+'</td>'
+      + '<td>'+(f.posts_30d==null?'—':f.posts_30d)+'</td>'
+      + '<td class="dim">'+dt(f.ultimo_post)+'</td>'
+      + '<td'+(f.vps>=0.5?' style="color:var(--ok)"':'')+'>'+(f.vps==null?'—':f.vps)+'</td>'
+      + '<td>'+(f.marcacoes||'—')+(f.ja_marcou?'':'')+'</td>'
+      + '<td class="dim">'+(f.envios||'—')+'</td>'
+      + '<td class="h">'+((f.tags||[]).map(x=>'<span class="tagchip">'+x+'</span>').join('')||'<span class="dim">—</span>')+'</td>'
+      + '<td><div class="acs">'+acoes+'</div></td></tr>';
+  }).join('') || '<tr><td colspan="11" class="h dim" style="padding:20px 15px">Nada nesta aba.</td></tr>';
+}
+
+document.querySelectorAll('.aba').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.aba').forEach(x => x.setAttribute('aria-pressed','false'));
+  b.setAttribute('aria-pressed','true'); flAba = b.dataset.fl; pintaFila();
+}));
+document.getElementById('fq').addEventListener('input', e => {
+  flBusca = e.target.value.trim().toLowerCase(); pintaFila();
+});
+
+/* ---- ações ---- */
+async function acao(id, ac, extra){
+  const q = new URLSearchParams({id, acao: ac, ...(extra||{})});
+  const r = await fetch('/api/parceiro?'+q, {method:'POST'});
+  const j = await r.json();
+  if (!j.ok) { alert('Não deu certo: ' + (j.erro||'erro')); return null; }
+  const f = FILA.find(x => x.parceiro_id === id);
+  if (f) {
+    f.status = j.parceiro.status; f.arquivado = j.parceiro.arquivado;
+    f.tags = j.parceiro.tags; f.reprovado_motivo = j.parceiro.reprovado_motivo;
+  }
+  pintaFila();
+  return j.parceiro;
+}
+
+document.addEventListener('click', async e => {
+  const b = e.target.closest('[data-ac]');
+  if (b) {
+    const id = +b.dataset.id, ac = b.dataset.ac;
+    // reprovar sem motivo vira lista de gente reprovada sem ninguém lembrar por quê
+    let extra = {};
+    if (ac === 'reprovar') {
+      const m = prompt('Motivo da reprovação (fica registrado):');
+      if (m === null) return;
+      extra.motivo = m;
+    }
+    b.disabled = true;
+    await acao(id, ac, extra);
+    return;
+  }
+  const fb = e.target.closest('[data-ficha]');
+  if (fb) abreFicha(+fb.dataset.ficha);
+});
+
+/* ---- ficha ---- */
+let fichaId = null;
+const dlgF = document.getElementById('dlgFicha');
+function abreFicha(id){
+  const f = FILA.find(x => x.parceiro_id === id); if (!f) return;
+  fichaId = id;
+  document.getElementById('fnome').textContent = f.nome || '—';
+  document.getElementById('fhandle').innerHTML = '@'+(f.instagram_handle||'—')
+    + ' · cadastro '+dt(f.cadastro) + (f.decidido_por ? ' · decidido por '+f.decidido_por : '');
+  document.getElementById('fbio').textContent = f.bio || '';
+  const okc = passaCriterio(f);
+  document.getElementById('fstatus').innerHTML =
+    '<span class="chip '+(f.arquivado?'vo':f.status==='ativo'?'ok':f.status==='reprovado'?'cr':'wa')+'">'
+    + (f.arquivado?'arquivado':f.status) + '</span>'
+    + (f.status==='pendente' ? ' <span class="chip '+(okc?'ok':'wa')+'">'
+        + (okc?'passa no critério':'revisar') + '</span>' : '')
+    + (f.reprovado_motivo ? '<div class="obs" style="margin-top:6px;max-width:34ch">'+f.reprovado_motivo+'</div>' : '');
+
+  document.getElementById('fquad').innerHTML = [
+    ['Seguidores', n(f.seguidores), ''],
+    ['Engajamento', pc(f.engajamento_pct), 'últimos 12 posts'],
+    ['Posts 30d', f.posts_30d==null?'—':f.posts_30d, 'último '+dt(f.ultimo_post)],
+    ['Marcações', f.marcacoes||'—', 'à Cells'],
+    ['Views', n(f.views_marc), (f.reels_medidos||0)+' reels'],
+    ['Views/seg.', f.vps==null?'—':f.vps, ''],
+  ].map(([k,v,nn]) => '<div><div class="k">'+k+'</div><div class="v">'+v+'</div>'
+      + (nn?'<div class="n" style="font-size:10.5px;color:var(--fnt);margin-top:4px">'+nn+'</div>':'')+'</div>').join('');
+
+  document.getElementById('ftags').value = (f.tags||[]).join(', ');
+  pintaEnvios(id);
+
+  const ps = PUBS.filter(p => p.parceiro_id === id);
+  document.getElementById('fpubs').innerHTML = ps.length ? ps.map(p =>
+    '<div class="pub"><span class="t">'+p.tipo.replace('feed_','')+'</span>'
+    + '<span class="d">'+dt(p.data)+'</span>'
+    + '<span class="l">'+(p.permalink?'<a href="'+p.permalink+'" target="_blank" rel="noopener" style="color:inherit">'+(p.legenda||'(sem legenda)')+'</a>':(p.legenda||'—'))+'</span>'
+    + '<span class="m">'+(p.curtidas!=null?n(p.curtidas)+'❤ ':'')
+    + (p.visualizacoes?n(p.visualizacoes)+' views':'')+'</span></div>').join('')
+    : '<p class="dim" style="font-size:12.5px;margin:0">Nenhuma publicação capturada ainda.</p>';
+
+  const pend = f.status === 'pendente' && !f.arquivado;
+  ['faprovar','freprovar','farquivar'].forEach(x =>
+    document.getElementById(x).style.display = pend ? '' : 'none');
+  dlgF.showModal();
+}
+function pintaEnvios(id){
+  const es = ENVIOS.filter(x => x.parceiro_id === id);
+  document.getElementById('elista').innerHTML = es.length ? es.map(x =>
+    '<div class="pub"><span class="t">'+x.tipo.replace('_',' ')+'</span>'
+    + '<span class="d">'+dt(x.solicitado)+'</span>'
+    + '<span class="l">'+(x.itens||'—')+(x.rastreio?' · '+x.rastreio:'')+'</span>'
+    + '<span class="m">'+(x.valor?'R$ '+n(x.valor):'')+'</span>'
+    + '<select class="acbt" data-envio="'+x.envio_id+'">'
+    + ['solicitado','separado','nf_emitida','postado','entregue','cancelado']
+        .map(s=>'<option value="'+s+'"'+(s===x.status?' selected':'')+'>'+s.replace('_',' ')+'</option>').join('')
+    + '</select></div>').join('')
+    : '<p class="dim" style="font-size:12.5px;margin:0">Nenhum envio registrado.</p>';
+}
+document.getElementById('elista').addEventListener('change', async e => {
+  const s = e.target.closest('[data-envio]'); if (!s) return;
+  const r = await fetch('/api/envio?envio_id='+s.dataset.envio+'&status='+s.value, {method:'POST'});
+  const j = await r.json();
+  if (!j.ok) alert('Não deu certo: '+(j.erro||'erro'));
+  else { const x = ENVIOS.find(v=>v.envio_id==s.dataset.envio); if (x) x.status = j.envio.status; }
+});
+document.getElementById('ecriar').addEventListener('click', async () => {
+  const q = new URLSearchParams({id: fichaId, tipo: etipo.value,
+    itens: eitens.value, valor: evalor.value.replace(',','.')});
+  const j = await (await fetch('/api/envio?'+q, {method:'POST'})).json();
+  if (!j.ok) return alert('Não deu certo: '+(j.erro||'erro'));
+  ENVIOS.unshift({...j.envio, solicitado: String(j.envio.solicitado_em).slice(0,10)});
+  const f = FILA.find(x=>x.parceiro_id===fichaId); if (f) f.envios = (f.envios||0)+1;
+  eitens.value=''; evalor.value=''; pintaEnvios(fichaId); pintaFila();
+});
+document.getElementById('fsalvatags').addEventListener('click', async () => {
+  await acao(fichaId, 'tags', {tags: document.getElementById('ftags').value});
+});
+document.getElementById('faprovar').addEventListener('click', async () => { await acao(fichaId,'aprovar'); dlgF.close(); });
+document.getElementById('farquivar').addEventListener('click', async () => { await acao(fichaId,'arquivar'); dlgF.close(); });
+document.getElementById('freprovar').addEventListener('click', async () => {
+  const m = prompt('Motivo da reprovação (fica registrado):'); if (m === null) return;
+  await acao(fichaId,'reprovar',{motivo:m}); dlgF.close();
+});
+document.getElementById('ffechar').addEventListener('click', () => dlgF.close());
+
+pintaFila();
 
 const marcam=r.cadastrados_que_marcam||0;
 document.getElementById('gapNote').innerHTML=
@@ -409,5 +658,39 @@ document.getElementById('ft').innerHTML=
   '<b>Views vs reprodução vs alcance</b> — três coisas. View é a "visualização" que o Instagram mostra; reprodução conta cada replay (~3× maior); alcance é conta única e <b>não existe aqui</b>, porque a Meta não entrega insight de post de terceiro. Só com tag de Parceria Paga.<br>'+
   '<b>Story</b> — capturado por webhook a partir da ativação, sem histórico. A mídia é baixada no ato: o CDN da Meta expira em 24h.';
 </script>
+
+<dialog class="ficha" id="dlgFicha">
+  <div class="fhd">
+    <div><h3 id="fnome">—</h3><div class="hh" id="fhandle"></div><div class="bio" id="fbio"></div></div>
+    <div id="fstatus"></div>
+  </div>
+  <div class="fbody">
+    <div class="fq" id="fquad"></div>
+    <div class="fsec"><h4>Tags</h4>
+      <div class="frm"><input id="ftags" placeholder="nutri, sp, alto-engajamento" style="flex:1;min-width:220px">
+        <button class="acbt" id="fsalvatags">salvar tags</button></div></div>
+    <div class="fsec"><h4>Registrar envio</h4>
+      <div class="frm">
+        <select id="etipo">
+          <option value="kit_entrada">kit de entrada</option>
+          <option value="seeding">seeding</option>
+          <option value="premio">prêmio</option>
+          <option value="reposicao">reposição</option>
+        </select>
+        <input id="eitens" placeholder="o que vai" style="flex:1;min-width:150px">
+        <input id="evalor" placeholder="custo R$" style="width:96px" inputmode="decimal">
+        <button class="acbt ok" id="ecriar">registrar</button>
+      </div>
+      <div id="elista" style="margin-top:10px"></div>
+    </div>
+    <div class="fsec"><h4>Publicações que marcaram a Cells</h4><div id="fpubs"></div></div>
+  </div>
+  <div class="fft">
+    <button class="acbt no" id="freprovar">reprovar</button>
+    <button class="acbt" id="farquivar">arquivar</button>
+    <button class="acbt ok" id="faprovar">aprovar</button>
+    <button class="acbt" id="ffechar">fechar</button>
+  </div>
+</dialog>
 </body>
 </html>

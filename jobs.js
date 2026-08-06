@@ -103,6 +103,69 @@ async function syncTags(pool, token) {
   return { novas, vistas, paginas, metricas };
 }
 
+// ---------------------------------------------------------------- 1b. cadastros -> fila
+// creator.leads é a entrada crua (webhook das LPs). creator.parceiro é quem entrou na fila de
+// curadoria. Este job faz a ponte: todo cadastro COMPLETO com @ vira um candidato pendente.
+// Idempotente por handle — rodar de novo não duplica.
+async function syncCadastros(pool, token) {
+  const r = await pool.query(`
+    INSERT INTO creator.parceiro (tipo,status,lead_id,nome,email,telefone_e164,instagram_handle,criado_em)
+    SELECT 'creator','pendente', v.lead_id, v.nome, v.email, v.telefone_e164,
+           lower(regexp_replace(v.instagram_handle,'^@','')), v.data_cadastro
+    FROM creator.vw_cadastro v
+    WHERE coalesce(v.instagram_handle,'') <> ''
+      AND NOT EXISTS (
+        SELECT 1 FROM creator.parceiro p
+        WHERE lower(p.instagram_handle) = lower(regexp_replace(v.instagram_handle,'^@','')))
+    RETURNING parceiro_id, instagram_handle`);
+
+  // liga o que já foi publicado por essa pessoa antes de ela se cadastrar
+  await pool.query(`UPDATE creator.publicacao pu SET parceiro_id=pa.parceiro_id
+    FROM creator.parceiro pa WHERE pu.parceiro_id IS NULL
+      AND lower(pu.instagram_handle)=lower(pa.instagram_handle)`);
+  await pool.query(`UPDATE creator.perfil_snapshot s SET parceiro_id=pa.parceiro_id
+    FROM creator.parceiro pa WHERE s.parceiro_id IS NULL
+      AND lower(s.instagram_handle)=lower(pa.instagram_handle)`);
+
+  // Enriquecer AGORA, não no ciclo semanal. Candidato que chega sem seguidores e sem
+  // engajamento obriga a abrir o Instagram na mão — que é exatamente o que a fila existe
+  // para evitar. São poucos por vez, então cabe no mesmo job.
+  // Pega TODO parceiro sem nenhum snapshot — não só os que acabaram de entrar. Assim a fila
+  // se conserta sozinha se um enriquecimento falhar ou se alguém for inserido por fora.
+  let enriquecidos = 0, indisponiveis = 0;
+  if (token) {
+    const faltando = await pool.query(`
+      SELECT lower(instagram_handle) AS instagram_handle FROM creator.parceiro p
+      WHERE instagram_handle IS NOT NULL AND NOT p.arquivado
+        AND NOT EXISTS (SELECT 1 FROM creator.perfil_snapshot s
+                        WHERE lower(s.instagram_handle)=lower(p.instagram_handle))
+      LIMIT 40`);
+    for (const { instagram_handle: h } of faltando.rows) {
+      try {
+        const p = await perfilDe(token, h);
+        if (p) { await salvarPerfil(pool, p); enriquecidos++; }
+        else {
+          // Perfil pessoal ou privado: a Meta não expõe e NUNCA vai expor enquanto continuar
+          // assim. Grava um marcador para a fila mostrar "perfil pessoal" em vez de campo vazio,
+          // e para o job parar de tentar de hora em hora até o fim dos tempos.
+          await pool.query(`
+            INSERT INTO creator.perfil_snapshot (instagram_handle, coletado_em, fonte, payload)
+            VALUES ($1, current_date, 'indisponivel', $2)
+            ON CONFLICT (lower(instagram_handle), coletado_em) DO NOTHING`,
+            [h, { motivo: 'perfil pessoal ou privado — business_discovery não retorna' }]);
+          indisponiveis++;
+        }
+      } catch (e) { console.error('[cadastro/enriquecer]', h, e.message); }
+      await sleep(250);
+    }
+    await pool.query(`UPDATE creator.perfil_snapshot s SET parceiro_id=pa.parceiro_id
+      FROM creator.parceiro pa WHERE s.parceiro_id IS NULL
+        AND lower(s.instagram_handle)=lower(pa.instagram_handle)`);
+  }
+
+  return { novos: r.rowCount, enriquecidos, indisponiveis, handles: r.rows.map(x => x.instagram_handle) };
+}
+
 // ---------------------------------------------------------------- 2. business_discovery
 // Engajamento = média por post sobre os últimos 12. NÃO é janela de 30 dias — quem parou de
 // postar continua tendo número, e a atividade real fica em posts_30d / ultimo_post.
@@ -298,6 +361,7 @@ function agendar(pool, env) {
     const t0 = Date.now();
     try {
       const r = await fn();
+      if (typeof env.onMudanca === 'function') env.onMudanca();
       console.log(`[job ${nome}] ok em ${((Date.now()-t0)/1000).toFixed(1)}s`, JSON.stringify(r));
       await logJob(pool, nome, true, JSON.stringify(r), r.novas ?? r.atualizados ?? r.coletados ?? 0);
     } catch (e) {
@@ -306,7 +370,10 @@ function agendar(pool, env) {
     } finally { rodando.delete(nome); }
   };
 
-  const DIA = 864e5;
+  const DIA = 864e5, HORA = 36e5;
+  // cadastro novo tem que aparecer na fila rápido — é o que o Gabriel abre de manhã
+  setInterval(() => roda('cadastros', () => syncCadastros(pool, env.META_TOKEN)), HORA).unref();
+  setTimeout(() => roda('cadastros', () => syncCadastros(pool, env.META_TOKEN)), 15000).unref();
   // /tags roda diário: marcação nova aparecendo com 1 dia de atraso já é aceitável, e é barato.
   setInterval(() => roda('tags',   () => syncTags(pool, env.META_TOKEN)),   DIA).unref();
   setInterval(() => roda('perfis', () => syncPerfis(pool, env.META_TOKEN)), 7 * DIA).unref();
@@ -318,5 +385,5 @@ function agendar(pool, env) {
   return { roda, syncTags, syncPerfis, syncApify };
 }
 
-module.exports = { syncTags, syncPerfis, syncApify, perfilDe, salvarPerfil,
+module.exports = { syncTags, syncPerfis, syncApify, syncCadastros, perfilDe, salvarPerfil,
                    guardarStory, extrairStories, agendar, logJob };

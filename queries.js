@@ -82,7 +82,66 @@ module.exports = {
     ORDER BY s.engajamento_pct DESC NULLS LAST
   `,
 
-  // ---- cadastrados aguardando curadoria ----
+  // ---- FILA DE CURADORIA: candidato + métrica do perfil na mesma linha ----
+  // É a tela que o Gabriel abre de manhã. Tudo que decide aprovar tem que estar aqui,
+  // sem precisar abrir o Instagram de ninguém.
+  fila: `
+    SELECT p.parceiro_id, p.nome, p.instagram_handle, p.email, p.telefone_e164,
+           p.status, p.arquivado, p.tags, p.criado_em::date AS cadastro,
+           p.aprovado_em::date AS aprovado, p.reprovado_motivo, p.decidido_por,
+           s.seguidores, s.engajamento_pct, s.posts_30d, s.ultimo_post, s.bio,
+           (s.fonte = 'indisponivel') AS perfil_indisponivel,
+           EXISTS (SELECT 1 FROM creator.publicacao u
+                   WHERE lower(u.instagram_handle)=lower(p.instagram_handle)) AS ja_marcou,
+           (SELECT count(*) FROM creator.publicacao u
+            WHERE lower(u.instagram_handle)=lower(p.instagram_handle))::int AS marcacoes,
+           v.views_marc, v.reels_medidos,
+           CASE WHEN s.seguidores > 0 AND v.views_marc > 0
+                THEN round(v.views_marc::numeric / s.seguidores, 2) END AS vps,
+           (SELECT count(*) FROM creator.envio e WHERE e.parceiro_id=p.parceiro_id)::int AS envios
+    FROM creator.parceiro p
+    LEFT JOIN LATERAL (
+      SELECT seguidores, engajamento_pct, posts_30d, ultimo_post, bio, fonte
+      FROM creator.perfil_snapshot ps
+      WHERE lower(ps.instagram_handle)=lower(p.instagram_handle)
+      ORDER BY (fonte <> 'indisponivel') DESC, coletado_em DESC LIMIT 1
+    ) s ON true
+    LEFT JOIN LATERAL (
+      SELECT sum(x.v) AS views_marc, count(*) FILTER (WHERE x.v IS NOT NULL)::int AS reels_medidos
+      FROM creator.publicacao u
+      JOIN LATERAL (SELECT max(visualizacoes) v FROM creator.publicacao_metrica m
+                    WHERE m.publicacao_id=u.publicacao_id) x ON true
+      WHERE lower(u.instagram_handle)=lower(p.instagram_handle)
+    ) v ON true
+    ORDER BY p.criado_em DESC
+  `,
+
+  // ---- envios ----
+  envios: `
+    SELECT e.envio_id, e.parceiro_id, p.nome, p.instagram_handle,
+           e.tipo, e.itens, e.valor, e.status, e.rastreio,
+           e.solicitado_em::date AS solicitado, e.enviado_em::date AS enviado,
+           e.entregue_em::date AS entregue, e.obs
+    FROM creator.envio e
+    JOIN creator.parceiro p ON p.parceiro_id = e.parceiro_id
+    ORDER BY e.solicitado_em DESC LIMIT 200
+  `,
+
+  // ---- publicações por parceiro, para a ficha ----
+  fichaPubs: `
+    SELECT u.parceiro_id, u.instagram_handle, u.tipo, u.publicado_em::date AS data,
+           u.permalink, left(coalesce(u.legenda,''),140) AS legenda,
+           m.curtidas, m.comentarios, m.visualizacoes
+    FROM creator.publicacao u
+    LEFT JOIN LATERAL (
+      SELECT max(curtidas) curtidas, max(comentarios) comentarios, max(visualizacoes) visualizacoes
+      FROM creator.publicacao_metrica pm WHERE pm.publicacao_id=u.publicacao_id
+    ) m ON true
+    WHERE u.parceiro_id IS NOT NULL
+    ORDER BY u.publicado_em DESC
+  `,
+
+  // ---- cadastrados aguardando curadoria (legado — a `fila` substitui) ----
   cadastrados: `
     SELECT p.parceiro_id, p.nome, p.instagram_handle, p.email, p.status,
            p.criado_em::date AS cadastro,

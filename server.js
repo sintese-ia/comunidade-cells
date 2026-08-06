@@ -319,16 +319,85 @@ http.createServer(async (req, res) => {
     }
   }
 
+  // ---------------- ações de curadoria ----------------
+  // POST /api/parceiro?id=1&acao=aprovar|reprovar|arquivar|desarquivar|tags
+  if (u.pathname === '/api/parceiro' && req.method === 'POST') {
+    const id = +u.searchParams.get('id');
+    const acao = u.searchParams.get('acao');
+    const por = (u.searchParams.get('por') || 'painel').slice(0, 60);
+    const motivo = (u.searchParams.get('motivo') || '').slice(0, 400);
+    const tags = (u.searchParams.get('tags') || '').split(',').map(t => t.trim()).filter(Boolean);
+    if (!id) return json(400, { erro: 'id ausente' });
+
+    const acoes = {
+      aprovar:     [`UPDATE creator.parceiro SET status='ativo', aprovado_em=now(), decidido_por=$2,
+                       arquivado=false, reprovado_em=NULL, reprovado_motivo=NULL,
+                       atualizado_em=now() WHERE parceiro_id=$1 RETURNING *`, [id, por]],
+      reprovar:    [`UPDATE creator.parceiro SET status='reprovado', reprovado_em=now(),
+                       reprovado_motivo=$3, decidido_por=$2, atualizado_em=now()
+                       WHERE parceiro_id=$1 RETURNING *`, [id, por, motivo]],
+      arquivar:    [`UPDATE creator.parceiro SET arquivado=true, arquivado_em=now(),
+                       decidido_por=$2, atualizado_em=now() WHERE parceiro_id=$1 RETURNING *`, [id, por]],
+      desarquivar: [`UPDATE creator.parceiro SET arquivado=false, arquivado_em=NULL,
+                       atualizado_em=now() WHERE parceiro_id=$1 RETURNING *`, [id]],
+      tags:        [`UPDATE creator.parceiro SET tags=$2, atualizado_em=now()
+                       WHERE parceiro_id=$1 RETURNING *`, [id, tags.length ? tags : null]],
+    };
+    if (!acoes[acao]) return json(400, { erro: 'ação desconhecida' });
+    try {
+      const [sql, params] = acoes[acao];
+      const r = await pool.query(sql, params);
+      if (!r.rows[0]) return json(404, { erro: 'parceiro não encontrado' });
+      cache.at = 0;                       // força recarga: a fila mudou
+      return json(200, { ok: true, parceiro: r.rows[0] });
+    } catch (e) { return json(200, { ok: false, erro: e.message }); }
+  }
+
+  // ---------------- envios ----------------
+  if (u.pathname === '/api/envio' && req.method === 'POST') {
+    const id = +u.searchParams.get('id');
+    const envioId = +u.searchParams.get('envio_id');
+    const g = k => u.searchParams.get(k) || null;
+    try {
+      if (envioId) {                      // atualizar status de um envio existente
+        const st = g('status');
+        const r = await pool.query(
+          `UPDATE creator.envio SET status=coalesce($2,status), rastreio=coalesce($3,rastreio),
+             enviado_em = CASE WHEN $2='postado'  THEN coalesce(enviado_em, now()) ELSE enviado_em END,
+             entregue_em= CASE WHEN $2='entregue' THEN coalesce(entregue_em,now()) ELSE entregue_em END
+           WHERE envio_id=$1 RETURNING *`, [envioId, st, g('rastreio')]);
+        cache.at = 0;
+        return json(200, { ok: true, envio: r.rows[0] });
+      }
+      if (!id) return json(400, { erro: 'id do parceiro ausente' });
+      const r = await pool.query(
+        `INSERT INTO creator.envio (parceiro_id,tipo,itens,valor,obs,criado_por)
+         VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+        [id, g('tipo') || 'kit_entrada', g('itens'), g('valor') || null, g('obs'),
+         (g('por') || 'painel').slice(0, 60)]);
+      // o custo entra na mesma hora — senão o budget do mês mente
+      if (g('valor')) await pool.query(
+        `INSERT INTO creator.custo (parceiro_id,competencia,tipo,valor,descricao,lancado_por)
+         VALUES ($1, date_trunc('month',current_date)::date, $2, $3, $4, $5)`,
+        [id, g('tipo') === 'seeding' ? 'seeding' : g('tipo') === 'premio' ? 'premio' : 'kit_entrada',
+         g('valor'), g('itens'), (g('por') || 'painel').slice(0, 60)]);
+      cache.at = 0;
+      return json(200, { ok: true, envio: r.rows[0] });
+    } catch (e) { return json(200, { ok: false, erro: e.message }); }
+  }
+
   // disparo manual de job (o agendador roda sozinho; isto é para não esperar o ciclo)
   if (u.pathname === '/api/job' && req.method === 'POST') {
     const nome = u.searchParams.get('n');
-    const fns = { tags:  () => J.syncTags(pool, META),
+    const fns = { cadastros: () => J.syncCadastros(pool, META),
+                  tags:  () => J.syncTags(pool, META),
                   perfis:() => J.syncPerfis(pool, META),
                   apify: () => J.syncApify(pool, APIFY) };
-    if (!fns[nome]) return json(400, { erro: 'job desconhecido: use tags, perfis ou apify' });
+    if (!fns[nome]) return json(400, { erro: 'job desconhecido: use cadastros, tags, perfis ou apify' });
     try {
       const r = await fns[nome]();
-      await J.logJob(pool, nome, true, JSON.stringify(r), r.novas ?? r.atualizados ?? r.coletados ?? 0);
+      cache.at = 0;   // o job mexeu no banco — a próxima leitura tem que ser fresca
+      await J.logJob(pool, nome, true, JSON.stringify(r), r.novas ?? r.atualizados ?? r.coletados ?? r.novos ?? 0);
       return json(200, { ok: true, job: nome, resultado: r });
     }
     catch (e) { await J.logJob(pool, nome, false, e.message, 0); return json(200, { ok: false, erro: e.message }); }
@@ -369,7 +438,7 @@ http.createServer(async (req, res) => {
     .catch(e => console.error('  [FALHA GRAVE] o app NÃO consegue gravar no Postgres:', e.message,
                               '\n  Nenhum job vai funcionar. Confira o usuário em DATABASE_URL.'));
 
-  J.agendar(pool, { META_TOKEN: META, APIFY_TOKEN: APIFY });
+  J.agendar(pool, { META_TOKEN: META, APIFY_TOKEN: APIFY, onMudanca: () => { cache.at = 0; } });
   if (!APP_SECRET) console.log('  [aviso] META_APP_SECRET vazio — webhook de story recusa POST');
   setInterval(() => recarregar().catch(() => {}), Math.max(60000, TTL / 2)).unref();
 });
