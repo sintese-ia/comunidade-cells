@@ -189,6 +189,37 @@ module.exports = {
     GROUP BY 1 ORDER BY 2 DESC
   `,
 
+  // ---- vendas por parceiro (cupom nominal) ----
+  // ⚠️ Só atribuição por CUPOM. Clique/UTM e assistida ainda não existem — quando existirem,
+  // ficam em colunas separadas e NUNCA somadas com esta.
+  vendas: `
+    SELECT p.parceiro_id, p.nome, p.instagram_handle, p.origem, p.tipo,
+           c.codigo AS cupom, c.desconto_pct,
+           count(*)::int                          AS pedidos,
+           round(sum(v.receita_liquida),2)        AS receita,
+           round(avg(v.receita_liquida),2)        AS ticket,
+           min(v.pedido_em)::date                 AS primeira,
+           max(v.pedido_em)::date                 AS ultima,
+           count(*) FILTER (WHERE v.pedido_em >= current_date - 90)::int AS pedidos_90d
+    FROM creator.venda v
+    JOIN creator.parceiro p ON p.parceiro_id = v.parceiro_id
+    LEFT JOIN creator.cupom c ON c.cupom_id = v.cupom_id
+    GROUP BY 1,2,3,4,5,6,7
+    ORDER BY sum(v.receita_liquida) DESC
+  `,
+
+  // ---- o canal em um número ----
+  canal: `
+    SELECT count(DISTINCT v.parceiro_id)::int AS pessoas_que_venderam,
+           count(*)::int                      AS pedidos,
+           round(sum(v.receita_liquida),2)    AS receita,
+           round(avg(v.receita_liquida),2)    AS ticket,
+           count(*) FILTER (WHERE v.pedido_em >= current_date - 90)::int AS pedidos_90d,
+           round(sum(v.receita_liquida) FILTER (WHERE v.pedido_em >= current_date - 90),2) AS receita_90d,
+           min(v.pedido_em)::date AS de, max(v.pedido_em)::date AS ate
+    FROM creator.venda v
+  `,
+
   // ---- saúde dos jobs de coleta ----
   jobs: `
     SELECT DISTINCT ON (job) job, sucesso, itens, detalhe, rodou_em

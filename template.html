@@ -285,6 +285,25 @@
     <div class="note al" id="gapNote"></div>
   </section>
 
+  <!-- 03b VENDAS -->
+  <section>
+    <div class="hd"><span class="eb">Módulo 04</span><h2>Vendas por cupom nominal</h2></div>
+    <p class="lede" id="ledeVendas"></p>
+    <div class="panel">
+      <div class="scroll"><table>
+        <thead><tr>
+          <th>Pessoa</th><th>Cupom</th><th>Pedidos</th><th>Receita</th><th>Ticket</th>
+          <th>90 dias</th><th>Primeira</th><th>Última</th><th>Origem</th>
+        </tr></thead>
+        <tbody id="tbvendas"></tbody>
+      </table></div>
+      <div class="empty">
+        <span class="tg">só cupom</span>
+        <p><b>Isto é atribuição por cupom, e só.</b> Venda por clique no link (UTM) e venda assistida na jornada ainda não existem — quando existirem, entram em colunas separadas e <b>nunca somadas</b> com esta, porque são sinais de força diferente.<br>O percentual de desconto aparece vazio nos cupons legados: eles variam entre 8%, 10% e 15%, e assumir 15% retroativamente inventaria margem que não houve.</p>
+      </div>
+    </div>
+  </section>
+
   <!-- 04 VOLUME -->
   <section>
     <div class="hd"><span class="eb">Módulo 04</span><h2>Volume de marcações por mês</h2></div>
@@ -630,6 +649,29 @@ document.getElementById('gapNote').innerHTML=
   '</b> já marcaram a Cells alguma vez. E dos '+n(r.perfis)+' perfis que marcam de verdade, quase nenhum se cadastrou.</p>'+
   '<p>São dois grupos quase sem interseção. Recrutar pela lista de cadastro é começar do zero com gente que nunca postou; '+
   'os '+n(r.perfis)+' do Módulo 02 já fazem de graça. <b>O piloto deveria sair daí.</b></p>';
+
+/* ---------- vendas ---------- */
+const VD = D.vendas || [], CN = (D.canal||[])[0] || {};
+document.getElementById('ledeVendas').innerHTML =
+  CN.pedidos
+    ? 'Operação de cupom nominal que já rodava na Shopify desde ' + dt(CN.de) + ', importada em 06/08. '
+      + '<b>' + n(CN.pedidos) + ' pedidos</b> · <b>R$ ' + n(CN.receita) + '</b> · ticket R$ ' + n(CN.ticket)
+      + ' · ' + n(CN.pessoas_que_venderam) + ' pessoas venderam. '
+      + 'Nos últimos 90 dias: ' + n(CN.pedidos_90d) + ' pedidos · R$ ' + n(CN.receita_90d) + '.'
+    : 'Nenhuma venda atribuída ainda.';
+document.getElementById('tbvendas').innerHTML = VD.map(v =>
+  '<tr><td class="h"><b>'+(v.nome||'—')+'</b>'
+  + (v.instagram_handle?'<span class="sub2">@'+v.instagram_handle+'</span>':'')+'</td>'
+  + '<td class="dim">'+(v.cupom||'—')+'</td>'
+  + '<td>'+n(v.pedidos)+'</td>'
+  + '<td style="font-weight:600">'+n(v.receita)+'</td>'
+  + '<td class="dim">'+n(v.ticket)+'</td>'
+  + '<td'+(v.pedidos_90d?'':' class="dim"')+'>'+(v.pedidos_90d||'—')+'</td>'
+  + '<td class="dim">'+dt(v.primeira)+'</td>'
+  + '<td class="dim">'+dt(v.ultima)+'</td>'
+  + '<td><span class="chip '+(v.origem==='cupom_legado'?'vo':'ok')+'">'
+  + (v.origem==='cupom_legado'?'cupom legado':'cadastro')+'</span></td></tr>').join('')
+  || '<tr><td colspan="9" class="h dim" style="padding:20px 15px">Nenhuma venda atribuída.</td></tr>';
 
 /* ---------- barras ---------- */
 const M=D.porMes||[]; const mx=Math.max(1,...M.map(m=>m.total));
