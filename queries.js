@@ -52,7 +52,9 @@ module.exports = {
              sum(x.curtidas)      AS curtidas_marc,
              sum(x.comentarios)   AS coment_marc,
              sum(x.visualizacoes) AS views_marc,
-             sum(x.reproducoes)   AS plays_marc
+             sum(x.reproducoes)   AS plays_marc,
+             count(*) FILTER (WHERE x.visualizacoes IS NOT NULL) AS reels_medidos,
+             round(avg(x.visualizacoes) FILTER (WHERE x.visualizacoes IS NOT NULL)) AS media_por_reel
       FROM creator.publicacao u
       JOIN LATERAL (
         SELECT max(curtidas) AS curtidas, max(comentarios) AS comentarios,
@@ -71,6 +73,7 @@ module.exports = {
       COALESCE(p.stories,0) AS stories, COALESCE(p.feed,0) AS feed,
       p.ultima_marcacao,
       m.curtidas_marc, m.coment_marc, m.views_marc, m.plays_marc,
+      m.reels_medidos, m.media_por_reel,
       pa.parceiro_id, pa.status AS status_parceiro, pa.nome AS nome_cadastro
     FROM snap s
     FULL OUTER JOIN pub p ON p.h = s.h

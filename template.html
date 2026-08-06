@@ -192,14 +192,15 @@
           <th>Reels/Carr./Feed</th>
           <th data-s="ultima_marcacao">Última marc.</th>
           <th data-s="views_marc">Views</th>
-          <th data-s="plays_marc">Reprod.</th>
+          <th data-s="media_por_reel">Média/reel</th>
+          <th data-s="vps">Views/seg.</th>
           <th>Curadoria</th>
         </tr></thead>
         <tbody id="tbody"></tbody>
       </table></div>
       <div class="empty">
         <span class="tg">ainda sem dado</span>
-        <p><b>Views já entram</b> — job do Apify, semanal, só em reels (carrossel e foto não têm contador público). <b>Views ≠ reprodução</b>: reprodução conta cada replay e fica ~3× maior. Nenhuma das duas é alcance, que continua impossível para post de terceiro.<br><b>Cliques, CPC e vendas</b> só existem depois do primeiro cupom nominal emitido — e nenhum foi. Ficam vazios em vez de receber número estimado.</p>
+        <p><b>Views só existem em reels.</b> Testado em 06/08: carrossel e foto voltam vazios do Apify — não têm contador público. <b>Views/seg.</b> = views ÷ seguidores, e é a coluna que separa conta grande e parada de conta pequena e viva.<br><b>Nada disso é alcance</b>, que é conta única e continua impossível para post de terceiro. Só com tag de Parceria Paga.<br><b>Cliques, CPC e vendas</b> só existem depois do primeiro cupom nominal emitido — e nenhum foi. Ficam vazios em vez de receber número estimado.</p>
       </div>
     </div>
     <div class="note" id="critNote"></div>
@@ -297,6 +298,14 @@ document.getElementById('frm').addEventListener('submit', async e=>{
 });
 const cel=(k,v,nn)=>'<div><div class="k">'+k+'</div><div class="v">'+v+'</div><div class="n">'+nn+'</div></div>';
 
+/* views por seguidor: quanta audiência o creator entrega POR seguidor que tem. É o número que
+   separa conta grande e parada de conta pequena e viva — e é MEDIDO, não estimado.
+   Só existe em reels: carrossel e foto não têm contador público (testado 06/08).
+   Não confundir com alcance, que é conta única e a Meta não entrega para post de terceiro. */
+D.perfis.forEach(p => {
+  p.vps = (p.views_marc && p.seguidores) ? +(p.views_marc / p.seguidores).toFixed(2) : null;
+});
+
 /* ---------- tabela ---------- */
 let ordem={c:'engajamento_pct',d:-1}, filtro='todos', busca='';
 function linhas(){
@@ -328,10 +337,13 @@ function render(){
       '<td>'+(p.marcacoes||'—')+'</td>'+
       '<td class="mix">'+p.reels+' <i>/ '+p.carrossel+' / '+p.feed+'</i></td>'+
       '<td class="dim">'+dt(p.ultima_marcacao)+'</td>'+
-      '<td'+(p.views_marc?'':' class="dim"')+'>'+(p.views_marc?n(p.views_marc):'—')+'</td>'+
-      '<td class="dim">'+(p.plays_marc?n(p.plays_marc):'—')+'</td>'+
+      '<td'+(p.views_marc?'':' class="dim"')+'>'+(p.views_marc?n(p.views_marc):'—')+
+        (p.reels_medidos?'<span class="sub2">'+p.reels_medidos+' reels</span>':'')+'</td>'+
+      '<td class="dim">'+(p.media_por_reel?n(p.media_por_reel):'—')+'</td>'+
+      '<td'+(p.vps==null?' class="dim"':p.vps>=0.5?' style="color:var(--ok);font-weight:600"':p.vps<0.1?' style="color:var(--cr)"':'')+'>'+
+        (p.vps==null?'—':p.vps.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}))+'</td>'+
       '<td><span class="chip '+cls+'">'+txt+'</span></td></tr>';
-  }).join('') || '<tr><td colspan="11" class="h dim" style="padding:20px 15px">Nenhum perfil com esse filtro.</td></tr>';
+  }).join('') || '<tr><td colspan="12" class="h dim" style="padding:20px 15px">Nenhum perfil com esse filtro.</td></tr>';
   document.querySelectorAll('th[data-s]').forEach(t=>{
     t.innerHTML=t.textContent.replace(/[▲▼]\s*$/,'').trim()+(t.dataset.s===ordem.c?' <span class="ar">'+(ordem.d<0?'▼':'▲')+'</span>':'');
   });
