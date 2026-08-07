@@ -275,6 +275,25 @@ module.exports = {
     ORDER BY endereco_completo DESC, nome
   `,
 
+  // ---- campanhas, jogos e placar ----
+  campanhas: `
+    SELECT c.*,
+           (SELECT count(*) FROM creator.campanha_parceiro cp
+            WHERE cp.campanha_id=c.campanha_id AND cp.saiu_em IS NULL)::int AS participantes,
+           (SELECT count(*) FROM creator.jogo j WHERE j.campanha_id=c.campanha_id AND j.ativo)::int AS jogos
+    FROM creator.campanha c ORDER BY c.inicio DESC
+  `,
+  jogos: `
+    SELECT j.*, c.nome AS campanha,
+           (SELECT json_agg(json_build_object('missao_id',m.missao_id,'tipo',m.tipo_conteudo,
+                    'pontos',m.pontos,'meta',m.meta_qtd,'bonus',m.bonus_pct,'premio',m.premio)
+                    ORDER BY m.ordem, m.missao_id)
+            FROM creator.missao m WHERE m.jogo_id=j.jogo_id) AS missoes
+    FROM creator.jogo j JOIN creator.campanha c USING (campanha_id)
+    ORDER BY j.inicio DESC
+  `,
+  placar: `SELECT * FROM creator.vw_placar ORDER BY pontos DESC, entregas DESC`,
+
   // ---- saúde dos jobs de coleta ----
   jobs: `
     SELECT DISTINCT ON (job) job, sucesso, itens, detalhe, rodou_em

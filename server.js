@@ -375,6 +375,70 @@ http.createServer(async (req, res) => {
     } catch (e) { return json(200, { ok: false, erro: e.message }); }
   }
 
+  // ---------------- campanhas, jogos e missões ----------------
+  if (u.pathname === '/api/campanha' && req.method === 'POST') {
+    const g = k => u.searchParams.get(k) || null;
+    try {
+      if (g('id')) {
+        const r = await pool.query(
+          `UPDATE creator.campanha SET nome=coalesce($2,nome), briefing=coalesce($3,briefing),
+             inicio=coalesce($4::date,inicio), fim=coalesce($5::date,fim),
+             status=coalesce($6,status), budget=coalesce($7::numeric,budget)
+           WHERE campanha_id=$1 RETURNING *`,
+          [+g('id'), g('nome'), g('briefing'), g('inicio'), g('fim'), g('status'), g('budget')]);
+        cache.at = 0; return json(200, { ok: true, campanha: r.rows[0] });
+      }
+      if (!g('nome') || !g('inicio')) return json(400, { erro: 'nome e início são obrigatórios' });
+      const r = await pool.query(
+        `INSERT INTO creator.campanha (nome,briefing,inicio,fim,status,budget,criado_por)
+         VALUES ($1,$2,$3::date,$4::date,coalesce($5,'rascunho'),$6::numeric,$7) RETURNING *`,
+        [g('nome'), g('briefing'), g('inicio'), g('fim'), g('status'), g('budget'),
+         (g('por') || 'painel').slice(0, 60)]);
+      cache.at = 0; return json(200, { ok: true, campanha: r.rows[0] });
+    } catch (e) { return json(200, { ok: false, erro: e.message }); }
+  }
+
+  // vincular/desvincular creator da campanha
+  if (u.pathname === '/api/campanha/parceiro' && req.method === 'POST') {
+    const c = +u.searchParams.get('campanha'), p = +u.searchParams.get('parceiro');
+    const sai = u.searchParams.get('sair') === '1';
+    if (!c || !p) return json(400, { erro: 'campanha e parceiro são obrigatórios' });
+    try {
+      if (sai) await pool.query(
+        `UPDATE creator.campanha_parceiro SET saiu_em=now() WHERE campanha_id=$1 AND parceiro_id=$2`, [c, p]);
+      else await pool.query(
+        `INSERT INTO creator.campanha_parceiro (campanha_id,parceiro_id) VALUES ($1,$2)
+         ON CONFLICT (campanha_id,parceiro_id) DO UPDATE SET saiu_em=NULL`, [c, p]);
+      cache.at = 0; return json(200, { ok: true });
+    } catch (e) { return json(200, { ok: false, erro: e.message }); }
+  }
+
+  // jogo + missões numa tacada: jogo sem missão não pontua nada, então nascem juntos
+  if (u.pathname === '/api/jogo' && req.method === 'POST') {
+    let b = ''; req.on('data', c => { b += c; if (b.length > 20000) req.destroy(); });
+    return req.on('end', async () => {
+      try {
+        const d = JSON.parse(b || '{}');
+        if (!d.campanha_id || !d.titulo || !d.inicio || !d.fim)
+          return json(400, { erro: 'campanha, título, início e fim são obrigatórios' });
+        const j = await pool.query(
+          `INSERT INTO creator.jogo (campanha_id,titulo,briefing,tipo,inicio,fim)
+           VALUES ($1,$2,$3,coalesce($4,'pontos_brindes'),$5::date,$6::date) RETURNING *`,
+          [d.campanha_id, d.titulo, d.briefing || null, d.tipo, d.inicio, d.fim]);
+        const jogo = j.rows[0];
+        for (const [i, m] of (d.missoes || []).entries()) {
+          await pool.query(
+            `INSERT INTO creator.missao (jogo_id,tipo_conteudo,pontos,meta_qtd,bonus_pct,premio,ordem)
+             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+            [jogo.jogo_id, m.tipo, +m.pontos || 0, m.meta ? +m.meta : null,
+             m.bonus ? +m.bonus : null, m.premio || null, i]);
+        }
+        cache.at = 0;
+        return json(200, { ok: true, jogo });
+      } catch (e) { return json(200, { ok: false, erro: e.message }); }
+    });
+  }
+
   // ---------------- ações de curadoria ----------------
   // POST /api/parceiro?id=1&acao=aprovar|reprovar|arquivar|desarquivar|tags
   if (u.pathname === '/api/parceiro' && req.method === 'POST') {

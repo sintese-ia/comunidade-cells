@@ -359,6 +359,24 @@
     </div>
   </section>
 
+  <!-- 07 CAMPANHAS -->
+  <section>
+    <div class="hd"><span class="eb">Módulo 07</span><h2>Campanhas e jogos</h2></div>
+    <p class="lede">A campanha é a caixa: agrupa creators, jogos e resultado. Dentro dela, um jogo tem missões com peso próprio — reel vale mais que carrossel, e vender vale ponto igual publicar. O placar soma sozinho do que já é coletado.</p>
+    <div class="panel">
+      <div class="abas">
+        <button class="acbt ok" id="novaCamp">nova campanha</button>
+        <button class="acbt" id="novoJogo">novo jogo</button>
+        <span class="cnt" id="cntCamp"></span>
+      </div>
+      <div id="listaCamp"></div>
+      <div class="empty">
+        <span class="tg">pontuação</span>
+        <p>O ponto sai de <b>publicação capturada</b> e <b>venda atribuída por cupom</b>, dentro da janela do jogo. Ninguém digita nada — apuração que depende de digitação morre no mês 2.</p>
+      </div>
+    </div>
+  </section>
+
   <!-- 04 VOLUME -->
   <section>
     <div class="hd"><span class="eb">Módulo 04</span><h2>Volume de marcações por mês</h2></div>
@@ -743,6 +761,93 @@ document.getElementById('tbvendas').innerHTML = VD.map(v =>
   + (v.origem==='cupom_legado'?'cupom legado':'cadastro')+'</span></td></tr>').join('')
   || '<tr><td colspan="9" class="h dim" style="padding:20px 15px">Nenhuma venda atribuída.</td></tr>';
 
+/* ---------- campanhas e jogos ---------- */
+const CAMP = D.campanhas || [], JOGOS = D.jogos || [], PLACAR = D.placar || [];
+const TIPOS = [['reels','reel'],['carrossel','carrossel'],['feed_imagem','imagem'],
+               ['story','story'],['venda','venda pelo cupom']];
+document.getElementById('cntCamp').textContent =
+  CAMP.length + ' campanha' + (CAMP.length===1?'':'s') + ' · ' + JOGOS.length + ' jogo' + (JOGOS.length===1?'':'s');
+
+function pintaCamp(){
+  document.getElementById('listaCamp').innerHTML = CAMP.length ? CAMP.map(c => {
+    const js = JOGOS.filter(j => j.campanha_id === c.campanha_id);
+    return '<div class="row" style="flex-direction:column;align-items:stretch;gap:8px">'
+      + '<div style="display:flex;gap:12px;align-items:baseline;flex-wrap:wrap">'
+      + '<b style="font-size:14px">'+c.nome+'</b>'
+      + '<span class="chip '+(c.status==='ativa'?'ok':'vo')+'">'+c.status+'</span>'
+      + '<span class="dim" style="font-family:var(--mono);font-size:11px">'+dt(c.inicio)+' → '+dt(c.fim)+'</span>'
+      + '<span class="dim" style="font-family:var(--mono);font-size:11px;margin-left:auto">'
+      + c.participantes+' creators · '+c.jogos+' jogos'+(c.budget?' · R$ '+n(c.budget):'')+'</span></div>'
+      + (c.briefing ? '<div class="obs">'+c.briefing+'</div>' : '')
+      + (js.length ? js.map(j => {
+          const pl = PLACAR.filter(p => p.jogo_id === j.jogo_id).sort((a,b)=>b.pontos-a.pontos);
+          return '<div style="border-left:2px solid var(--ac);padding:7px 0 7px 11px;margin-top:4px">'
+            + '<div style="font-size:13px;font-weight:600">'+j.titulo
+            + ' <span class="chip vo">'+(j.tipo==='metas_fixas'?'metas fixas':'pontos e brindes')+'</span></div>'
+            + '<div class="obs">'+(j.missoes||[]).map(m =>
+                (TIPOS.find(x=>x[0]===m.tipo)||[,m.tipo])[1] + ' · ' + m.pontos + ' pts'
+                + (m.meta?' · meta '+m.meta:'')).join('  |  ')+'</div>'
+            + (pl.length ? '<div class="obs" style="margin-top:5px">'
+                + pl.slice(0,5).map(p => '<b>'+p.pontos+'</b> '+(p.nome||'@'+p.instagram_handle)).join(' · ')
+                + '</div>' : '<div class="obs" style="margin-top:5px">Nenhum creator vinculado ainda.</div>')
+            + '</div>';
+        }).join('') : '<div class="obs">Sem jogos nesta campanha.</div>')
+      + '</div>';
+  }).join('') : '<div class="row"><span class="dim" style="font-size:13px">Nenhuma campanha ainda. Crie a primeira para começar a agrupar creators e jogos.</span></div>';
+}
+pintaCamp();
+
+const dC = document.getElementById('dlgCamp'), dJ = document.getElementById('dlgJogo');
+document.getElementById('novaCamp').addEventListener('click', () => {
+  const hoje = new Date().toISOString().slice(0,10);
+  dcIni.value = hoje; dC.showModal();
+});
+document.getElementById('dcFechar').addEventListener('click', () => dC.close());
+document.getElementById('dcSalvar').addEventListener('click', async () => {
+  if (!dcNome.value.trim() || !dcIni.value) return alert('Nome e início são obrigatórios.');
+  const q = new URLSearchParams({nome:dcNome.value, briefing:dcBrief.value,
+    inicio:dcIni.value, fim:dcFim.value, status:dcStatus.value, budget:dcBudget.value.replace(',','.')});
+  const j = await (await fetch('/api/campanha?'+q, {method:'POST'})).json();
+  if (!j.ok) return alert('Não deu certo: '+(j.erro||'erro'));
+  location.reload();
+});
+
+function linhaMissao(){
+  const d = document.createElement('div');
+  d.className = 'frm'; d.style.marginTop = '6px';
+  d.innerHTML = '<select class="mt">'+TIPOS.map(t=>'<option value="'+t[0]+'">'+t[1]+'</option>').join('')+'</select>'
+    + '<input class="mp" placeholder="pontos" style="width:82px" inputmode="numeric">'
+    + '<input class="mm" placeholder="meta (opcional)" style="width:130px" inputmode="numeric">'
+    + '<button class="acbt no" type="button">remover</button>';
+  d.querySelector('button').addEventListener('click', () => d.remove());
+  return d;
+}
+document.getElementById('novoJogo').addEventListener('click', () => {
+  if (!CAMP.length) return alert('Crie uma campanha antes — o jogo mora dentro dela.');
+  djCamp.innerHTML = CAMP.map(c=>'<option value="'+c.campanha_id+'">'+c.nome+'</option>').join('');
+  djMissoes.innerHTML = ''; djMissoes.appendChild(linhaMissao());
+  const hoje = new Date().toISOString().slice(0,10);
+  djIni.value = hoje; dJ.showModal();
+});
+document.getElementById('djAdd').addEventListener('click', () => djMissoes.appendChild(linhaMissao()));
+document.getElementById('djFechar').addEventListener('click', () => dJ.close());
+document.getElementById('djSalvar').addEventListener('click', async () => {
+  if (!djTitulo.value.trim() || !djIni.value || !djFim.value)
+    return alert('Título, início e fim são obrigatórios.');
+  const missoes = [...djMissoes.querySelectorAll('.frm')].map(r => ({
+    tipo: r.querySelector('.mt').value,
+    pontos: r.querySelector('.mp').value || 0,
+    meta: r.querySelector('.mm').value || null,
+  })).filter(m => m.tipo);
+  if (!missoes.length) return alert('Um jogo sem missão não pontua nada. Adicione pelo menos uma.');
+  const j = await (await fetch('/api/jogo', {method:'POST',
+    headers:{'content-type':'application/json'},
+    body: JSON.stringify({campanha_id:+djCamp.value, titulo:djTitulo.value, briefing:djBrief.value,
+      tipo:djTipo.value, inicio:djIni.value, fim:djFim.value, missoes})})).json();
+  if (!j.ok) return alert('Não deu certo: '+(j.erro||'erro'));
+  location.reload();
+});
+
 /* ---------- seeding ---------- */
 const SEED = D.seeding || [];
 const cSeed = SEED.reduce((a,s)=>{a[s.decisao]=(a[s.decisao]||0)+1;return a},{});
@@ -883,6 +988,50 @@ document.getElementById('ft').innerHTML=
     <button class="acbt ok" id="faprovar">aprovar</button>
     <button class="acbt" id="ffechar">fechar</button>
   </div>
+</dialog>
+
+<dialog class="ficha" id="dlgCamp">
+  <div class="fhd"><div><h3 id="dcTitulo">Nova campanha</h3>
+    <div class="hh">A caixa que agrupa creators, jogos e resultado.</div></div></div>
+  <div class="fbody"><div class="fsec">
+    <div class="frm" style="flex-direction:column;align-items:stretch;gap:9px">
+      <input id="dcNome" placeholder="nome da campanha" style="font-family:var(--sans);font-size:14px">
+      <textarea id="dcBrief" placeholder="briefing — o que se espera do creator" rows="3"
+        style="border:1px solid var(--line);border-radius:2px;padding:9px;font:inherit;font-size:13px;resize:vertical"></textarea>
+      <div class="frm">
+        <input id="dcIni" type="date" aria-label="início"><input id="dcFim" type="date" aria-label="fim">
+        <input id="dcBudget" placeholder="budget R$" style="width:110px" inputmode="decimal">
+        <select id="dcStatus"><option value="rascunho">rascunho</option><option value="ativa">ativa</option></select>
+      </div>
+    </div>
+  </div></div>
+  <div class="fft"><button class="acbt" id="dcFechar">cancelar</button>
+    <button class="acbt ok" id="dcSalvar">criar campanha</button></div>
+</dialog>
+
+<dialog class="ficha" id="dlgJogo">
+  <div class="fhd"><div><h3>Novo jogo</h3>
+    <div class="hh">Título e briefing são <b>visíveis para o creator</b> — escreva pensando nele.</div></div></div>
+  <div class="fbody"><div class="fsec">
+    <div class="frm" style="flex-direction:column;align-items:stretch;gap:9px">
+      <select id="djCamp" aria-label="campanha"></select>
+      <input id="djTitulo" placeholder="título do jogo" style="font-family:var(--sans);font-size:14px">
+      <textarea id="djBrief" placeholder="briefing do jogo" rows="2"
+        style="border:1px solid var(--line);border-radius:2px;padding:9px;font:inherit;font-size:13px"></textarea>
+      <div class="frm">
+        <select id="djTipo">
+          <option value="pontos_brindes">pontos e brindes</option>
+          <option value="metas_fixas">metas fixas (bônus %)</option>
+        </select>
+        <input id="djIni" type="date" aria-label="início"><input id="djFim" type="date" aria-label="fim">
+      </div>
+    </div>
+    <h4 style="margin-top:16px">Missões</h4>
+    <div id="djMissoes"></div>
+    <button class="acbt" id="djAdd" style="margin-top:8px">+ missão</button>
+  </div></div>
+  <div class="fft"><button class="acbt" id="djFechar">cancelar</button>
+    <button class="acbt ok" id="djSalvar">criar jogo</button></div>
 </dialog>
 </body>
 </html>
