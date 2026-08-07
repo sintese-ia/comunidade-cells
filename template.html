@@ -377,6 +377,40 @@
     </div>
   </section>
 
+  <!-- 08 APURACAO -->
+  <section>
+    <div class="hd"><span class="eb">Módulo 08</span><h2>Apuração e resultado do canal</h2></div>
+    <p class="lede" id="ledeApur"></p>
+    <div class="panel">
+      <div class="scroll"><table>
+        <thead><tr><th>Mês</th><th>Creators</th><th>Pedidos</th><th>Clientes novos</th>
+        <th>Receita</th><th>Ticket</th></tr></thead>
+        <tbody id="tbcanal"></tbody>
+      </table></div>
+      <div class="empty">
+        <span class="tg">comissão</span>
+        <p id="obsApur"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 09 IMPULSO -->
+  <section>
+    <div class="hd"><span class="eb">Módulo 09</span><h2>Impulso de pedidos em 24h</h2></div>
+    <p class="lede">Quando alguém publica, os pedidos da loja sobem nas 24h seguintes? Compara com a média diária dos 14 dias anteriores.</p>
+    <div class="panel">
+      <div class="scroll"><table>
+        <thead><tr><th>Creator</th><th>Tipo</th><th>Data</th><th>Pedidos 24h</th>
+        <th>Base diária</th><th>Impulso</th></tr></thead>
+        <tbody id="tbimp"></tbody>
+      </table></div>
+      <div class="empty">
+        <span class="tg">o que isto não é</span>
+        <p><b>Isto não credita venda a ninguém.</b> Crédito é cupom e UTM. Aqui só entram leituras limpas: 14 dias inteiros de histórico antes do post, base de pelo menos 1 pedido/dia, e <b>um único creator publicando naquele dia</b>. Sem essas guardas, o post de 16/jan/25 aparecia com impulso de 10,89× só porque a série de pedidos começava ali.</p>
+      </div>
+    </div>
+  </section>
+
   <!-- 04 VOLUME -->
   <section>
     <div class="hd"><span class="eb">Módulo 04</span><h2>Volume de marcações por mês</h2></div>
@@ -769,6 +803,34 @@ document.getElementById('tbvendas').innerHTML = VD.map(v =>
   + '<td><span class="chip '+(v.origem==='cupom_legado'?'vo':'ok')+'">'
   + (v.origem==='cupom_legado'?'cupom legado':'cadastro')+'</span></td></tr>').join('')
   || '<tr><td colspan="9" class="h dim" style="padding:20px 15px">Nenhuma venda atribuída.</td></tr>';
+
+/* ---------- apuração e impulso ---------- */
+const CM = D.canalMes || [], AP = D.apuracao || [], IMP = D.impulso || [];
+const semRegra = AP.filter(a => a.situacao === 'sem regra de comissao');
+const totSemRegra = semRegra.reduce((a,x) => a + Number(x.receita||0), 0);
+const ult = CM[0] || {};
+document.getElementById('ledeApur').innerHTML = CM.length
+  ? 'Mês corrente: <b>'+n(ult.pedidos)+' pedidos</b>, '+n(ult.clientes_novos)+' clientes novos, R$ '+n(ult.receita)+'.'
+  : 'Nenhuma venda atribuída ainda.';
+document.getElementById('tbcanal').innerHTML = CM.map(m =>
+  '<tr><td class="h"><b>'+String(m.competencia).slice(0,7)+'</b></td>'
+  + '<td>'+n(m.creators_que_venderam)+'</td><td>'+n(m.pedidos)+'</td>'
+  + '<td'+(m.clientes_novos?' style="color:var(--ok);font-weight:600"':'')+'>'+n(m.clientes_novos)+'</td>'
+  + '<td style="font-weight:600">'+n(m.receita)+'</td><td class="dim">'+n(m.ticket)+'</td></tr>').join('')
+  || '<tr><td colspan="6" class="h dim" style="padding:20px 15px">Sem vendas.</td></tr>';
+document.getElementById('obsApur').innerHTML = semRegra.length
+  ? '<b>'+semRegra.length+' linhas de apuração ficam sem valor a pagar</b> porque o cupom não tem percentual de comissão combinado — são os '
+    + 'cupons legados, que somam R$ '+n(totSemRegra)+' no período. Deixei o campo vazio de propósito: '
+    + 'assumir os 15% da regra nova criaria uma dívida retroativa que ninguém acordou.'
+  : 'Todos os cupons têm percentual de comissão definido.';
+
+document.getElementById('tbimp').innerHTML = IMP.map(i =>
+  '<tr><td class="h"><b>@'+i.instagram_handle+'</b>'+(i.nome?'<span class="sub2">'+i.nome+'</span>':'')+'</td>'
+  + '<td class="dim">'+String(i.tipo).replace('feed_','')+'</td>'
+  + '<td class="dim">'+dt(i.publicado_em)+'</td>'
+  + '<td>'+n(i.pedidos_24h)+'</td><td class="dim">'+n(i.base_diaria_arred)+'</td>'
+  + '<td'+(i.impulso_x>=2?' style="color:var(--ok);font-weight:600"':'')+'>'+i.impulso_x+'×</td></tr>').join('')
+  || '<tr><td colspan="6" class="h dim" style="padding:20px 15px">Nenhuma leitura limpa ainda.</td></tr>';
 
 /* ---------- campanhas e jogos ---------- */
 const CAMP = D.campanhas || [], JOGOS = D.jogos || [], PLACAR = D.placar || [];

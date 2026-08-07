@@ -294,6 +294,23 @@ module.exports = {
   `,
   placar: `SELECT * FROM creator.vw_placar ORDER BY pontos DESC, entregas DESC`,
 
+  // ---- apuração mensal ----
+  apuracao: `
+    SELECT * FROM creator.vw_apuracao
+    WHERE competencia >= date_trunc('month', current_date) - interval '3 months'
+    ORDER BY competencia DESC, receita DESC NULLS LAST
+  `,
+  canalMes: `SELECT * FROM creator.vw_canal_mes ORDER BY competencia DESC LIMIT 24`,
+
+  // ---- impulso de pedidos em 24h ----
+  impulso: `
+    SELECT i.*, p.nome
+    FROM creator.vw_impulso_24h i
+    LEFT JOIN creator.parceiro p ON p.parceiro_id = i.parceiro_id
+    WHERE i.leitura_limpa AND i.impulso_x IS NOT NULL
+    ORDER BY i.impulso_x DESC LIMIT 40
+  `,
+
   // ---- saúde dos jobs de coleta ----
   jobs: `
     SELECT DISTINCT ON (job) job, sucesso, itens, detalhe, rodou_em
