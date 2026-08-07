@@ -1076,6 +1076,57 @@ document.getElementById('ft').innerHTML=
   '<b>Engajamento</b> — média de (curtidas + comentários) por post sobre os últimos 12 posts, dividida por seguidores. Não é janela de 30 dias: quem não posta há meses continua tendo número, por isso a coluna Último post existe.<br>'+
   '<b>Views vs reprodução vs alcance</b> — três coisas. View é a "visualização" que o Instagram mostra; reprodução conta cada replay (~3× maior); alcance é conta única e <b>não existe aqui</b>, porque a Meta não entrega insight de post de terceiro. Só com tag de Parceria Paga.<br>'+
   '<b>Story</b> — capturado por webhook a partir da ativação, sem histórico. A mídia é baixada no ato: o CDN da Meta expira em 24h.';
+
+/* ================= NAVEGAÇÃO POR MÓDULO ================= */
+const MODULOS = [
+  ['busca',     'Buscar creator',    () => null],
+  ['fila',      'Fila de curadoria', () => (D.fila||[]).filter(f=>!f.arquivado && f.status==='pendente').length],
+  ['gestao',    'Quem marca',        () => (D.perfis||[]).length],
+  ['vendas',    'Vendas',            () => (D.vendas||[]).length],
+  ['galeria',   'Conteúdo',          () => (D.galeria||[]).length],
+  ['seeding',   'Seeding',           () => (D.seeding||[]).filter(s=>s.decisao==='elegivel').length || null],
+  ['campanhas', 'Campanhas',         () => (D.campanhas||[]).length || null],
+  ['apuracao',  'Apuração',          () => null],
+  ['impulso',   'Impulso 24h',       () => (D.impulso||[]).length],
+  ['volume',    'Volume por mês',    () => null],
+];
+
+document.getElementById('navLista').innerHTML = MODULOS.map(([k,rot,cont],i) => {
+  let c = null; try { c = cont(); } catch(e) {}
+  return '<li><a href="#'+k+'" data-nav="'+k+'">'
+    + '<span class="num">'+String(i+1).padStart(2,'0')+'</span>'
+    + '<span>'+rot+'</span>'
+    + (c ? '<span class="bd">'+c+'</span>' : '') + '</a></li>';
+}).join('');
+
+const secoes = [...document.querySelectorAll('.mod')];
+function abrir(k, semHash){
+  const alvo = MODULOS.some(m => m[0] === k) ? k : MODULOS[0][0];
+  secoes.forEach(s => s.classList.toggle('on', s.dataset.mod === alvo));
+  document.querySelectorAll('[data-nav]').forEach(a =>
+    a.setAttribute('aria-current', a.dataset.nav === alvo ? 'page' : 'false'));
+  const rot = (MODULOS.find(m => m[0] === alvo) || [,''])[1];
+  const sub = document.getElementById('navSub');
+  if (sub) sub.textContent = rot;
+  document.title = rot + ' — Comunidade Cells';
+  if (!semHash && location.hash !== '#'+alvo) history.replaceState(null,'','#'+alvo);
+  document.getElementById('nav').classList.remove('aberto');
+  window.scrollTo(0,0);
+}
+document.getElementById('navLista').addEventListener('click', e => {
+  const a = e.target.closest('[data-nav]'); if (!a) return;
+  e.preventDefault(); abrir(a.dataset.nav);
+});
+window.addEventListener('hashchange', () => abrir(location.hash.slice(1), true));
+document.getElementById('abrirNav').addEventListener('click', () =>
+  document.getElementById('nav').classList.toggle('aberto'));
+
+const rp = document.getElementById('navRodape');
+if (rp) rp.innerHTML = ((D.resumo||[])[0]||{}).publicacoes + ' publicações<br>'
+  + ((D.resumo||[])[0]||{}).cadastrados + ' parceiros<br>atualizado ' + (D.ger || '');
+
+abrir(location.hash.slice(1) || MODULOS[0][0], true);
+
 </script>
 
 <dialog class="ficha" id="dlgFicha">
