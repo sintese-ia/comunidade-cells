@@ -255,6 +255,26 @@ module.exports = {
     LIMIT 200
   `,
 
+  // ---- seeding: quem continua recebendo, e se o produto enviado voltou em venda ----
+  seeding: `
+    SELECT s.*, e.endereco_completo, e.cpf_valido, e.end_uf, e.logistica_sugerida,
+           r.envios AS envios_feitos, r.custo_total, r.receita, r.retorno_x
+    FROM creator.vw_seeding_elegivel s
+    LEFT JOIN creator.vw_endereco e ON e.parceiro_id = s.parceiro_id
+    LEFT JOIN creator.vw_seeding_retorno r ON r.parceiro_id = s.parceiro_id
+    ORDER BY CASE s.decisao WHEN 'elegivel' THEN 1 WHEN 'ainda_nao' THEN 2 ELSE 3 END,
+             s.conteudos DESC
+  `,
+
+  // ---- endereço: dá para postar hoje? ----
+  enderecos: `
+    SELECT parceiro_id, nome, instagram_handle, end_cidade, end_uf,
+           endereco_completo, cpf_valido, logistica_sugerida
+    FROM creator.vw_endereco
+    WHERE parceiro_id IN (SELECT parceiro_id FROM creator.parceiro WHERE status='ativo' AND NOT arquivado)
+    ORDER BY endereco_completo DESC, nome
+  `,
+
   // ---- saúde dos jobs de coleta ----
   jobs: `
     SELECT DISTINCT ON (job) job, sucesso, itens, detalhe, rodou_em

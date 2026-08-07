@@ -339,6 +339,26 @@
     </div>
   </section>
 
+  <!-- 06 SEEDING -->
+  <section>
+    <div class="hd"><span class="eb">Módulo 06</span><h2>Seeding — quem continua recebendo</h2></div>
+    <p class="lede" id="ledeSeed"></p>
+    <div class="panel">
+      <div class="scroll"><table>
+        <thead><tr>
+          <th>Pessoa</th><th>Decisão</th><th>Conteúdos</th><th>Vendas</th>
+          <th>Última publicação</th><th>Envios</th><th>Custo</th><th>Receita</th>
+          <th>Retorno</th><th>Endereço</th><th>Logística</th>
+        </tr></thead>
+        <tbody id="tbseed"></tbody>
+      </table></div>
+      <div class="empty">
+        <span class="tg">a regra</span>
+        <p>Do business case: seeding entra só a partir de <b>3 conteúdos + 3 vendas</b> e <b>suspende após 90 dias sem publicar</b>. Seeding preso ao cadastro é sangria — 100 creators × R$ 45 dá R$ 4,5 mil/mês sem contrapartida.<br><b>Logística</b> segue sua regra de 28/07: SP inteiro vai de Correios; fora de SP a escolha é por preço, então a coluna diz "cotar" em vez de fingir que sabe qual transportadora.</p>
+      </div>
+    </div>
+  </section>
+
   <!-- 04 VOLUME -->
   <section>
     <div class="hd"><span class="eb">Módulo 04</span><h2>Volume de marcações por mês</h2></div>
@@ -722,6 +742,30 @@ document.getElementById('tbvendas').innerHTML = VD.map(v =>
   + '<td><span class="chip '+(v.origem==='cupom_legado'?'vo':'ok')+'">'
   + (v.origem==='cupom_legado'?'cupom legado':'cadastro')+'</span></td></tr>').join('')
   || '<tr><td colspan="9" class="h dim" style="padding:20px 15px">Nenhuma venda atribuída.</td></tr>';
+
+/* ---------- seeding ---------- */
+const SEED = D.seeding || [];
+const cSeed = SEED.reduce((a,s)=>{a[s.decisao]=(a[s.decisao]||0)+1;return a},{});
+const semEnd = SEED.filter(s=>!s.endereco_completo).length;
+document.getElementById('ledeSeed').innerHTML =
+  (cSeed.elegivel||0)+' elegíveis · '+(cSeed.ainda_nao||0)+' ainda não atingiram o piso · '
+  + '<b>'+(cSeed.suspender||0)+' para suspender</b> (90+ dias sem publicar). '
+  + (semEnd ? '<span style="color:var(--wa)">'+semEnd+' sem endereço completo — não dá para postar para eles hoje.</span>' : '');
+document.getElementById('tbseed').innerHTML = SEED.map(s =>
+  '<tr><td class="h"><b>'+(s.nome||'—')+'</b>'
+  + (s.instagram_handle?'<span class="sub2">@'+s.instagram_handle+'</span>':'')+'</td>'
+  + '<td><span class="chip '+(s.decisao==='elegivel'?'ok':s.decisao==='suspender'?'cr':'wa')+'">'
+  + s.decisao.replace('_',' ')+'</span></td>'
+  + '<td>'+(s.conteudos||'—')+'</td><td>'+(s.vendas||'—')+'</td>'
+  + '<td class="dim">'+dt(s.ultima_publicacao)+'</td>'
+  + '<td class="dim">'+(s.envios||'—')+'</td>'
+  + '<td class="dim">'+(s.custo_total>0?n(s.custo_total):'—')+'</td>'
+  + '<td>'+(s.receita>0?n(s.receita):'—')+'</td>'
+  + '<td'+(s.retorno_x>=1?' style="color:var(--ok);font-weight:600"':s.retorno_x!=null?' style="color:var(--cr)"':' class="dim"')+'>'
+  + (s.retorno_x!=null?s.retorno_x+'x':'—')+'</td>'
+  + '<td><span class="chip '+(s.endereco_completo?'ok':'vo')+'">'+(s.endereco_completo?'ok':'falta')+'</span></td>'
+  + '<td class="dim">'+(s.logistica_sugerida||'—')+'</td></tr>').join('')
+  || '<tr><td colspan="11" class="h dim" style="padding:20px 15px">Nenhum parceiro ativo.</td></tr>';
 
 /* ---------- galeria ---------- */
 const GAL = D.galeria || [];
