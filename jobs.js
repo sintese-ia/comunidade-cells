@@ -119,6 +119,17 @@ async function syncCadastros(pool, token) {
         WHERE lower(p.instagram_handle) = lower(regexp_replace(v.instagram_handle,'^@','')))
     RETURNING parceiro_id, instagram_handle`);
 
+  // slug do link nasce junto com o parceiro. Sem isso a ficha abre com "(sem slug)" e o
+  // botão de copiar link não serve para nada — foi o que aconteceu com quem entrou depois
+  // da geração inicial.
+  await pool.query(`
+    UPDATE creator.parceiro p SET utm_slug = b.s
+    FROM (SELECT parceiro_id,
+                 lower(regexp_replace(coalesce(nullif(instagram_handle,''), nome),'[^a-zA-Z0-9]','','g')) s
+          FROM creator.parceiro WHERE utm_slug IS NULL) b
+    WHERE p.parceiro_id = b.parceiro_id AND b.s <> ''
+      AND NOT EXISTS (SELECT 1 FROM creator.parceiro x WHERE x.utm_slug = b.s)`);
+
   // liga o que já foi publicado por essa pessoa antes de ela se cadastrar
   await pool.query(`UPDATE creator.publicacao pu SET parceiro_id=pa.parceiro_id
     FROM creator.parceiro pa WHERE pu.parceiro_id IS NULL

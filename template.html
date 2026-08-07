@@ -293,7 +293,7 @@
 
   <!-- 02 BASE -->
   <section class="mod" data-mod="gestao">
-    <div class="hd"><span class="eb">Módulo 02</span><h2>Gestão — quem marca a Cells</h2></div>
+    <div class="hd"><span class="eb">Módulo 03</span><h2>Gestão — quem marca a Cells</h2></div>
     <p class="lede">Todo perfil já coletado. Marcações vêm da Graph API; engajamento é média por post sobre os últimos 12 posts de cada um.</p>
     <div class="panel">
       <div class="tools">
@@ -331,7 +331,7 @@
 
   <!-- 03 FILA DE CURADORIA -->
   <section class="mod" data-mod="fila">
-    <div class="hd"><span class="eb">Módulo 03</span><h2>Fila de curadoria</h2></div>
+    <div class="hd"><span class="eb">Módulo 02</span><h2>Fila de curadoria</h2></div>
     <p class="lede">Quem se cadastrou, com os números do perfil na mesma linha. Aprovar, reprovar ou arquivar sem sair daqui — e sem abrir o Instagram de ninguém.</p>
     <div class="panel">
       <div class="abas">
@@ -471,7 +471,7 @@
 
   <!-- 04 VOLUME -->
   <section class="mod" data-mod="volume">
-    <div class="hd"><span class="eb">Módulo 04</span><h2>Volume de marcações por mês</h2></div>
+    <div class="hd"><span class="eb">Módulo 10</span><h2>Volume de marcações por mês</h2></div>
     <p class="lede">Quanto a Cells é marcada espontaneamente, sem programa nenhum rodando. É a linha de base contra a qual o piloto vai ser medido.</p>
     <div class="panel">
       <div class="bars" id="bars"></div>
@@ -1157,7 +1157,7 @@ const JB=D.jobs||[];
 if(JB.length){
   const nomes={tags:'marcações (/tags)',perfis:'perfis (business_discovery)',apify:'views (Apify)',story:'stories (webhook)'};
   document.getElementById('ft').insertAdjacentHTML('beforebegin',
-    '<section><div class="hd"><span class="eb">Coleta</span><h2>Saúde dos jobs</h2></div>'+
+    '<section class="mod" data-mod="jobs"><div class="hd"><span class="eb">Coleta</span><h2>Saúde dos jobs</h2></div>'+
     '<p class="lede">Rodam dentro deste app, não no n8n. Se um parar, some daqui — log com timestamp não apodrece como alerta de lista fixa.</p>'+
     '<div class="panel"><div class="scroll"><table><thead><tr><th>Job</th><th>Última</th><th>Itens</th><th>Estado</th><th>Detalhe</th></tr></thead><tbody>'+
     JB.map(j=>'<tr><td class="h"><b>'+(nomes[j.job]||j.job)+'</b></td>'+
@@ -1185,6 +1185,7 @@ const MODULOS = [
   ['apuracao',  'Apuração',          () => null],
   ['impulso',   'Impulso 24h',       () => (D.impulso||[]).length],
   ['volume',    'Volume por mês',    () => null],
+  ['jobs',      'Saúde da coleta',   () => (D.jobs||[]).filter(j=>!j.sucesso).length || null],
 ];
 
 document.getElementById('navLista').innerHTML = MODULOS.map(([k,rot,cont],i) => {
@@ -1221,6 +1222,9 @@ const rp = document.getElementById('navRodape');
 if (rp) rp.innerHTML = ((D.resumo||[])[0]||{}).publicacoes + ' publicações<br>'
   + ((D.resumo||[])[0]||{}).cadastrados + ' parceiros<br>atualizado ' + (D.ger || '');
 
+// a seção de jobs é injetada por JS mais acima; recolhe as seções de novo antes de abrir
+secoes.length = 0;
+secoes.push(...document.querySelectorAll('.mod'));
 abrir(location.hash.slice(1) || MODULOS[0][0], true);
 
 </script>
