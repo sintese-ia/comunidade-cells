@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Comunidade Cells — seu painel</title>
+<style>
+  :root{
+    --bg:#FFFFFF;--pg:#F6F8F7;--ink:#14181A;--ink2:#3E4749;--mut:#6C7679;--fnt:#98A0A2;
+    --line:#E3E8E7;--line2:#EFF3F2;--ac:#0B5FFF;--ac-s:#EDF3FF;
+    --ok:#0F7A4E;--ok-s:#E5F4ED;--wa:#8A5800;--wa-s:#FBF1DC;--vo:#98A0A2;--vo-s:#F1F4F3;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--pg);color:var(--ink);font-family:var(--sans);font-size:15px;
+       line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:760px;margin:0 auto;padding:28px 16px 80px}
+  header{background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:20px}
+  header .oi{font-size:13px;color:var(--mut)}
+  header h1{margin:3px 0 0;font-size:23px;letter-spacing:-.024em;font-weight:660}
+  header .hh{font-family:var(--mono);font-size:12px;color:var(--fnt);margin-top:3px}
+
+  .destaque{background:var(--bg);border:1px solid var(--line);border-radius:4px;margin-top:14px;
+            padding:22px 20px;text-align:center}
+  .destaque .k{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut)}
+  .destaque .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:42px;font-weight:560;
+               letter-spacing:-.03em;line-height:1;margin-top:10px}
+  .destaque .n{font-size:12.5px;color:var(--mut);margin-top:9px}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1px;
+        background:var(--line);border:1px solid var(--line);border-radius:4px;margin-top:14px;overflow:hidden}
+  .cel{background:var(--bg);padding:14px 15px}
+  .cel .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--mut)}
+  .cel .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:23px;font-weight:520;
+          margin-top:7px;line-height:1;letter-spacing:-.02em}
+  .cel .n{font-size:11px;color:var(--fnt);margin-top:5px}
+
+  section{background:var(--bg);border:1px solid var(--line);border-radius:4px;margin-top:14px;overflow:hidden}
+  .sh{padding:14px 18px 11px;border-bottom:1px solid var(--line2)}
+  .sh h2{margin:0;font-size:15.5px;font-weight:640;letter-spacing:-.01em}
+  .sh p{margin:4px 0 0;font-size:12.5px;color:var(--mut)}
+  .sb{padding:14px 18px}
+
+  .codigo{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .codigo input{flex:1;min-width:180px;border:1px solid var(--line);border-radius:3px;padding:10px 11px;
+                font-family:var(--mono);font-size:13.5px;background:var(--pg);color:var(--ink)}
+  .cp{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;background:var(--ink);color:#fff;
+      border:0;border-radius:3px;padding:10px 14px;cursor:pointer}
+  .cp:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+
+  .lin{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--line2);
+       font-size:13px;align-items:baseline}
+  .lin:last-child{border-bottom:0}
+  .lin .d{font-family:var(--mono);font-size:11px;color:var(--fnt);flex:none;width:74px}
+  .lin .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink2)}
+  .lin .v{font-family:var(--mono);font-variant-numeric:tabular-nums;flex:none;font-weight:600}
+  .tag{font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:.06em;
+       padding:2px 6px;border-radius:2px;background:var(--vo-s);color:var(--mut);flex:none}
+
+  .meta{margin-bottom:13px}
+  .meta:last-child{margin-bottom:0}
+  .meta .mh{display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px}
+  .meta .mh b{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .bar{height:6px;background:var(--line2);border-radius:99px;overflow:hidden}
+  .bar span{display:block;height:100%;background:var(--ac);border-radius:99px}
+  .bar.full span{background:var(--ok)}
+
+  .vazio{font-size:13px;color:var(--fnt);padding:4px 0}
+  footer{margin-top:22px;font-size:11.5px;color:var(--fnt);line-height:1.7;text-align:center}
+  .erro{background:var(--bg);border:1px solid var(--line);border-left:3px solid var(--wa);
+        border-radius:4px;padding:22px;text-align:center;margin-top:40px}
+  .erro h1{margin:0 0 8px;font-size:19px}
+  .erro p{margin:0;font-size:13.5px;color:var(--mut);line-height:1.6}
+  @media(max-width:520px){.wrap{padding:20px 12px 60px}.destaque .v{font-size:34px}}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<script>
+const P = __DADOS__;
+const n  = v => v==null ? '—' : Number(v).toLocaleString('pt-BR');
+const rs = v => 'R$ ' + Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const dt = s => s ? String(s).slice(8,10)+'/'+String(s).slice(5,7)+'/'+String(s).slice(2,4) : '—';
+const esc = s => String(s==null?'':s).replace(/[<>&]/g,m=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[m]));
+
+const p = P.parceiro, v = P.vendas||{}, ex = P.extrato||[], pubs = P.publicacoes||[],
+      env = P.envios||[], jg = P.jogos||[];
+
+const link = p.utm_slug
+  ? 'https://cells.com.br/?utm_source=creator&utm_medium=organic&utm_campaign='+p.utm_slug : '';
+
+document.getElementById('app').innerHTML = `
+<header>
+  <div class="oi">Olá,</div>
+  <h1>${esc((p.nome||'').split(' ')[0] || p.instagram_handle)}</h1>
+  <div class="hh">@${esc(p.instagram_handle||'—')}${p.tags&&p.tags.length?' · '+p.tags.map(esc).join(' · '):''}</div>
+</header>
+
+<div class="destaque">
+  <div class="k">Você já gerou</div>
+  <div class="v">${rs(v.receita)}</div>
+  <div class="n">${n(v.pedidos)} ${v.pedidos===1?'pedido':'pedidos'} com o seu cupom${
+    v.receita_mes ? ' · <b>'+rs(v.receita_mes)+'</b> neste mês' : ''}</div>
+</div>
+
+<div class="grid">
+  <div class="cel"><div class="k">Pedidos</div><div class="v">${n(v.pedidos)}</div>
+    <div class="n">${n(v.pedidos_mes)} neste mês</div></div>
+  <div class="cel"><div class="k">Ticket médio</div><div class="v">${v.ticket?rs(v.ticket):'—'}</div>
+    <div class="n">por pedido</div></div>
+  <div class="cel"><div class="k">Conteúdos</div><div class="v">${n(pubs.length)}</div>
+    <div class="n">marcando a Cells</div></div>
+  <div class="cel"><div class="k">Pontos</div><div class="v">${jg.length?n(jg.reduce((a,j)=>a+(j.pontos||0),0)):'—'}</div>
+    <div class="n">${jg.length?'nos jogos ativos':'sem jogo ativo'}</div></div>
+</div>
+
+<section>
+  <div class="sh"><h2>Seu cupom e seu link</h2>
+    <p>Quem comprar com um dos dois conta pra você.</p></div>
+  <div class="sb">
+    <div class="codigo" style="margin-bottom:9px">
+      <input id="c1" value="${esc(p.cupom||'ainda sem cupom')}" readonly aria-label="seu cupom">
+      <button class="cp" data-c="c1">copiar cupom</button>
+    </div>
+    <div class="codigo">
+      <input id="c2" value="${esc(link||'ainda sem link')}" readonly aria-label="seu link">
+      <button class="cp" data-c="c2">copiar link</button>
+    </div>
+  </div>
+</section>
+
+${jg.length ? `<section>
+  <div class="sh"><h2>Suas metas</h2><p>Atualiza sozinho conforme você publica e vende.</p></div>
+  <div class="sb">${jg.map(j => `
+    <div style="margin-bottom:16px">
+      <div style="font-size:13.5px;font-weight:600;margin-bottom:8px">${esc(j.jogo)}
+        <span class="tag">${j.pontos} pts</span></div>
+      ${Object.entries(j.detalhe||{}).map(([tipo,d]) => {
+        const meta = d.meta, feito = d.feito||0;
+        const pct = meta ? Math.min(100, Math.round(feito/meta*100)) : (feito?100:0);
+        const nomes = {reels:'Reels',carrossel:'Carrossel',feed_imagem:'Foto',story:'Stories',venda:'Vendas'};
+        return `<div class="meta"><div class="mh"><span>${nomes[tipo]||tipo}</span>
+          <b>${feito}${meta?' / '+meta:''}</b></div>
+          <div class="bar${meta&&feito>=meta?' full':''}"><span style="width:${pct}%"></span></div></div>`;
+      }).join('')}
+    </div>`).join('')}</div>
+</section>` : ''}
+
+<section>
+  <div class="sh"><h2>Seus pedidos</h2><p>Cada compra feita com o seu cupom.</p></div>
+  <div class="sb">${ex.length ? ex.map(e => `
+    <div class="lin"><span class="d">${dt(e.pedido_em)}</span>
+      <span class="t">Pedido ${esc(e.pedido_numero||e.pedido_id)}${e.cliente_novo?' · cliente novo':''}</span>
+      <span class="v">${rs(e.receita_liquida)}</span></div>`).join('')
+    : '<div class="vazio">Nenhum pedido ainda. Compartilhe seu cupom e ele aparece aqui.</div>'}</div>
+</section>
+
+<section>
+  <div class="sh"><h2>Seus conteúdos</h2><p>O que a gente capturou do seu perfil.</p></div>
+  <div class="sb">${pubs.length ? pubs.slice(0,20).map(c => `
+    <div class="lin"><span class="tag">${esc(String(c.tipo).replace('feed_',''))}</span>
+      <span class="d">${dt(c.publicado_em)}</span>
+      <span class="t">${c.permalink?`<a href="${esc(c.permalink)}" target="_blank" rel="noopener" style="color:inherit">${esc(c.legenda||'ver post')}</a>`:esc(c.legenda||'—')}</span>
+      <span class="v">${c.visualizacoes?n(c.visualizacoes)+' views':(c.curtidas!=null?n(c.curtidas)+'♥':'')}</span></div>`).join('')
+    : '<div class="vazio">Nenhum conteúdo capturado ainda. Marque @cellsoficial nos seus posts.</div>'}</div>
+</section>
+
+${env.length ? `<section>
+  <div class="sh"><h2>Seus envios</h2><p>O que a Cells mandou pra você.</p></div>
+  <div class="sb">${env.map(e => `
+    <div class="lin"><span class="tag">${esc(String(e.tipo).replace('_',' '))}</span>
+      <span class="d">${dt(e.solicitado_em)}</span>
+      <span class="t">${esc(e.itens||'—')}${e.rastreio?' · '+esc(e.rastreio):''}</span>
+      <span class="v" style="font-size:11px;font-weight:500">${esc(String(e.status).replace('_',' '))}</span></div>`).join('')}</div>
+</section>` : ''}
+
+<footer>
+  Comunidade Cells · seus números atualizam sozinhos<br>
+  Dúvida sobre pagamento ou sobre um pedido? Fale com a gente.
+</footer>`;
+
+document.querySelectorAll('.cp').forEach(b => b.addEventListener('click', async () => {
+  const el = document.getElementById(b.dataset.c);
+  try { await navigator.clipboard.writeText(el.value); }
+  catch(e) { el.select(); document.execCommand('copy'); }
+  const o = b.textContent; b.textContent = 'copiado'; setTimeout(()=>b.textContent=o, 1500);
+}));
+</script>
+</body>
+</html>

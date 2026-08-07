@@ -32,6 +32,8 @@ const pool = new Pool({
 });
 
 const TPL = fs.readFileSync(path.join(__dirname, 'template.html'), 'utf8');
+const TPL_CREATOR = fs.readFileSync(path.join(__dirname, 'portal.html'), 'utf8');
+const COOKIE_CR = 'cc_creator';
 let cache = { at: 0, json: null, erro: null };
 
 // ---------------------------------------------------------------- Postgres
@@ -184,6 +186,59 @@ async function historicoCells(h) {
   return { ...r.rows[0], cadastrado: c.rows[0] || null };
 }
 
+// ---------------------------------------------------------------- portal do creator
+// Tudo aqui é escopado por parceiro_id vindo do TOKEN, nunca de parâmetro da URL.
+// Se viesse da URL, trocar o número mostraria os dados de outra pessoa.
+async function dadosDoCreator(parceiroId) {
+  const q = (sql, p) => pool.query(sql, p).then(r => r.rows);
+  const [pa] = await q(`
+    SELECT p.parceiro_id, p.nome, p.instagram_handle, p.utm_slug, p.tags, p.status,
+           c.codigo AS cupom
+    FROM creator.parceiro p
+    LEFT JOIN creator.cupom c ON c.parceiro_id = p.parceiro_id AND c.ativo
+    WHERE p.parceiro_id = $1`, [parceiroId]);
+  if (!pa) return null;
+
+  const [v] = await q(`
+    SELECT count(*)::int AS pedidos, coalesce(sum(receita_liquida),0) AS receita,
+           round(avg(receita_liquida),2) AS ticket,
+           count(*) FILTER (WHERE pedido_em >= date_trunc('month', current_date))::int AS pedidos_mes,
+           coalesce(sum(receita_liquida) FILTER (WHERE pedido_em >= date_trunc('month', current_date)),0) AS receita_mes
+    FROM creator.venda WHERE parceiro_id=$1 AND atribuicao='cupom'`, [parceiroId]);
+
+  const extrato = await q(`
+    SELECT pedido_id, pedido_numero, pedido_em, receita_liquida, cliente_novo
+    FROM creator.venda WHERE parceiro_id=$1 AND atribuicao='cupom'
+    ORDER BY pedido_em DESC LIMIT 60`, [parceiroId]);
+
+  const publicacoes = await q(`
+    SELECT u.tipo, u.publicado_em, u.permalink, left(coalesce(u.legenda,''),90) AS legenda,
+           m.curtidas, m.visualizacoes
+    FROM creator.publicacao u
+    LEFT JOIN LATERAL (SELECT max(curtidas) curtidas, max(visualizacoes) visualizacoes
+                       FROM creator.publicacao_metrica pm WHERE pm.publicacao_id=u.publicacao_id) m ON true
+    WHERE u.parceiro_id=$1 ORDER BY u.publicado_em DESC LIMIT 40`, [parceiroId]);
+
+  const envios = await q(`
+    SELECT tipo, itens, status, rastreio, solicitado_em
+    FROM creator.envio WHERE parceiro_id=$1 ORDER BY solicitado_em DESC LIMIT 20`, [parceiroId]);
+
+  const jogos = await q(`
+    SELECT jogo, pontos, entregas, detalhe FROM creator.vw_placar
+    WHERE parceiro_id=$1 ORDER BY pontos DESC`, [parceiroId]);
+
+  return { parceiro: pa, vendas: v, extrato, publicacoes, envios, jogos };
+}
+
+const portalErro = (titulo, msg) => `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Comunidade Cells</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#F6F8F7;color:#14181A;
+font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;padding:20px}
+.bx{background:#fff;border:1px solid #E3E8E7;border-left:3px solid #8A5800;border-radius:4px;
+padding:26px;max-width:420px;text-align:center}h1{margin:0 0 9px;font-size:19px}
+p{margin:0;font-size:13.5px;color:#6C7679;line-height:1.6}</style></head>
+<body><div class="bx"><h1>${titulo}</h1><p>${msg}</p></div></body></html>`;
+
 // ---------------------------------------------------------------- páginas
 const esc = s => String(s).replace(/[<>&"]/g, m => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[m]));
 
@@ -276,6 +331,58 @@ http.createServer(async (req, res) => {
         }
       } catch (e) { console.error('[webhook]', e.message); J.logJob(pool, 'story', false, e.message, 0); }
     });
+  }
+
+  // ---- portal do creator (link mágico) ----
+  if (u.pathname === '/creator') {
+    const ck = req.headers.cookie || '';
+    let pid = null;
+    const t = u.searchParams.get('t');
+
+    if (t) {
+      try {
+        const r = await pool.query(`
+          UPDATE creator.acesso SET usos = usos + 1, ultimo_uso = now(),
+                 primeiro_uso = coalesce(primeiro_uso, now())
+          WHERE token = $1 AND revogado_em IS NULL AND expira_em > now()
+          RETURNING parceiro_id`, [t]);
+        if (!r.rows[0]) {
+          res.writeHead(403, {'content-type':'text/html; charset=utf-8'});
+          return res.end(portalErro('Este link não vale mais',
+            'Ele expirou ou foi desativado. Peça um novo para a equipe da Cells.'));
+        }
+        pid = r.rows[0].parceiro_id;
+        // cookie assinado com o token: quem não tem o token não forja o cookie
+        const sig = crypto.createHash('sha256').update('cr|' + SENHA + '|' + pid).digest('hex').slice(0, 32);
+        res.writeHead(303, { Location: '/creator', 'Set-Cookie':
+          `${COOKIE_CR}=${pid}.${sig}; Path=/creator; HttpOnly; Secure; SameSite=Lax; Max-Age=7776000` });
+        return res.end();
+      } catch (e) {
+        res.writeHead(500, {'content-type':'text/html; charset=utf-8'});
+        return res.end(portalErro('Deu erro aqui', 'Tente de novo em instantes.'));
+      }
+    }
+
+    const m = /cc_creator=(\d+)\.([a-f0-9]{32})/.exec(ck);
+    if (m) {
+      const esperado = crypto.createHash('sha256').update('cr|' + SENHA + '|' + m[1]).digest('hex').slice(0, 32);
+      if (m[2] === esperado) pid = +m[1];
+    }
+    if (!pid) {
+      res.writeHead(401, {'content-type':'text/html; charset=utf-8'});
+      return res.end(portalErro('Você precisa do seu link',
+        'O acesso é por link pessoal enviado pela Cells. Se você perdeu o seu, é só pedir outro.'));
+    }
+    try {
+      const d = await dadosDoCreator(pid);
+      if (!d) { res.writeHead(404, {'content-type':'text/html; charset=utf-8'});
+        return res.end(portalErro('Não encontrei seu cadastro', 'Fale com a equipe da Cells.')); }
+      res.writeHead(200, {'content-type':'text/html; charset=utf-8','cache-control':'no-store'});
+      return res.end(TPL_CREATOR.replace('__DADOS__', JSON.stringify(d).replace(/</g, '\\u003c')));
+    } catch (e) {
+      res.writeHead(500, {'content-type':'text/html; charset=utf-8'});
+      return res.end(portalErro('Deu erro aqui', 'Tente de novo em instantes.'));
+    }
   }
 
   const autenticado = (req.headers.cookie || '').includes(`${COOKIE}=${TOKEN}`);
@@ -372,6 +479,22 @@ http.createServer(async (req, res) => {
          WHERE publicacao_id=$1 RETURNING publicacao_id, virou_anuncio`, [pub, v]);
       cache.at = 0;
       return json(200, { ok: true, publicacao: r.rows[0] });
+    } catch (e) { return json(200, { ok: false, erro: e.message }); }
+  }
+
+  // gera link de acesso do creator (o admin copia e envia — não disparo mensagem sozinho)
+  if (u.pathname === '/api/acesso' && req.method === 'POST') {
+    const id = +u.searchParams.get('id');
+    const dias = Math.min(365, +u.searchParams.get('dias') || 90);
+    if (!id) return json(400, { erro: 'parceiro ausente' });
+    try {
+      const tok = crypto.randomBytes(24).toString('base64url');
+      await pool.query(
+        `INSERT INTO creator.acesso (token,parceiro_id,expira_em,criado_por)
+         VALUES ($1,$2, now() + ($3 || ' days')::interval, $4)`,
+        [tok, id, String(dias), (u.searchParams.get('por') || 'painel').slice(0, 60)]);
+      return json(200, { ok: true, url: 'https://comunidade-cells.sinteseia.com.br/creator?t=' + tok,
+                         expira_em_dias: dias });
     } catch (e) { return json(200, { ok: false, erro: e.message }); }
   }
 

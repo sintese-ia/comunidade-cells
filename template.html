@@ -662,6 +662,7 @@ function abreFicha(id){
   document.getElementById('flink').value = p3.utm_slug
     ? 'https://cells.com.br/?utm_source=creator&utm_medium=organic&utm_campaign=' + p3.utm_slug
     : '(sem slug)';
+  document.getElementById('flinkcr').value = '';
   document.getElementById('ftags').value = (f.tags||[]).join(', ');
   pintaEnvios(id);
 
@@ -714,6 +715,14 @@ async function copia(el, btn){
   const b = document.getElementById(btn), o = b.textContent;
   b.textContent = 'copiado'; setTimeout(() => b.textContent = o, 1400);
 }
+document.getElementById('fgeralink').addEventListener('click', async () => {
+  const b = document.getElementById('fgeralink'); b.disabled = true;
+  const j = await (await fetch('/api/acesso?id='+fichaId+'&dias=90', {method:'POST'})).json();
+  b.disabled = false;
+  if (!j.ok) return alert('Não deu certo: '+(j.erro||'erro'));
+  document.getElementById('flinkcr').value = j.url;
+});
+document.getElementById('fcopiacr').addEventListener('click', () => copia('flinkcr','fcopiacr'));
 document.getElementById('copiacupom').addEventListener('click', () => copia('fcupom','copiacupom'));
 document.getElementById('copialink').addEventListener('click', () => copia('flink','copialink'));
 document.getElementById('fsalvatags').addEventListener('click', async () => {
@@ -962,6 +971,14 @@ document.getElementById('ft').innerHTML=
         <button class="acbt" id="copialink">copiar link</button>
       </div>
       <p class="obs" style="margin-top:7px">O link carrega <span style="font-family:var(--mono);font-size:11px">utm_campaign</span> do creator. Cupom e link são atribuições <b>diferentes</b> — quando as duas apontam para pessoas diferentes no mesmo pedido, o cupom ganha a comissão e o link fica como assistida.</p>
+    </div>
+    <div class="fsec"><h4>Acesso do creator</h4>
+      <div class="frm">
+        <button class="acbt" id="fgeralink">gerar link do painel dele</button>
+        <input id="flinkcr" readonly placeholder="o link aparece aqui" style="flex:1;min-width:240px">
+        <button class="acbt" id="fcopiacr">copiar</button>
+      </div>
+      <p class="obs" style="margin-top:7px">Link pessoal, vale 90 dias. <b>Eu não envio</b> — você copia e manda por onde preferir. Ele mostra só os dados dessa pessoa.</p>
     </div>
     <div class="fsec"><h4>Tags</h4>
       <div class="frm"><input id="ftags" placeholder="nutri, sp, alto-engajamento" style="flex:1;min-width:220px">
