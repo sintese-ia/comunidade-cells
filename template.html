@@ -1208,6 +1208,8 @@ function abrir(k, semHash){
   document.title = rot + ' — Comunidade Cells';
   if (!semHash && location.hash !== '#'+alvo) history.replaceState(null,'','#'+alvo);
   document.getElementById('nav').classList.remove('aberto');
+  // diálogo aberto sobrevive à troca de módulo e fica boiando sobre a tela nova
+  document.querySelectorAll('dialog[open]').forEach(d => d.close());
   window.scrollTo(0,0);
 }
 document.getElementById('navLista').addEventListener('click', e => {
