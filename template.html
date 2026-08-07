@@ -138,6 +138,53 @@
   footer b{color:var(--mut);font-weight:600}
 
 
+
+  /* ================= LAYOUT COM MENU LATERAL ================= */
+  .app{display:grid;grid-template-columns:216px 1fr;min-height:100vh;align-items:start}
+  aside.nav{position:sticky;top:0;height:100vh;border-right:1px solid var(--line);
+            background:var(--sub);display:flex;flex-direction:column;overflow-y:auto}
+  aside.nav .marca{padding:20px 18px 14px;border-bottom:1px solid var(--line)}
+  aside.nav .marca .lg{font-size:16px;font-weight:660;letter-spacing:-.02em;line-height:1.25}
+  aside.nav .marca .lg em{font-style:normal;color:var(--ac)}
+  aside.nav .marca .sub{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;
+                        text-transform:uppercase;color:var(--fnt);margin-top:5px}
+  aside.nav ul{list-style:none;margin:0;padding:9px 0;flex:1}
+  aside.nav li{margin:0}
+  aside.nav a{display:flex;align-items:baseline;gap:9px;padding:9px 18px;text-decoration:none;
+              color:var(--ink2);font-size:13.5px;border-left:2px solid transparent;line-height:1.35}
+  aside.nav a:hover{background:var(--bg);color:var(--ink)}
+  aside.nav a[aria-current="page"]{background:var(--bg);color:var(--ink);font-weight:600;
+                                   border-left-color:var(--ac)}
+  aside.nav a .num{font-family:var(--mono);font-size:10px;color:var(--fnt);flex:none;width:15px}
+  aside.nav a[aria-current="page"] .num{color:var(--ac)}
+  aside.nav a .bd{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--fnt);
+                  font-variant-numeric:tabular-nums;flex:none}
+  aside.nav .rodape{padding:13px 18px;border-top:1px solid var(--line);
+                    font-family:var(--mono);font-size:9.5px;color:var(--fnt);line-height:1.7}
+
+  main.conteudo{min-width:0;padding:0}
+  main.conteudo > .wrap{max-width:1120px;padding:26px 26px 70px}
+  .mod{display:none;margin-top:0}
+  .mod.on{display:block}
+  .mod + .mod{margin-top:0}
+  section.mod > .hd{margin-bottom:0}
+
+  .topo-mod{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;
+            flex-wrap:wrap;padding-bottom:14px;border-bottom:2px solid var(--ink);margin-bottom:22px}
+  .topo-mod .quem{font-family:var(--mono);font-size:10px;letter-spacing:.1em;
+                  text-transform:uppercase;color:var(--fnt);text-align:right;line-height:1.7}
+
+  .abrir{display:none;position:fixed;left:11px;top:11px;z-index:60;background:var(--ink);color:#fff;
+         border:0;border-radius:3px;padding:9px 12px;font-family:var(--mono);font-size:11px;cursor:pointer}
+  @media(max-width:860px){
+    .app{grid-template-columns:1fr}
+    aside.nav{position:fixed;left:0;top:0;bottom:0;width:242px;z-index:55;transform:translateX(-100%);
+              transition:transform .18s ease;box-shadow:0 0 24px rgba(20,24,26,.16)}
+    aside.nav.aberto{transform:none}
+    .abrir{display:block}
+    main.conteudo > .wrap{padding:52px 14px 60px}
+  }
+  @media(prefers-reduced-motion:reduce){aside.nav{transition:none}}
   /* ---- galeria ---- */
   .gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:1px;background:var(--line2)}
   .card{background:var(--bg);position:relative}
@@ -206,9 +253,20 @@
 </style>
 </head>
 <body>
+<button class="abrir" id="abrirNav" aria-label="abrir menu">menu</button>
+<div class="app">
+<aside class="nav" id="nav">
+  <div class="marca">
+    <div class="lg">comunidade <em>cells</em></div>
+    <div class="sub" id="navSub">painel interno</div>
+  </div>
+  <ul id="navLista"></ul>
+  <div class="rodape" id="navRodape"></div>
+</aside>
+<main class="conteudo">
 <div class="wrap">
 
-  <header class="top">
+  <header class="top topo-mod">
     <div>
       <h1>comunidade <em>cells</em></h1>
       <p>Painel interno de creators — busca ao vivo e base coletada.</p>
@@ -219,7 +277,7 @@
   <div class="strip" id="strip"></div>
 
   <!-- 01 BUSCA -->
-  <section>
+  <section class="mod" data-mod="busca">
     <div class="hd"><span class="eb">Módulo 01</span><h2>Buscar creator</h2></div>
     <p class="lede">Digita qualquer @ do Instagram. O servidor consulta a Graph API da Meta na hora — não precisa estar cadastrado nem ter relação com a Cells. Toda busca vira snapshot no banco.</p>
     <div class="panel">
@@ -234,7 +292,7 @@
   </section>
 
   <!-- 02 BASE -->
-  <section>
+  <section class="mod" data-mod="gestao">
     <div class="hd"><span class="eb">Módulo 02</span><h2>Gestão — quem marca a Cells</h2></div>
     <p class="lede">Todo perfil já coletado. Marcações vêm da Graph API; engajamento é média por post sobre os últimos 12 posts de cada um.</p>
     <div class="panel">
@@ -272,7 +330,7 @@
   </section>
 
   <!-- 03 FILA DE CURADORIA -->
-  <section>
+  <section class="mod" data-mod="fila">
     <div class="hd"><span class="eb">Módulo 03</span><h2>Fila de curadoria</h2></div>
     <p class="lede">Quem se cadastrou, com os números do perfil na mesma linha. Aprovar, reprovar ou arquivar sem sair daqui — e sem abrir o Instagram de ninguém.</p>
     <div class="panel">
@@ -301,7 +359,7 @@
   </section>
 
   <!-- 03b VENDAS -->
-  <section>
+  <section class="mod" data-mod="vendas">
     <div class="hd"><span class="eb">Módulo 04</span><h2>Vendas por cupom nominal</h2></div>
     <p class="lede" id="ledeVendas"></p>
     <div class="panel">
@@ -320,7 +378,7 @@
   </section>
 
   <!-- 05 GALERIA -->
-  <section>
+  <section class="mod" data-mod="galeria">
     <div class="hd"><span class="eb">Módulo 05</span><h2>Galeria de conteúdo</h2></div>
     <p class="lede" id="ledeGal"></p>
     <div class="panel">
@@ -340,7 +398,7 @@
   </section>
 
   <!-- 06 SEEDING -->
-  <section>
+  <section class="mod" data-mod="seeding">
     <div class="hd"><span class="eb">Módulo 06</span><h2>Seeding — quem continua recebendo</h2></div>
     <p class="lede" id="ledeSeed"></p>
     <div class="panel">
@@ -360,7 +418,7 @@
   </section>
 
   <!-- 07 CAMPANHAS -->
-  <section>
+  <section class="mod" data-mod="campanhas">
     <div class="hd"><span class="eb">Módulo 07</span><h2>Campanhas e jogos</h2></div>
     <p class="lede">A campanha é a caixa: agrupa creators, jogos e resultado. Dentro dela, um jogo tem missões com peso próprio — reel vale mais que carrossel, e vender vale ponto igual publicar. O placar soma sozinho do que já é coletado.</p>
     <div class="panel">
@@ -378,7 +436,7 @@
   </section>
 
   <!-- 08 APURACAO -->
-  <section>
+  <section class="mod" data-mod="apuracao">
     <div class="hd"><span class="eb">Módulo 08</span><h2>Apuração e resultado do canal</h2></div>
     <p class="lede" id="ledeApur"></p>
     <div class="panel">
@@ -395,7 +453,7 @@
   </section>
 
   <!-- 09 IMPULSO -->
-  <section>
+  <section class="mod" data-mod="impulso">
     <div class="hd"><span class="eb">Módulo 09</span><h2>Impulso de pedidos em 24h</h2></div>
     <p class="lede">Quando alguém publica, os pedidos da loja sobem nas 24h seguintes? Compara com a média diária dos 14 dias anteriores.</p>
     <div class="panel">
@@ -412,7 +470,7 @@
   </section>
 
   <!-- 04 VOLUME -->
-  <section>
+  <section class="mod" data-mod="volume">
     <div class="hd"><span class="eb">Módulo 04</span><h2>Volume de marcações por mês</h2></div>
     <p class="lede">Quanto a Cells é marcada espontaneamente, sem programa nenhum rodando. É a linha de base contra a qual o piloto vai ser medido.</p>
     <div class="panel">
@@ -422,6 +480,8 @@
   </section>
 
   <footer id="ft"></footer>
+</div>
+</main>
 </div>
 
 <script>
