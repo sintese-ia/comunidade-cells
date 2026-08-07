@@ -484,6 +484,102 @@
 </main>
 </div>
 
+
+
+<dialog class="ficha" id="dlgFicha">
+  <div class="fhd">
+    <div><h3 id="fnome">—</h3><div class="hh" id="fhandle"></div><div class="bio" id="fbio"></div></div>
+    <div id="fstatus"></div>
+  </div>
+  <div class="fbody">
+    <div class="fq" id="fquad"></div>
+    <div class="fsec"><h4>Cupom e link</h4>
+      <div class="frm">
+        <input id="fcupom" readonly style="width:170px" aria-label="cupom">
+        <button class="acbt" id="copiacupom">copiar cupom</button>
+        <input id="flink" readonly style="flex:1;min-width:260px" aria-label="link">
+        <button class="acbt" id="copialink">copiar link</button>
+      </div>
+      <p class="obs" style="margin-top:7px">O link carrega <span style="font-family:var(--mono);font-size:11px">utm_campaign</span> do creator. Cupom e link são atribuições <b>diferentes</b> — quando as duas apontam para pessoas diferentes no mesmo pedido, o cupom ganha a comissão e o link fica como assistida.</p>
+    </div>
+    <div class="fsec"><h4>Acesso do creator</h4>
+      <div class="frm">
+        <button class="acbt" id="fgeralink">gerar link do painel dele</button>
+        <input id="flinkcr" readonly placeholder="o link aparece aqui" style="flex:1;min-width:240px">
+        <button class="acbt" id="fcopiacr">copiar</button>
+      </div>
+      <p class="obs" style="margin-top:7px">Link pessoal, vale 90 dias. <b>Eu não envio</b> — você copia e manda por onde preferir. Ele mostra só os dados dessa pessoa.</p>
+    </div>
+    <div class="fsec"><h4>Tags</h4>
+      <div class="frm"><input id="ftags" placeholder="nutri, sp, alto-engajamento" style="flex:1;min-width:220px">
+        <button class="acbt" id="fsalvatags">salvar tags</button></div></div>
+    <div class="fsec"><h4>Registrar envio</h4>
+      <div class="frm">
+        <select id="etipo">
+          <option value="kit_entrada">kit de entrada</option>
+          <option value="seeding">seeding</option>
+          <option value="premio">prêmio</option>
+          <option value="reposicao">reposição</option>
+        </select>
+        <input id="eitens" placeholder="o que vai" style="flex:1;min-width:150px">
+        <input id="evalor" placeholder="custo R$" style="width:96px" inputmode="decimal">
+        <button class="acbt ok" id="ecriar">registrar</button>
+      </div>
+      <div id="elista" style="margin-top:10px"></div>
+    </div>
+    <div class="fsec"><h4>Publicações que marcaram a Cells</h4><div id="fpubs"></div></div>
+  </div>
+  <div class="fft">
+    <button class="acbt no" id="freprovar">reprovar</button>
+    <button class="acbt" id="farquivar">arquivar</button>
+    <button class="acbt ok" id="faprovar">aprovar</button>
+    <button class="acbt" id="ffechar">fechar</button>
+  </div>
+</dialog>
+
+<dialog class="ficha" id="dlgCamp">
+  <div class="fhd"><div><h3 id="dcTitulo">Nova campanha</h3>
+    <div class="hh">A caixa que agrupa creators, jogos e resultado.</div></div></div>
+  <div class="fbody"><div class="fsec">
+    <div class="frm" style="flex-direction:column;align-items:stretch;gap:9px">
+      <input id="dcNome" placeholder="nome da campanha" style="font-family:var(--sans);font-size:14px">
+      <textarea id="dcBrief" placeholder="briefing — o que se espera do creator" rows="3"
+        style="border:1px solid var(--line);border-radius:2px;padding:9px;font:inherit;font-size:13px;resize:vertical"></textarea>
+      <div class="frm">
+        <input id="dcIni" type="date" aria-label="início"><input id="dcFim" type="date" aria-label="fim">
+        <input id="dcBudget" placeholder="budget R$" style="width:110px" inputmode="decimal">
+        <select id="dcStatus"><option value="rascunho">rascunho</option><option value="ativa">ativa</option></select>
+      </div>
+    </div>
+  </div></div>
+  <div class="fft"><button class="acbt" id="dcFechar">cancelar</button>
+    <button class="acbt ok" id="dcSalvar">criar campanha</button></div>
+</dialog>
+
+<dialog class="ficha" id="dlgJogo">
+  <div class="fhd"><div><h3>Novo jogo</h3>
+    <div class="hh">Título e briefing são <b>visíveis para o creator</b> — escreva pensando nele.</div></div></div>
+  <div class="fbody"><div class="fsec">
+    <div class="frm" style="flex-direction:column;align-items:stretch;gap:9px">
+      <select id="djCamp" aria-label="campanha"></select>
+      <input id="djTitulo" placeholder="título do jogo" style="font-family:var(--sans);font-size:14px">
+      <textarea id="djBrief" placeholder="briefing do jogo" rows="2"
+        style="border:1px solid var(--line);border-radius:2px;padding:9px;font:inherit;font-size:13px"></textarea>
+      <div class="frm">
+        <select id="djTipo">
+          <option value="pontos_brindes">pontos e brindes</option>
+          <option value="metas_fixas">metas fixas (bônus %)</option>
+        </select>
+        <input id="djIni" type="date" aria-label="início"><input id="djFim" type="date" aria-label="fim">
+      </div>
+    </div>
+    <h4 style="margin-top:16px">Missões</h4>
+    <div id="djMissoes"></div>
+    <button class="acbt" id="djAdd" style="margin-top:8px">+ missão</button>
+  </div></div>
+  <div class="fft"><button class="acbt" id="djFechar">cancelar</button>
+    <button class="acbt ok" id="djSalvar">criar jogo</button></div>
+</dialog>
 <script>
 const D = __DATA__;
 const n  = v => v==null ? '—' : Number(v).toLocaleString('pt-BR');
@@ -1128,100 +1224,5 @@ if (rp) rp.innerHTML = ((D.resumo||[])[0]||{}).publicacoes + ' publicações<br>
 abrir(location.hash.slice(1) || MODULOS[0][0], true);
 
 </script>
-
-<dialog class="ficha" id="dlgFicha">
-  <div class="fhd">
-    <div><h3 id="fnome">—</h3><div class="hh" id="fhandle"></div><div class="bio" id="fbio"></div></div>
-    <div id="fstatus"></div>
-  </div>
-  <div class="fbody">
-    <div class="fq" id="fquad"></div>
-    <div class="fsec"><h4>Cupom e link</h4>
-      <div class="frm">
-        <input id="fcupom" readonly style="width:170px" aria-label="cupom">
-        <button class="acbt" id="copiacupom">copiar cupom</button>
-        <input id="flink" readonly style="flex:1;min-width:260px" aria-label="link">
-        <button class="acbt" id="copialink">copiar link</button>
-      </div>
-      <p class="obs" style="margin-top:7px">O link carrega <span style="font-family:var(--mono);font-size:11px">utm_campaign</span> do creator. Cupom e link são atribuições <b>diferentes</b> — quando as duas apontam para pessoas diferentes no mesmo pedido, o cupom ganha a comissão e o link fica como assistida.</p>
-    </div>
-    <div class="fsec"><h4>Acesso do creator</h4>
-      <div class="frm">
-        <button class="acbt" id="fgeralink">gerar link do painel dele</button>
-        <input id="flinkcr" readonly placeholder="o link aparece aqui" style="flex:1;min-width:240px">
-        <button class="acbt" id="fcopiacr">copiar</button>
-      </div>
-      <p class="obs" style="margin-top:7px">Link pessoal, vale 90 dias. <b>Eu não envio</b> — você copia e manda por onde preferir. Ele mostra só os dados dessa pessoa.</p>
-    </div>
-    <div class="fsec"><h4>Tags</h4>
-      <div class="frm"><input id="ftags" placeholder="nutri, sp, alto-engajamento" style="flex:1;min-width:220px">
-        <button class="acbt" id="fsalvatags">salvar tags</button></div></div>
-    <div class="fsec"><h4>Registrar envio</h4>
-      <div class="frm">
-        <select id="etipo">
-          <option value="kit_entrada">kit de entrada</option>
-          <option value="seeding">seeding</option>
-          <option value="premio">prêmio</option>
-          <option value="reposicao">reposição</option>
-        </select>
-        <input id="eitens" placeholder="o que vai" style="flex:1;min-width:150px">
-        <input id="evalor" placeholder="custo R$" style="width:96px" inputmode="decimal">
-        <button class="acbt ok" id="ecriar">registrar</button>
-      </div>
-      <div id="elista" style="margin-top:10px"></div>
-    </div>
-    <div class="fsec"><h4>Publicações que marcaram a Cells</h4><div id="fpubs"></div></div>
-  </div>
-  <div class="fft">
-    <button class="acbt no" id="freprovar">reprovar</button>
-    <button class="acbt" id="farquivar">arquivar</button>
-    <button class="acbt ok" id="faprovar">aprovar</button>
-    <button class="acbt" id="ffechar">fechar</button>
-  </div>
-</dialog>
-
-<dialog class="ficha" id="dlgCamp">
-  <div class="fhd"><div><h3 id="dcTitulo">Nova campanha</h3>
-    <div class="hh">A caixa que agrupa creators, jogos e resultado.</div></div></div>
-  <div class="fbody"><div class="fsec">
-    <div class="frm" style="flex-direction:column;align-items:stretch;gap:9px">
-      <input id="dcNome" placeholder="nome da campanha" style="font-family:var(--sans);font-size:14px">
-      <textarea id="dcBrief" placeholder="briefing — o que se espera do creator" rows="3"
-        style="border:1px solid var(--line);border-radius:2px;padding:9px;font:inherit;font-size:13px;resize:vertical"></textarea>
-      <div class="frm">
-        <input id="dcIni" type="date" aria-label="início"><input id="dcFim" type="date" aria-label="fim">
-        <input id="dcBudget" placeholder="budget R$" style="width:110px" inputmode="decimal">
-        <select id="dcStatus"><option value="rascunho">rascunho</option><option value="ativa">ativa</option></select>
-      </div>
-    </div>
-  </div></div>
-  <div class="fft"><button class="acbt" id="dcFechar">cancelar</button>
-    <button class="acbt ok" id="dcSalvar">criar campanha</button></div>
-</dialog>
-
-<dialog class="ficha" id="dlgJogo">
-  <div class="fhd"><div><h3>Novo jogo</h3>
-    <div class="hh">Título e briefing são <b>visíveis para o creator</b> — escreva pensando nele.</div></div></div>
-  <div class="fbody"><div class="fsec">
-    <div class="frm" style="flex-direction:column;align-items:stretch;gap:9px">
-      <select id="djCamp" aria-label="campanha"></select>
-      <input id="djTitulo" placeholder="título do jogo" style="font-family:var(--sans);font-size:14px">
-      <textarea id="djBrief" placeholder="briefing do jogo" rows="2"
-        style="border:1px solid var(--line);border-radius:2px;padding:9px;font:inherit;font-size:13px"></textarea>
-      <div class="frm">
-        <select id="djTipo">
-          <option value="pontos_brindes">pontos e brindes</option>
-          <option value="metas_fixas">metas fixas (bônus %)</option>
-        </select>
-        <input id="djIni" type="date" aria-label="início"><input id="djFim" type="date" aria-label="fim">
-      </div>
-    </div>
-    <h4 style="margin-top:16px">Missões</h4>
-    <div id="djMissoes"></div>
-    <button class="acbt" id="djAdd" style="margin-top:8px">+ missão</button>
-  </div></div>
-  <div class="fft"><button class="acbt" id="djFechar">cancelar</button>
-    <button class="acbt ok" id="djSalvar">criar jogo</button></div>
-</dialog>
 </body>
 </html>
