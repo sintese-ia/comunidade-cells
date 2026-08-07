@@ -319,6 +319,62 @@ http.createServer(async (req, res) => {
     }
   }
 
+  // ---------------- download de mídia (para virar anúncio) ----------------
+  // Busca no CDN da Meta e devolve como anexo. Não guardamos o arquivo — a URL é renovada
+  // pelo job do Apify, e vídeo em banco é peso morto.
+  if (u.pathname === '/api/midia') {
+    const pub = +u.searchParams.get('pub');
+    const querVideo = u.searchParams.get('tipo') !== 'imagem';
+    if (!pub) return json(400, { erro: 'publicacao ausente' });
+    try {
+      const r = await pool.query(`
+        SELECT pu.instagram_handle, pu.tipo, pu.publicado_em,
+               m.payload->>'videoUrl' AS video, m.payload->>'displayUrl' AS img,
+               m.coletado_em
+        FROM creator.publicacao pu
+        JOIN LATERAL (SELECT payload, coletado_em FROM creator.publicacao_metrica pm
+                      WHERE pm.publicacao_id=pu.publicacao_id AND pm.payload->>'displayUrl' IS NOT NULL
+                      ORDER BY coletado_em DESC LIMIT 1) m ON true
+        WHERE pu.publicacao_id=$1`, [pub]);
+      const row = r.rows[0];
+      if (!row) return json(404, { erro: 'sem mídia coletada para esta publicação' });
+      const alvo = (querVideo && row.video) ? row.video : row.img;
+      if (!alvo) return json(404, { erro: 'mídia indisponível' });
+
+      const ext = alvo === row.video ? 'mp4' : 'jpg';
+      const nome = `${row.instagram_handle}-${String(row.publicado_em).slice(0,10)}-${pub}.${ext}`;
+      const up = await new Promise((ok, err) => {
+        https.get(alvo, resp => ok(resp)).on('error', err).setTimeout(45000, function(){ this.destroy(new Error('timeout')); });
+      });
+      if (up.statusCode !== 200) {
+        up.resume();
+        // URL do CDN expira. Dizer isso é melhor que servir 0 bytes e o usuário achar que baixou.
+        return json(410, { erro: 'a URL da mídia expirou no CDN da Meta (coletada em ' +
+          String(row.coletado_em).slice(0,10) + '). Rode o job do Apify para renovar.' });
+      }
+      res.writeHead(200, {
+        'content-type': up.headers['content-type'] || 'application/octet-stream',
+        'content-disposition': `attachment; filename="${nome}"`,
+        'cache-control': 'no-store',
+      });
+      return up.pipe(res);
+    } catch (e) { return json(500, { erro: e.message }); }
+  }
+
+  // marca conteúdo como "virou anúncio" (bônus de R$300 do business case)
+  if (u.pathname === '/api/publicacao' && req.method === 'POST') {
+    const pub = +u.searchParams.get('pub');
+    const v = u.searchParams.get('anuncio') === '1';
+    if (!pub) return json(400, { erro: 'publicacao ausente' });
+    try {
+      const r = await pool.query(
+        `UPDATE creator.publicacao SET virou_anuncio=$2, virou_anuncio_em = CASE WHEN $2 THEN now() ELSE NULL END
+         WHERE publicacao_id=$1 RETURNING publicacao_id, virou_anuncio`, [pub, v]);
+      cache.at = 0;
+      return json(200, { ok: true, publicacao: r.rows[0] });
+    } catch (e) { return json(200, { ok: false, erro: e.message }); }
+  }
+
   // ---------------- ações de curadoria ----------------
   // POST /api/parceiro?id=1&acao=aprovar|reprovar|arquivar|desarquivar|tags
   if (u.pathname === '/api/parceiro' && req.method === 'POST') {

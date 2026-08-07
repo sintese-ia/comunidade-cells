@@ -137,6 +137,21 @@
          color:var(--fnt);line-height:1.75}
   footer b{color:var(--mut);font-weight:600}
 
+
+  /* ---- galeria ---- */
+  .gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:1px;background:var(--line2)}
+  .card{background:var(--bg);position:relative}
+  .card .th{display:block;width:100%;aspect-ratio:4/5;object-fit:cover;background:var(--sub)}
+  .card .inf{padding:9px 10px}
+  .card .who{font-size:11.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .card .met{font-family:var(--mono);font-size:10.5px;color:var(--mut);margin-top:3px;
+             font-variant-numeric:tabular-nums}
+  .card .bts{display:flex;gap:4px;padding:0 10px 10px}
+  .card .bts .acbt{flex:1;text-align:center;font-size:9px;padding:5px 4px}
+  .badge{position:absolute;top:6px;left:6px;font-family:var(--mono);font-size:8.5px;
+         letter-spacing:.06em;text-transform:uppercase;background:rgba(20,24,26,.82);color:#fff;
+         padding:3px 6px;border-radius:2px}
+  .badge.ad{background:var(--ok);left:auto;right:6px}
   /* ---- fila de curadoria ---- */
   .abas{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:11px 14px;background:var(--sub);
         border-bottom:1px solid var(--line)}
@@ -300,6 +315,26 @@
       <div class="empty">
         <span class="tg">só cupom</span>
         <p><b>Isto é atribuição por cupom, e só.</b> Venda por clique no link (UTM) e venda assistida na jornada ainda não existem — quando existirem, entram em colunas separadas e <b>nunca somadas</b> com esta, porque são sinais de força diferente.<br>O percentual de desconto aparece vazio nos cupons legados: eles variam entre 8%, 10% e 15%, e assumir 15% retroativamente inventaria margem que não houve.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 05 GALERIA -->
+  <section>
+    <div class="hd"><span class="eb">Módulo 05</span><h2>Galeria de conteúdo</h2></div>
+    <p class="lede" id="ledeGal"></p>
+    <div class="panel">
+      <div class="abas">
+        <button class="aba" data-g="todos" aria-pressed="true">todos</button>
+        <button class="aba" data-g="reels" aria-pressed="false">reels</button>
+        <button class="aba" data-g="carrossel" aria-pressed="false">carrossel</button>
+        <button class="aba" data-g="anuncio" aria-pressed="false">virou anúncio</button>
+        <input id="gq" placeholder="filtrar por @ ou legenda" aria-label="Filtrar galeria">
+      </div>
+      <div class="gal" id="gal"></div>
+      <div class="empty">
+        <span class="tg">como funciona</span>
+        <p><b>Baixar</b> puxa o arquivo do CDN da Meta na hora — não guardamos vídeo no banco. A URL expira; se der erro, o job semanal do Apify renova. <b>Virou anúncio</b> marca o conteúdo para o bônus de R$ 300 do business case.</p>
       </div>
     </div>
   </section>
@@ -687,6 +722,53 @@ document.getElementById('tbvendas').innerHTML = VD.map(v =>
   + '<td><span class="chip '+(v.origem==='cupom_legado'?'vo':'ok')+'">'
   + (v.origem==='cupom_legado'?'cupom legado':'cadastro')+'</span></td></tr>').join('')
   || '<tr><td colspan="9" class="h dim" style="padding:20px 15px">Nenhuma venda atribuída.</td></tr>';
+
+/* ---------- galeria ---------- */
+const GAL = D.galeria || [];
+let gAba='todos', gQ='';
+document.getElementById('ledeGal').innerHTML =
+  GAL.length ? n(GAL.length)+' conteúdos com mídia coletada. Ordenados por visualização. '
+    + 'Baixar aqui é criativo que você não precisa produzir — julho gastou R$ 18.333 em mídia.'
+    : 'Nenhuma mídia coletada ainda. Rode o job do Apify.';
+function pintaGal(){
+  const L = GAL.filter(g => {
+    if (gAba==='reels' && g.tipo!=='reels') return false;
+    if (gAba==='carrossel' && g.tipo!=='carrossel') return false;
+    if (gAba==='anuncio' && !g.virou_anuncio) return false;
+    if (gQ && !((g.instagram_handle+' '+(g.legenda||'')).toLowerCase().includes(gQ))) return false;
+    return true;
+  });
+  document.getElementById('gal').innerHTML = L.map(g =>
+    '<div class="card">'
+    + '<span class="badge">'+g.tipo.replace('feed_','')+'</span>'
+    + (g.virou_anuncio?'<span class="badge ad">anúncio</span>':'')
+    + '<a href="'+(g.permalink||'#')+'" target="_blank" rel="noopener">'
+    + '<img class="th" loading="lazy" src="'+(g.thumb||'')+'" alt="conteúdo de @'+g.instagram_handle+'"></a>'
+    + '<div class="inf"><div class="who">@'+g.instagram_handle+'</div>'
+    + '<div class="met">'+(g.visualizacoes?n(g.visualizacoes)+' views':(g.curtidas!=null?n(g.curtidas)+' curt.':'—'))
+    + ' · '+dt(g.data)+'</div></div>'
+    + '<div class="bts">'
+    + '<a class="acbt" href="/api/midia?pub='+g.publicacao_id+(g.tem_video?'':'&tipo=imagem')+'">baixar</a>'
+    + '<button class="acbt'+(g.virou_anuncio?' ok':'')+'" data-ad="'+g.publicacao_id+'" data-v="'+(g.virou_anuncio?0:1)+'">'
+    + (g.virou_anuncio?'desmarcar':'virou anúncio')+'</button>'
+    + '</div></div>').join('') || '<div class="card"><div class="inf dim" style="padding:18px">Nada neste filtro.</div></div>';
+}
+document.querySelectorAll('[data-g]').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('[data-g]').forEach(x => x.setAttribute('aria-pressed','false'));
+  b.setAttribute('aria-pressed','true'); gAba=b.dataset.g; pintaGal();
+}));
+document.getElementById('gq').addEventListener('input', e => { gQ=e.target.value.trim().toLowerCase(); pintaGal(); });
+document.getElementById('gal').addEventListener('click', async e => {
+  const b = e.target.closest('[data-ad]'); if (!b) return;
+  b.disabled = true;
+  const j = await (await fetch('/api/publicacao?pub='+b.dataset.ad+'&anuncio='+b.dataset.v, {method:'POST'})).json();
+  b.disabled = false;
+  if (!j.ok) return alert('Não deu certo: '+(j.erro||'erro'));
+  const g = GAL.find(x => x.publicacao_id == b.dataset.ad);
+  if (g) g.virou_anuncio = j.publicacao.virou_anuncio;
+  pintaGal();
+});
+pintaGal();
 
 /* ---------- barras ---------- */
 const M=D.porMes||[]; const mx=Math.max(1,...M.map(m=>m.total));

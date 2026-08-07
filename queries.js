@@ -230,6 +230,31 @@ module.exports = {
     FROM creator.venda v
   `,
 
+  // ---- galeria de conteúdo ----
+  // A URL de mídia vem do payload do Apify e EXPIRA. Não guardamos o arquivo: o job semanal
+  // renova a URL, e o download é feito na hora pelo servidor. Guardar vídeo em bytea inflaria
+  // o banco por nada.
+  galeria: `
+    SELECT u.publicacao_id, u.instagram_handle, u.tipo, u.publicado_em::date AS data,
+           u.permalink, left(coalesce(u.legenda,''),200) AS legenda,
+           u.parceiro_id, p.nome AS parceiro, u.parceria_paga, u.virou_anuncio,
+           m.curtidas, m.comentarios, m.visualizacoes, m.reproducoes,
+           m.payload->>'displayUrl' AS thumb,
+           (m.payload->>'videoUrl' IS NOT NULL) AS tem_video,
+           m.coletado_em AS midia_de
+    FROM creator.publicacao u
+    LEFT JOIN creator.parceiro p ON p.parceiro_id = u.parceiro_id
+    LEFT JOIN LATERAL (
+      SELECT curtidas, comentarios, visualizacoes, reproducoes, payload, coletado_em
+      FROM creator.publicacao_metrica pm
+      WHERE pm.publicacao_id = u.publicacao_id AND pm.payload->>'displayUrl' IS NOT NULL
+      ORDER BY coletado_em DESC LIMIT 1
+    ) m ON true
+    WHERE m.payload IS NOT NULL
+    ORDER BY coalesce(m.visualizacoes,0) DESC, u.publicado_em DESC
+    LIMIT 200
+  `,
+
   // ---- saúde dos jobs de coleta ----
   jobs: `
     SELECT DISTINCT ON (job) job, sucesso, itens, detalhe, rodou_em
