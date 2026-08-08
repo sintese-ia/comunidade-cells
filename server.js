@@ -282,6 +282,24 @@ async function criarCupomShopify({ codigo, pct, combinavel }) {
 // email_log grava `evento_enviado`, nunca `enviado`.
 const METRICA_APROVACAO = 'Creator Aprovado';
 const METRICA_CAMPANHA  = 'Creator Campanha';
+const METRICA_REGISTRO  = 'Creator Cadastrado';
+
+// "obrigado pelo registro". Mesmo caminho dos outros: o app manda evento, o flow do Klaviyo
+// entrega. Quem chama é o job de cadastros, uma vez por pessoa.
+async function eventoRegistro({ email, nome, instagram }) {
+  if (!KLAVIYO) throw new Error('KLAVIYO_KEY não configurada');
+  if (!email) throw new Error('sem e-mail no cadastro');
+  const corpo = { data: { type: 'event', attributes: {
+    properties: { nome_creator: nome || null, instagram: instagram || null },
+    metric: { data: { type: 'metric', attributes: { name: METRICA_REGISTRO } } },
+    profile: { data: { type: 'profile', attributes: { email,
+               ...(nome ? { first_name: String(nome).split(/\s+/)[0] } : {}) } } },
+  } } };
+  const r = await postJSON('https://a.klaviyo.com/api/events/',
+    { Authorization: 'Klaviyo-API-Key ' + KLAVIYO, revision: '2024-10-15' }, corpo);
+  if (r.status !== 202) throw new Error('Klaviyo HTTP ' + r.status + ' ' + String(r.txt).slice(0, 200));
+  return corpo.data.attributes.properties;
+}
 
 // Mesmo caminho do aviso de aprovação, com a campanha junto. Separado em métrica própria
 // porque o flow é outro: aqui o assunto é "seu link mudou para esta campanha", não boas-vindas.
@@ -1272,7 +1290,7 @@ http.createServer(async (req, res) => {
   // disparo manual de job (o agendador roda sozinho; isto é para não esperar o ciclo)
   if (u.pathname === '/api/job' && req.method === 'POST') {
     const nome = u.searchParams.get('n');
-    const fns = { cadastros: () => J.syncCadastros(pool, META),
+    const fns = { cadastros: () => J.syncCadastros(pool, META, eventoRegistro),
                   tags:  () => J.syncTags(pool, META),
                   perfis:() => J.syncPerfis(pool, META),
                   apify: () => J.syncApify(pool, APIFY) };
@@ -1321,7 +1339,8 @@ http.createServer(async (req, res) => {
     .catch(e => console.error('  [FALHA GRAVE] o app NÃO consegue gravar no Postgres:', e.message,
                               '\n  Nenhum job vai funcionar. Confira o usuário em DATABASE_URL.'));
 
-  J.agendar(pool, { META_TOKEN: META, APIFY_TOKEN: APIFY, onMudanca: () => { invalida(); } });
+  J.agendar(pool, { META_TOKEN: META, APIFY_TOKEN: APIFY, aoRegistrar: eventoRegistro,
+                    onMudanca: () => { invalida(); } });
   if (!APP_SECRET) console.log('  [aviso] META_APP_SECRET vazio — webhook de story recusa POST');
   setInterval(() => recarregar().catch(() => {}), Math.max(60000, TTL / 2)).unref();
 });

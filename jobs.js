@@ -206,7 +206,62 @@ async function syncTags(pool, token) {
 // creator.leads é a entrada crua (webhook das LPs). creator.parceiro é quem entrou na fila de
 // curadoria. Este job faz a ponte: todo cadastro COMPLETO com @ vira um candidato pendente.
 // Idempotente por handle — rodar de novo não duplica.
-async function syncCadastros(pool, token) {
+// ---------------------------------------------------------------- 0b. obrigado pelo registro
+// Dispara UMA vez por pessoa, quando ela acabou de se cadastrar.
+//
+// ⚠️ AS DUAS GUARDAS AQUI EXISTEM PARA NÃO DISPARAR EM MASSA. Este job varre TODO parceiro,
+// não só os novos. Sem elas, a primeira rodada mandaria e-mail para as 51 pessoas que já estão
+// na base há semanas — gente que se cadastrou em julho receberia "obrigado pelo registro" hoje.
+//   1. só quem se cadastrou nas últimas 48h;
+//   2. só quem nunca recebeu e-mail de cadastro (creator.email_log).
+const JANELA_REGISTRO_H = 48;
+
+// ⚠️ TERCEIRA GUARDA, e a que mais importa: `REGISTRO_DESDE`.
+// Quando este recurso subiu, JÁ HAVIA 10 pessoas cadastradas nas últimas 48h. Sem um corte,
+// a primeira rodada mandaria "obrigado pelo seu registro" para elas — gente que se cadastrou
+// antes do e-mail existir, recebendo um agradecimento com dois dias de atraso.
+// Com o corte, só quem se cadastra DEPOIS da data recebe. Sem a variável definida o job não
+// manda nada: melhor um recurso desligado do que e-mail inesperado para pessoa real.
+const REGISTRO_DESDE = process.env.REGISTRO_DESDE || '';
+
+async function avisarRegistro(pool, enviar) {
+  if (typeof enviar !== 'function') return { avisados: 0, motivo: 'sem canal de e-mail' };
+  if (!REGISTRO_DESDE) return { avisados: 0, motivo: 'REGISTRO_DESDE não definido — desligado' };
+  const { rows } = await pool.query(`
+    SELECT p.parceiro_id, p.nome, p.email, p.instagram_handle
+    FROM creator.parceiro p
+    WHERE p.email IS NOT NULL AND p.email <> ''
+      AND p.criado_em > greatest($1::timestamptz, now() - interval '${JANELA_REGISTRO_H} hours')
+      AND NOT p.arquivado
+      -- só ENVIO BEM-SUCEDIDO bloqueia. Se a primeira tentativa falhou (Klaviyo fora do ar,
+      -- e-mail inválido), a pessoa tem que entrar na próxima rodada — senão uma falha
+      -- momentânea deixa alguém sem o e-mail para sempre, em silêncio.
+      AND NOT EXISTS (SELECT 1 FROM creator.email_log el
+                       WHERE el.parceiro_id = p.parceiro_id AND el.tipo = 'cadastro'
+                         AND el.estado = 'evento_enviado')
+    LIMIT 25`, [REGISTRO_DESDE]);
+  let n = 0;
+  for (const p of rows) {
+    try {
+      const props = await enviar({ email: p.email, nome: p.nome, instagram: p.instagram_handle });
+      await pool.query(`
+        INSERT INTO creator.email_log (parceiro_id,para,assunto,tipo,estado,payload)
+        VALUES ($1,$2,'Creator Cadastrado','cadastro','evento_enviado',$3)`,
+        [p.parceiro_id, p.email, props]);
+      n++;
+    } catch (e) {
+      // grava a falha: sem isso a pessoa fica fora do e-mail e ninguém fica sabendo
+      await pool.query(`
+        INSERT INTO creator.email_log (parceiro_id,para,assunto,tipo,estado,detalhe)
+        VALUES ($1,$2,'Creator Cadastrado','cadastro','falhou',$3)`,
+        [p.parceiro_id, p.email, e.message]).catch(() => {});
+      console.error('[registro]', p.email, e.message);
+    }
+  }
+  return { avisados: n, candidatos: rows.length };
+}
+
+async function syncCadastros(pool, token, aoRegistrar) {
   const r = await pool.query(`
     INSERT INTO creator.parceiro (tipo,status,lead_id,nome,email,telefone_e164,instagram_handle,criado_em)
     SELECT 'creator','pendente', v.lead_id, v.nome, v.email, v.telefone_e164,
@@ -273,7 +328,14 @@ async function syncCadastros(pool, token) {
         AND lower(s.instagram_handle)=lower(pa.instagram_handle)`);
   }
 
-  return { novos: r.rowCount, enriquecidos, indisponiveis, handles: r.rows.map(x => x.instagram_handle) };
+  // "obrigado pelo registro" — por último, e só para quem acabou de entrar (ver as guardas
+  // em avisarRegistro). Falha de e-mail não pode derrubar o sync do cadastro.
+  let registro = { avisados: 0 };
+  try { registro = await avisarRegistro(pool, aoRegistrar); }
+  catch (e) { console.error('[registro]', e.message); registro = { avisados: 0, erro: e.message }; }
+
+  return { novos: r.rowCount, enriquecidos, indisponiveis, avisados: registro.avisados,
+           handles: r.rows.map(x => x.instagram_handle) };
 }
 
 // ---------------------------------------------------------------- 2. business_discovery
@@ -495,8 +557,8 @@ function agendar(pool, env) {
 
   const DIA = 864e5, HORA = 36e5;
   // cadastro novo tem que aparecer na fila rápido — é o que o Gabriel abre de manhã
-  setInterval(() => roda('cadastros', () => syncCadastros(pool, env.META_TOKEN)), HORA).unref();
-  setTimeout(() => roda('cadastros', () => syncCadastros(pool, env.META_TOKEN)), 15000).unref();
+  setInterval(() => roda('cadastros', () => syncCadastros(pool, env.META_TOKEN, env.aoRegistrar)), HORA).unref();
+  setTimeout(() => roda('cadastros', () => syncCadastros(pool, env.META_TOKEN, env.aoRegistrar)), 15000).unref();
   // /tags roda diário: marcação nova aparecendo com 1 dia de atraso já é aceitável, e é barato.
   setInterval(() => roda('tags',   () => syncTags(pool, env.META_TOKEN)),   DIA).unref();
   setInterval(() => roda('perfis', () => syncPerfis(pool, env.META_TOKEN)), 7 * DIA).unref();
@@ -508,6 +570,6 @@ function agendar(pool, env) {
   return { roda, syncTags, syncPerfis, syncApify };
 }
 
-module.exports = { syncTags, syncPerfis, syncApify, syncCadastros, perfilDe, salvarPerfil,
+module.exports = { syncTags, syncPerfis, syncApify, syncCadastros, avisarRegistro, perfilDe, salvarPerfil,
                    guardarStory, guardarVideo, buscarVideoDe, limparMidia,
                    extrairStories, agendar, logJob };
