@@ -201,6 +201,24 @@ const painel = {
     FROM hs ORDER BY 3 DESC, 1
   `,
 
+  // ---- LEGADO: o inventário de cupons da loja ----
+  // Separado do programa de propósito. Aqui mora tudo que já existiu, inclusive o cupom que
+  // foi criado e nunca vendeu — que é o número que ninguém olhava.
+  legado: `SELECT * FROM creator.vw_legado`,
+
+  // ---- e-mails de aprovação, para a ficha ----
+  emails: `
+    SELECT parceiro_id, para, tipo, estado, detalhe, criado_em
+    FROM creator.email_log ORDER BY criado_em DESC LIMIT 300
+  `,
+
+  // ---- cupom por parceiro, com o estado na Shopify ----
+  cupons: `
+    SELECT c.parceiro_id, c.codigo, c.desconto_pct, c.comissao_pct, c.combinavel,
+           c.shopify_discount_id, c.shopify_erro, c.ativo, c.criado_em::date AS criado
+    FROM creator.cupom c WHERE c.ativo ORDER BY c.cupom_id
+  `,
+
   // ---- saúde dos jobs de coleta (vai para o rodapé do menu) ----
   jobs: `
     SELECT DISTINCT ON (job) job, sucesso, itens, rodou_em

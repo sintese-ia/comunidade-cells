@@ -344,6 +344,7 @@
           <th data-t="marcacoes">Marcações</th>
           <th data-t="pedidos">Pedidos</th>
           <th data-t="receita">Receita</th>
+          <th>Cupom</th>
           <th>Status</th>
           <th>Ações</th>
         </tr></thead>
@@ -465,6 +466,41 @@
     </div>
   </section>
 
+  <!-- ============ 06 LEGADO ============ -->
+  <section class="mod" data-mod="legado">
+    <div class="topo">
+      <div><h1>Legado</h1>
+        <p class="lede">Todo cupom que já existiu na loja, do jeito que a Shopify tem — <b>inclusive os que nunca venderam</b>. Isto é histórico: o programa novo mora em Cadastros.</p></div>
+      <div class="stamp" id="stampLeg"></div>
+    </div>
+    <div class="strip" id="stripLeg"></div>
+    <div class="panel">
+      <div class="barra">
+        <button class="aba" data-lg="nominal" aria-pressed="true">de pessoa <b id="l-nominal">0</b></button>
+        <button class="aba" data-lg="campanha" aria-pressed="false">de campanha <b id="l-campanha">0</b></button>
+        <button class="aba" data-lg="teste" aria-pressed="false">de teste <b id="l-teste">0</b></button>
+        <button class="aba" data-lg="zerado" aria-pressed="false">nunca vendeu <b id="l-zerado">0</b></button>
+        <button class="aba" data-lg="todos" aria-pressed="false">todos <b id="l-todos">0</b></button>
+        <input id="lq" class="busca" placeholder="filtrar por código ou nome" aria-label="Filtrar legado">
+        <span class="cnt" id="cntLeg"></span>
+      </div>
+      <div class="scroll"><table>
+        <thead><tr>
+          <th data-l="codigo">Cupom</th><th data-l="nome">Quem é</th>
+          <th data-l="desconto_pct">Desconto</th><th data-l="status_shopify">Na loja</th>
+          <th data-l="usos_shopify">Usos</th><th data-l="pedidos">Pedidos</th>
+          <th data-l="receita">Receita</th><th data-l="clientes_novos">Novos</th>
+          <th data-l="ultima_venda">Última venda</th><th>Empilha</th>
+        </tr></thead>
+        <tbody id="tbLeg"></tbody>
+      </table></div>
+      <div class="empty">
+        <span class="tg">o que é "usos" e o que é "pedidos"</span>
+        <p><b>Usos</b> é o contador da própria Shopify. <b>Pedidos</b> é o que casou com um pedido real no nosso banco. Quando os dois divergem, confie em Pedidos — é ele que tem receita atrás.<br><b>Empilha</b> mostra se o cupom soma com outro desconto de pedido no mesmo carrinho.</p>
+      </div>
+    </div>
+  </section>
+
 </div></main>
 </div>
 
@@ -484,6 +520,14 @@
         <button class="acbt" id="copialink">copiar link</button>
       </div>
       <p class="obs" style="margin-top:8px">O link carrega o <span style="font-family:var(--mono)">utm_campaign</span> do creator. Cupom e link são atribuições <b>diferentes</b>: quando apontam para pessoas diferentes no mesmo pedido, o cupom leva a comissão e o link fica como assistida.</p>
+    </div>
+    <div class="fsec"><h4>Cupom e e-mail</h4>
+      <div id="fCupomEstado"></div>
+      <div class="frm" style="margin-top:9px">
+        <button class="acbt" id="freenviar">reenviar o e-mail de aprovação</button>
+        <span class="obs" id="fEnvioMsg"></span>
+      </div>
+      <div id="fEmails" style="margin-top:9px"></div>
     </div>
     <div class="fsec"><h4>Acesso do creator</h4>
       <div class="frm">
@@ -519,6 +563,55 @@
     </span>
     <button class="acbt no" id="farquivar">arquivar</button>
     <button class="acbt" id="ffechar">fechar</button>
+  </div>
+</dialog>
+
+<!-- ---------------- aprovar: cupom + link + e-mail ---------------- -->
+<dialog class="ficha" id="dlgAprovar">
+  <div class="fhd">
+    <div><h3 id="apTitulo">Aprovar</h3>
+      <div class="hh" id="apSub"></div></div>
+  </div>
+  <div class="fbody">
+    <div class="fsec"><h4>Cupom</h4>
+      <div class="frm">
+        <input id="apCupom" style="width:190px;text-transform:uppercase" maxlength="24"
+               placeholder="CODIGO" aria-label="código do cupom">
+        <span class="obs">desconto</span>
+        <input id="apDesc" style="width:70px" inputmode="decimal" aria-label="desconto">
+        <span class="obs">% · comissão</span>
+        <input id="apCom" style="width:70px" inputmode="decimal" placeholder="—" aria-label="comissão">
+        <span class="obs">%</span>
+      </div>
+      <label class="obs" style="display:flex;gap:7px;align-items:center;margin-top:9px;cursor:pointer">
+        <input type="checkbox" id="apComb">
+        deixar empilhar com outro desconto de pedido
+      </label>
+      <p class="obs" style="margin-top:7px">O padrão da loja hoje é <b>8%</b> — os 103 cupons nominais que já existem são assim, não 15% como diz o business case. <b>Comissão em branco</b> significa que ainda não há regra combinada, e a apuração não vai inventar uma.</p>
+      <p class="obs" id="apAvisoComb" style="margin-top:7px;color:var(--wa)"></p>
+    </div>
+    <div class="fsec"><h4>Link do creator</h4>
+      <div class="frm"><input id="apLink" readonly style="flex:1;min-width:260px" aria-label="link"></div>
+      <p class="obs" style="margin-top:7px">Gerado a partir do @ da pessoa. É por ele que o clique vira venda assistida.</p>
+    </div>
+    <div class="fsec"><h4>E-mail</h4>
+      <div class="frm">
+        <input id="apEmail" style="flex:1;min-width:240px" placeholder="sem e-mail no cadastro"
+               aria-label="e-mail" type="email">
+        <label class="obs" style="display:flex;gap:6px;align-items:center;cursor:pointer">
+          <input type="checkbox" id="apEnviar" checked> avisar a pessoa
+        </label>
+      </div>
+      <div class="empty" style="margin-top:10px;border-top:0;padding:12px 13px">
+        <span class="tg">o que ela recebe</span>
+        <p id="apPreview"></p>
+      </div>
+    </div>
+  </div>
+  <div class="fft">
+    <span class="esq obs" id="apErro"></span>
+    <button class="acbt" id="apFechar">cancelar</button>
+    <button class="acbt ok" id="apSalvar">aprovar</button>
   </div>
 </dialog>
 
@@ -631,7 +724,7 @@ const rotAcao = k => (ACOES.find(a=>a[0]===k)||[,k])[1];
 
 /* carimbo do topo, repetido em cada módulo */
 const carimbo = 'Cells · canal influencer<br>base de '+dt(R.desde)+' a '+dt(R.ate)+'<br>atualizado '+(D.ger||'');
-['stamp','stampCad','stampCamp','stampAn','stampMen'].forEach(id => {
+['stamp','stampCad','stampCamp','stampAn','stampMen','stampLeg'].forEach(id => {
   const e = document.getElementById(id); if (e) e.innerHTML = carimbo;
 });
 
@@ -746,13 +839,20 @@ function pintaCad(){
       + '<td'+(f.marcacoes?'':' class="dim"')+'>'+(f.marcacoes||'—')+'</td>'
       + '<td'+(f.pedidos?'':' class="dim"')+'>'+(f.pedidos||'—')+'</td>'
       + '<td'+(f.receita?' style="font-weight:600"':' class="dim"')+'>'+(f.receita?nm(f.receita):'—')+'</td>'
+      + '<td>'+(() => { const c = cupomDe(f.parceiro_id);
+          if (!c) return '<span class="dim">—</span>';
+          return c.shopify_erro
+            ? '<span class="chip cr" title="'+esc(c.shopify_erro)+'">só no banco</span>'
+            : '<span class="chip ok">'+esc(c.codigo)+'</span>'; })()+'</td>'
       + '<td>'+selStatus(f)+'</td>'
       + '<td><div class="acs">'
+        + (f.status === 'pendente' && !f.arquivado
+            ? '<button class="acbt ok" data-aprovar="'+f.parceiro_id+'">aprovar</button>' : '')
         + '<button class="acbt" data-ficha="'+f.parceiro_id+'">ficha</button>'
         + '<button class="acbt no" data-ac="'+(f.arquivado?'desarquivar':'arquivar')+'" data-id="'+f.parceiro_id+'">'
         + (f.arquivado?'desarquivar':'arquivar')+'</button>'
       + '</div></td></tr>';
-  }).join('') || '<tr><td colspan="10" class="h dim" style="padding:20px 15px">Nada com esse filtro.</td></tr>';
+  }).join('') || '<tr><td colspan="11" class="h dim" style="padding:20px 15px">Nada com esse filtro.</td></tr>';
 }
 
 document.querySelectorAll('[data-fl]').forEach(b => b.addEventListener('click', () => {
@@ -805,10 +905,116 @@ document.getElementById('tbCad').addEventListener('click', async e => {
     pintaCad();
     return;
   }
+  const ab = e.target.closest('[data-aprovar]');
+  if (ab) { abreAprovar(+ab.dataset.aprovar); return; }
   const cb = e.target.closest('[data-casar]');
   if (cb) { abreCasar(+cb.dataset.casar); return; }
   const fb = e.target.closest('[data-ficha]');
   if (fb) abreFicha(+fb.dataset.ficha);
+});
+
+/* ---- aprovar: cupom + link + e-mail num clique --------------------------------
+   O diálogo mostra ANTES de gravar exatamente o que vai acontecer: qual código, quanto de
+   desconto, qual link e o que a pessoa recebe. Aprovar dispara e-mail para uma pessoa real —
+   clicar sem ver o que sai é como se manda a coisa errada. */
+const CUPONS = D.cupons || [], EMAILS = D.emails || [];
+const LEGADO = D.legado || [];
+const dlgAp = document.getElementById('dlgAprovar');
+let aprovarId = null;
+
+const cupomDe = id => CUPONS.find(c => c.parceiro_id === id) || null;
+
+// sugere o código a partir do primeiro nome; se já existir na loja, numera
+function sugereCupom(f){
+  const base = norml((f.nome || f.instagram_handle || 'creator').trim().split(/\s+/)[0])
+    .toUpperCase().slice(0, 16) || 'CREATOR';
+  const usados = new Set([
+    ...LEGADO.map(l => (l.codigo || '').toUpperCase()),
+    ...CUPONS.map(c => (c.codigo || '').toUpperCase()),
+  ]);
+  if (!usados.has(base)) return base;
+  for (let i = 2; i < 60; i++) if (!usados.has(base + i)) return base + i;
+  return base + Date.now().toString().slice(-4);
+}
+
+function slugDe(f){
+  return norml(f.instagram_handle || f.nome || '').slice(0, 24) || 'creator';
+}
+
+function pintaPreviewAp(){
+  const cod = (document.getElementById('apCupom').value || '').toUpperCase() || '(sem código)';
+  const desc = document.getElementById('apDesc').value || '?';
+  const link = document.getElementById('apLink').value;
+  const email = document.getElementById('apEmail').value.trim();
+  const vai = document.getElementById('apEnviar').checked;
+  document.getElementById('apPreview').innerHTML = vai
+    ? (email
+        ? 'Um e-mail para <b>' + esc(email) + '</b> dizendo que ela foi aprovada, com o cupom <b>'
+          + esc(cod) + '</b> (' + esc(desc) + '% para quem comprar) e o link dela.'
+          + '<br><span style="color:var(--wa)">Quem escreve e dispara é o Klaviyo. O painel só avisa que a aprovação aconteceu — se o flow não estiver ligado lá, nada sai e a tela vai dizer isso.</span>'
+        : '<span style="color:var(--cr)">Não há e-mail no cadastro. Preencha acima ou desmarque "avisar a pessoa".</span>')
+    : 'Nada é enviado agora. Dá para avisar depois pelo botão de reenviar na ficha.';
+  const comb = document.getElementById('apComb').checked;
+  document.getElementById('apAvisoComb').textContent = comb
+    ? 'Empilhando, este cupom soma com cupom de campanha no mesmo carrinho — é assim que 8% vira 28%.'
+    : '';
+}
+
+function abreAprovar(id){
+  const f = CAD.find(x => x.parceiro_id === id); if (!f) return;
+  aprovarId = id;
+  document.getElementById('apTitulo').textContent = 'Aprovar ' + (f.nome || '');
+  document.getElementById('apSub').innerHTML = (f.instagram_handle ? '@' + esc(f.instagram_handle) : 'sem Instagram')
+    + (f.seguidores ? ' · ' + n(f.seguidores) + ' seguidores' : '')
+    + (f.engajamento_pct ? ' · ' + pc(f.engajamento_pct) + ' de engajamento' : '');
+  document.getElementById('apCupom').value = sugereCupom(f);
+  document.getElementById('apDesc').value = 8;
+  document.getElementById('apCom').value = '';
+  document.getElementById('apComb').checked = false;
+  document.getElementById('apEmail').value = f.email || '';
+  document.getElementById('apEnviar').checked = true;
+  document.getElementById('apLink').value =
+    'https://cells.com.br/?utm_source=creator&utm_medium=organic&utm_campaign=' + slugDe(f);
+  document.getElementById('apErro').textContent = '';
+  pintaPreviewAp();
+  dlgAp.showModal();
+}
+['apCupom','apDesc','apEmail','apEnviar','apComb'].forEach(x =>
+  document.getElementById(x).addEventListener('input', pintaPreviewAp));
+document.getElementById('apEnviar').addEventListener('change', pintaPreviewAp);
+document.getElementById('apComb').addEventListener('change', pintaPreviewAp);
+document.getElementById('apFechar').addEventListener('click', () => dlgAp.close());
+
+document.getElementById('apSalvar').addEventListener('click', async () => {
+  const bt = document.getElementById('apSalvar'), err = document.getElementById('apErro');
+  const corpo = {
+    parceiro_id: aprovarId,
+    cupom: document.getElementById('apCupom').value.trim().toUpperCase(),
+    desconto_pct: document.getElementById('apDesc').value,
+    comissao_pct: document.getElementById('apCom').value,
+    combinavel: document.getElementById('apComb').checked,
+    email: document.getElementById('apEmail').value.trim(),
+    enviar_email: document.getElementById('apEnviar').checked,
+  };
+  if (corpo.enviar_email && !corpo.email) { err.textContent = 'Preencha o e-mail ou desmarque o aviso.'; return; }
+  bt.disabled = true; err.textContent = 'aprovando…';
+  const j = await (await fetch('/api/aprovar', {method:'POST',
+    headers:{'content-type':'application/json'}, body: JSON.stringify(corpo)})).json();
+  bt.disabled = false;
+  if (!j.ok) { err.textContent = (j.erro || 'não gravou') + (j.etapa ? ' (em: ' + j.etapa + ')' : ''); return; }
+  dlgAp.close();
+  // relatório honesto: cada etapa com o que REALMENTE aconteceu
+  const linhas = ['Aprovado. Cupom ' + j.cupom.codigo + ' de ' + j.cupom.desconto_pct + '%.'];
+  linhas.push(j.shopify_erro
+    ? '\n⚠️ O cupom NÃO foi criado na Shopify: ' + j.shopify_erro
+      + '\nEle está gravado aqui, mas NÃO funciona no checkout até ser criado na loja.'
+    : '\nCriado na Shopify e valendo no checkout.');
+  if (j.email.estado === 'evento_enviado')
+    linhas.push('\nO Klaviyo aceitou o aviso. A entrega depende do flow estar ligado lá.');
+  else if (j.email.estado === 'falhou') linhas.push('\n⚠️ O aviso não saiu: ' + j.email.detalhe);
+  else linhas.push('\nNenhum e-mail enviado, como você pediu.');
+  alert(linhas.join(''));
+  location.reload();
 });
 
 /* ---- casar cupom com creator ----------------------------------------------
@@ -954,6 +1160,29 @@ function abreFicha(id){
     ? 'https://cells.com.br/?utm_source=creator&utm_medium=organic&utm_campaign=' + f.utm_slug
     : '(sem slug)';
   document.getElementById('flinkcr').value = '';
+
+  // estado REAL do cupom: existir aqui não é existir na loja
+  const cp = cupomDe(id);
+  document.getElementById('fCupomEstado').innerHTML = !cp
+    ? '<p class="obs">Ainda sem cupom. Ele nasce quando você aprova.</p>'
+    : (cp.shopify_erro
+        ? '<div class="empty" style="border-top:0;padding:11px 12px"><span class="tg" style="background:var(--cr-s);color:var(--cr)">não está na loja</span>'
+          + '<p><b>' + esc(cp.codigo) + '</b> está gravado aqui mas <b>NÃO existe na Shopify</b>, então não funciona no checkout.<br>'
+          + '<span style="font-family:var(--mono);font-size:11px">' + esc(cp.shopify_erro) + '</span></p></div>'
+        : '<p class="obs"><b>' + esc(cp.codigo) + '</b> · ' + cp.desconto_pct + '% de desconto'
+          + (cp.comissao_pct != null ? ' · ' + cp.comissao_pct + '% de comissão' : ' · <span style="color:var(--wa)">sem regra de comissão</span>')
+          + ' · <span style="color:var(--ok)">ativo na loja</span></p>');
+
+  const es = EMAILS.filter(x => x.parceiro_id === id);
+  document.getElementById('fEnvioMsg').textContent = '';
+  document.getElementById('fEmails').innerHTML = es.length ? es.map(x =>
+    '<div class="pub"><span class="t">' + esc(x.tipo) + '</span>'
+    + '<span class="d">' + String(x.criado_em).slice(0,10).split('-').reverse().join('/') + '</span>'
+    + '<span class="l">' + esc(x.para) + '</span>'
+    + '<span class="m">' + (x.estado === 'evento_enviado'
+        ? '<span class="chip ok" title="o Klaviyo aceitou; a entrega depende do flow estar ligado">avisado</span>'
+        : '<span class="chip cr" title="' + esc(x.detalhe||'') + '">falhou</span>') + '</span></div>').join('')
+    : '<p class="obs">Nenhum e-mail enviado ainda.</p>';
   document.getElementById('ftags').value = (f.tags||[]).join(', ');
   pintaEnvios(id);
 
@@ -1010,6 +1239,14 @@ async function copia(el, btn){
 document.getElementById('copiacupom').addEventListener('click', () => copia('fcupom','copiacupom'));
 document.getElementById('copialink').addEventListener('click', () => copia('flink','copialink'));
 document.getElementById('fcopiacr').addEventListener('click', () => copia('flinkcr','fcopiacr'));
+document.getElementById('freenviar').addEventListener('click', async e => {
+  const msg = document.getElementById('fEnvioMsg');
+  e.target.disabled = true; msg.textContent = 'enviando…';
+  const j = await (await fetch('/api/reenviar?id='+fichaId, {method:'POST'})).json();
+  e.target.disabled = false;
+  // "avisado", não "enviado": o que aconteceu foi o Klaviyo aceitar o evento
+  msg.textContent = j.ok ? 'aviso mandado ao Klaviyo para ' + j.para : 'não deu: ' + (j.erro||'');
+});
 document.getElementById('fgeralink').addEventListener('click', async () => {
   const b = document.getElementById('fgeralink'); b.disabled = true;
   const j = await (await fetch('/api/acesso?id='+fichaId+'&dias=90', {method:'POST'})).json();
@@ -1417,6 +1654,76 @@ document.getElementById('mFechar').addEventListener('click', fechaMidia);
 dM.addEventListener('close', () => { document.getElementById('mplayer').innerHTML = ''; });
 pintaGal();
 
+/* =================================================== 06 LEGADO ================= */
+let lgAba = 'nominal', lgQ = '', lgOrd = {c:'receita', d:-1};
+
+(function topoLegado(){
+  const nom = LEGADO.filter(l => l.classe === 'nominal');
+  const semVenda = nom.filter(l => l.nunca_vendeu).length;
+  const receita = LEGADO.reduce((a,l) => a + Number(l.receita||0), 0);
+  const empilha = LEGADO.filter(l => l.combina_pedido && l.status_shopify === 'ACTIVE').length;
+  document.getElementById('stripLeg').innerHTML = [
+    ['Cupons na loja', n(LEGADO.length), 'varridos da Shopify'],
+    ['De pessoa', n(nom.length), 'cupom nominal de creator'],
+    ['Nunca venderam', n(semVenda), semVenda ? Math.round(semVenda/Math.max(1,nom.length)*100)+'% dos nominais' : ''],
+    ['Receita do legado', nm(receita), 'todos os cupons somados'],
+    ['Empilham desconto', n(empilha), 'somam com outro cupom no carrinho'],
+  ].map(([k,v,nn]) => '<div class="cel"><div class="k">'+k+'</div><div class="v">'+v+'</div>'
+      + '<div class="n">'+nn+'</div></div>').join('');
+})();
+
+function pintaLegado(){
+  const c = {nominal:0, campanha:0, teste:0, zerado:0, todos:LEGADO.length};
+  LEGADO.forEach(l => { if (c[l.classe] != null) c[l.classe]++; if (l.nunca_vendeu) c.zerado++; });
+  for (const k in c) { const e = document.getElementById('l-'+k); if (e) e.textContent = c[k]; }
+
+  let L = LEGADO.filter(l => {
+    if (lgAba === 'zerado') { if (!l.nunca_vendeu) return false; }
+    else if (lgAba !== 'todos' && l.classe !== lgAba) return false;
+    if (lgQ && !((l.codigo+' '+(l.nome||'')+' '+(l.instagram_handle||'')).toLowerCase().includes(lgQ))) return false;
+    return true;
+  });
+  const k = lgOrd.c;
+  L.sort((a,b) => {
+    let x = a[k], y = b[k];
+    if (x == null) return 1; if (y == null) return -1;
+    if (typeof x === 'string') return x.localeCompare(y) * lgOrd.d;
+    return (x - y) * lgOrd.d;
+  });
+  document.getElementById('cntLeg').textContent = L.length + ' de ' + LEGADO.length;
+  document.getElementById('tbLeg').innerHTML = L.map(l =>
+    '<tr><td class="h"><b>'+esc(l.codigo)+'</b></td>'
+    + '<td class="h">'+(l.nome ? esc(l.nome) : '<span class="dim">—</span>')
+      + (l.instagram_handle ? '<span class="sub2">@'+esc(l.instagram_handle)+'</span>' : '')+'</td>'
+    + '<td>'+(l.desconto_pct != null ? l.desconto_pct+'%' : '<span class="dim">valor fixo</span>')+'</td>'
+    + '<td><span class="chip '+(l.status_shopify==='ACTIVE'?'ok':'vo')+'">'
+      + esc(String(l.status_shopify||'—').toLowerCase())+'</span></td>'
+    + '<td'+(l.usos_shopify?'':' class="dim"')+'>'+(l.usos_shopify != null ? n(l.usos_shopify) : '—')+'</td>'
+    + '<td'+(l.pedidos?'':' class="dim"')+'>'+(l.pedidos || '—')+'</td>'
+    + '<td'+(l.receita>0?' style="font-weight:600"':' class="dim"')+'>'+(l.receita>0?nm(l.receita):'—')+'</td>'
+    + '<td'+(l.clientes_novos?'':' class="dim"')+'>'+(l.clientes_novos || '—')+'</td>'
+    + '<td class="dim">'+dt(l.ultima_venda)+'</td>'
+    + '<td>'+(l.combina_pedido ? '<span class="chip wa">empilha</span>' : '<span class="dim">não</span>')+'</td>'
+    + '</tr>').join('')
+    || '<tr><td colspan="10" class="h dim" style="padding:20px 15px">Nada com esse filtro.</td></tr>';
+}
+document.querySelectorAll('[data-lg]').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('[data-lg]').forEach(x => x.setAttribute('aria-pressed','false'));
+  b.setAttribute('aria-pressed','true'); lgAba = b.dataset.lg; pintaLegado();
+}));
+document.getElementById('lq').addEventListener('input', e => {
+  lgQ = e.target.value.trim().toLowerCase(); pintaLegado();
+});
+document.querySelectorAll('th[data-l]').forEach(t => t.addEventListener('click', () => {
+  const c = t.dataset.l;
+  lgOrd = lgOrd.c === c ? {c, d:-lgOrd.d} : {c, d:(c==='codigo'||c==='nome'?1:-1)};
+  document.querySelectorAll('th[data-l]').forEach(x =>
+    x.innerHTML = x.textContent.replace(/[▲▼]\s*$/,'').trim() +
+      (x.dataset.l===lgOrd.c ? ' <span class="ar">'+(lgOrd.d<0?'▼':'▲')+'</span>' : ''));
+  pintaLegado();
+}));
+pintaLegado();
+
 /* =================================================== NAVEGAÇÃO ================= */
 const MODULOS = [
   ['busca',     'Buscar creator', () => null],
@@ -1424,6 +1731,7 @@ const MODULOS = [
   ['campanhas', 'Campanhas',      () => CAMP.filter(c => c.status==='ativa').length || null],
   ['analises',  'Análises',       () => null],
   ['mencoes',   'Menções',        () => GAL.length || null],
+  ['legado',    'Legado',         () => (D.legado||[]).filter(l => l.nunca_vendeu).length || null],
 ];
 
 document.getElementById('navLista').innerHTML = MODULOS.map(([k,rot,cont],i) => {

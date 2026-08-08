@@ -23,6 +23,13 @@ const GRAPH_V = process.env.GRAPH_VERSION || 'v21.0';
 const APIFY   = process.env.APIFY_TOKEN || '';
 const APP_SECRET   = process.env.META_APP_SECRET || '';
 const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN || '';
+const SHOP      = process.env.SHOPIFY_SHOP  || 'r1n6nj-ui.myshopify.com';
+const SHOP_TOKEN = process.env.SHOPIFY_TOKEN || '';   // precisa de write_discounts
+const KLAVIYO   = process.env.KLAVIYO_KEY || '';
+const SITE      = process.env.SITE_URL || 'https://cells.com.br';
+// O padrão REAL da casa, medido na loja em 08/08: os ~103 cupons nominais são de 8%.
+// O business case dizia 15% — está errado, e usar 15 dobraria o desconto sem ninguém decidir.
+const DESCONTO_PADRAO = +process.env.DESCONTO_PADRAO || 8;
 const COOKIE  = 'cc_sess';
 // Os únicos status que um cadastro pode ter. A tela oferece exatamente estes, e o servidor
 // recusa qualquer outro — status livre vira dialeto pessoal e quebra todo filtro depois.
@@ -190,6 +197,112 @@ async function historicoCells(h) {
   const c = await pool.query(
     `SELECT parceiro_id,status,nome FROM creator.parceiro WHERE lower(instagram_handle)=lower($1)`, [h]);
   return { ...r.rows[0], cadastrado: c.rows[0] || null };
+}
+
+// ---------------------------------------------------------------- POST genérico
+function postJSON(url, headers, corpo) {
+  return new Promise((ok, err) => {
+    const body = Buffer.from(JSON.stringify(corpo));
+    const r = https.request(url, { method: 'POST',
+      headers: { 'content-type': 'application/json', 'content-length': body.length, ...headers } },
+      resp => {
+        const bufs = [];
+        resp.on('data', c => bufs.push(c));
+        resp.on('end', () => {
+          const txt = Buffer.concat(bufs).toString('utf8');
+          let json = null; try { json = txt ? JSON.parse(txt) : null; } catch {}
+          ok({ status: resp.statusCode, json, txt });
+        });
+      });
+    r.on('error', err);
+    r.setTimeout(25000, () => r.destroy(new Error('timeout')));
+    r.write(body); r.end();
+  });
+}
+
+// ---------------------------------------------------------------- cupom na Shopify
+// ⚠️ O token do app custom que existe hoje tem SEIS escopos e NENHUM de desconto —
+// `read_discounts` já dá ACCESS_DENIED (testado 08/08). Enquanto não houver um token com
+// `write_discounts`, esta função devolve erro e o cupom fica gravado só no nosso banco,
+// marcado com `shopify_erro`. A tela mostra isso em vermelho: cupom que não existe na loja
+// não funciona no checkout, e fingir que funciona é o pior resultado possível.
+async function criarCupomShopify({ codigo, pct, combinavel }) {
+  if (!SHOP_TOKEN) throw new Error('SHOPIFY_TOKEN não configurado — cupom NÃO existe na loja');
+  const mut = `
+    mutation criar($d: DiscountCodeBasicInput!) {
+      discountCodeBasicCreate(basicCodeDiscount: $d) {
+        codeDiscountNode { id }
+        userErrors { field message }
+      }
+    }`;
+  const d = {
+    title: codigo,
+    code: codigo,
+    startsAt: new Date().toISOString(),
+    customerSelection: { all: true },
+    customerGets: {
+      value: { percentage: pct / 100 },
+      items: { all: true },
+    },
+    // combinar com outro desconto de PEDIDO é como o cupom de creator vira 8% + 20% de
+    // campanha no mesmo carrinho. Todos os ~180 cupons da loja hoje estão com isso LIGADO;
+    // os novos nascem desligados, salvo escolha explícita na tela.
+    combinesWith: { orderDiscounts: !!combinavel, productDiscounts: false, shippingDiscounts: true },
+    appliesOncePerCustomer: false,
+  };
+  const r = await postJSON(`https://${SHOP}/admin/api/2025-01/graphql.json`,
+    { 'X-Shopify-Access-Token': SHOP_TOKEN }, { query: mut, variables: { d } });
+  if (r.status !== 200) throw new Error('Shopify HTTP ' + r.status + ' ' + String(r.txt).slice(0, 160));
+  const erroApi = r.json?.errors?.[0]?.message;
+  if (erroApi) throw new Error(erroApi);
+  const res = r.json?.data?.discountCodeBasicCreate;
+  if (res?.userErrors?.length) throw new Error(res.userErrors.map(e => e.message).join('; '));
+  const id = res?.codeDiscountNode?.id;
+  if (!id) throw new Error('a Shopify não devolveu o id do desconto');
+  return id;
+}
+
+// ---------------------------------------------------------------- e-mail pelo Klaviyo
+// O app NÃO manda e-mail: manda um EVENTO. Quem transforma em mensagem é um flow do Klaviyo,
+// que cuida de template, remetente verificado, descadastro e entrega. Construir mailer próprio
+// para isso seria refazer o que já existe na casa e com pior entrega.
+//
+// ⚠️ CONSEQUÊNCIA QUE PRECISA APARECER NA TELA: aceitar o evento (202) NÃO é entregar o
+// e-mail. Se o flow não estiver ligado no Klaviyo, o evento entra e nada sai. Por isso o
+// email_log grava `evento_enviado`, nunca `enviado`.
+const METRICA_APROVACAO = 'Creator Aprovado';
+
+async function eventoAprovacao({ email, nome, cupom, link, desconto, comissao }) {
+  if (!KLAVIYO) throw new Error('KLAVIYO_KEY não configurada');
+  if (!email) throw new Error('esta pessoa não tem e-mail no cadastro');
+  const corpo = {
+    data: {
+      type: 'event',
+      attributes: {
+        properties: { cupom, link, desconto_pct: desconto, comissao_pct: comissao,
+                      nome_creator: nome || null },
+        metric: { data: { type: 'metric', attributes: { name: METRICA_APROVACAO } } },
+        profile: { data: { type: 'profile',
+                   attributes: { email, ...(nome ? { first_name: String(nome).split(/\s+/)[0] } : {}) } } },
+      },
+    },
+  };
+  const r = await postJSON('https://a.klaviyo.com/api/events/',
+    { Authorization: 'Klaviyo-API-Key ' + KLAVIYO, revision: '2024-10-15' }, corpo);
+  if (r.status !== 202) throw new Error('Klaviyo HTTP ' + r.status + ' ' + String(r.txt).slice(0, 200));
+  return corpo.data.attributes.properties;
+}
+
+// slug do link, único. `ux_parceiro_slug` é único de verdade, então tentar sem checar quebra.
+async function slugLivre(cli, base) {
+  const raiz = (base || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 24) || 'creator';
+  for (let i = 0; i < 40; i++) {
+    const tentativa = i ? raiz + i : raiz;
+    const r = await cli.query(`SELECT 1 FROM creator.parceiro WHERE utm_slug=$1`, [tentativa]);
+    if (!r.rows[0]) return tentativa;
+  }
+  throw new Error('não achei slug livre para ' + raiz);
 }
 
 // ---------------------------------------------------------------- portal do creator
@@ -711,6 +824,148 @@ http.createServer(async (req, res) => {
          ON CONFLICT (campanha_id,parceiro_id) DO UPDATE SET saiu_em=NULL`, [c, p]);
       cache.at = 0; return json(200, { ok: true });
     } catch (e) { return json(200, { ok: false, erro: e.message }); }
+  }
+
+  // ---------------- APROVAR: cupom + link + e-mail, num clique ----------------
+  // Pedido do Gabriel em 08/08: aprovar tem que criar o cupom e o link e avisar a pessoa.
+  //
+  // A ordem importa e é deliberada. Primeiro grava no NOSSO banco, depois tenta a Shopify,
+  // por último o e-mail — do mais reversível para o menos. Se o e-mail sair e o cupom não
+  // existir, a pessoa recebe um código quebrado e a Cells queima a primeira impressão; o
+  // contrário (cupom existe, e-mail falhou) é só reenviar.
+  if (u.pathname === '/api/aprovar' && req.method === 'POST') {
+    let b = ''; req.on('data', c => { b += c; if (b.length > 8000) req.destroy(); });
+    return req.on('end', async () => {
+      const cli = await pool.connect();
+      let etapa = 'início';
+      try {
+        const d = JSON.parse(b || '{}');
+        const id = +d.parceiro_id;
+        if (!id) return json(400, { erro: 'parceiro ausente' });
+
+        const codigo = String(d.cupom || '').trim().toUpperCase();
+        if (!/^[A-Z0-9]{3,24}$/.test(codigo))
+          return json(400, { erro: 'cupom: use de 3 a 24 letras ou números, sem espaço nem acento' });
+        const desconto = Number(String(d.desconto_pct ?? DESCONTO_PADRAO).replace(',', '.'));
+        const comissao = d.comissao_pct == null || d.comissao_pct === ''
+          ? null : Number(String(d.comissao_pct).replace(',', '.'));
+        if (!(desconto > 0 && desconto <= 100)) return json(400, { erro: 'desconto fora de 0 a 100' });
+        if (comissao != null && !(comissao >= 0 && comissao <= 100))
+          return json(400, { erro: 'comissão fora de 0 a 100' });
+
+        etapa = 'conferindo o cadastro';
+        const pa = (await cli.query(`SELECT * FROM creator.parceiro WHERE parceiro_id=$1`, [id])).rows[0];
+        if (!pa) return json(404, { erro: 'parceiro não encontrado' });
+
+        // O código tem que ser único na LOJA, não só aqui. `creator.legado` tem o inventário
+        // inteiro da Shopify — inclusive cupons que nunca venderam e por isso não estão em
+        // creator.cupom. Sem esta checagem, dá para reaproveitar sem querer o código de outra
+        // pessoa e misturar a venda dos dois.
+        etapa = 'conferindo se o código já existe';
+        const cho = await cli.query(`
+          SELECT 'programa' AS onde FROM creator.cupom WHERE upper(codigo)=$1
+          UNION ALL SELECT 'loja' FROM creator.legado WHERE upper(codigo)=$1`, [codigo]);
+        if (cho.rows[0])
+          return json(409, { erro: 'o código ' + codigo + ' já existe ('
+            + (cho.rows[0].onde === 'loja' ? 'na Shopify' : 'no programa') + '). Escolha outro.' });
+
+        await cli.query('BEGIN');
+        etapa = 'gravando o link';
+        const slug = pa.utm_slug || await slugLivre(cli, pa.instagram_handle || pa.nome || codigo);
+        const link = `${SITE}/?utm_source=creator&utm_medium=organic&utm_campaign=${slug}`;
+
+        etapa = 'criando o cupom na Shopify';
+        let shopifyId = null, shopifyErro = null;
+        try { shopifyId = await criarCupomShopify({ codigo, pct: desconto, combinavel: !!d.combinavel }); }
+        catch (e) { shopifyErro = e.message; }
+
+        etapa = 'gravando o cupom';
+        const cup = (await cli.query(`
+          INSERT INTO creator.cupom (parceiro_id, codigo, desconto_pct, comissao_pct,
+                                     combinavel, shopify_discount_id, shopify_erro, ativo)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,true) RETURNING *`,
+          [id, codigo, desconto, comissao, !!d.combinavel, shopifyId, shopifyErro])).rows[0];
+
+        etapa = 'atualizando o cadastro';
+        const novo = (await cli.query(`
+          UPDATE creator.parceiro SET status='ativo', utm_slug=$2, aprovado_em=now(),
+                 aprovado_por=$3, decidido_por=$3, arquivado=false,
+                 reprovado_em=NULL, reprovado_motivo=NULL, atualizado_em=now()
+           WHERE parceiro_id=$1 RETURNING *`, [id, slug, (d.por || 'painel').slice(0, 60)])).rows[0];
+
+        // registra no legado também, para o inventário não ficar desatualizado no dia seguinte
+        await cli.query(`
+          INSERT INTO creator.legado (codigo, titulo, status_shopify, desconto_pct, combina_pedido,
+                                      usos_shopify, classe, parceiro_id, instagram_handle, obs)
+          VALUES ($1,$1,$2,$3,$4,0,'nominal',$5,$6,'criado pelo painel na aprovação')
+          ON CONFLICT (upper(codigo)) DO UPDATE SET parceiro_id=EXCLUDED.parceiro_id,
+                 instagram_handle=EXCLUDED.instagram_handle, sincronizado_em=now()`,
+          [codigo, shopifyErro ? 'NAO_CRIADO' : 'ACTIVE', desconto, !!d.combinavel,
+           id, novo.instagram_handle]);
+        await cli.query('COMMIT');
+        cache.at = 0;
+
+        // ---- e-mail, por último e fora da transação ----
+        // Fora de propósito: e-mail não tem rollback. Se ele falhar, a aprovação continua
+        // valendo e o painel oferece reenviar — o contrário perderia o cupom já criado.
+        const email = String(d.email || pa.email || '').trim();
+        let envio = { estado: 'nao_enviado', detalhe: null };
+        if (d.enviar_email !== false) {
+          try {
+            const props = await eventoAprovacao({ email, nome: novo.nome, cupom: codigo, link,
+                                                  desconto, comissao });
+            envio = { estado: 'evento_enviado', detalhe: null };
+            await pool.query(`
+              INSERT INTO creator.email_log (parceiro_id,para,assunto,tipo,estado,payload)
+              VALUES ($1,$2,$3,'aprovacao','evento_enviado',$4)`,
+              [id, email, METRICA_APROVACAO, props]);
+          } catch (e) {
+            envio = { estado: 'falhou', detalhe: e.message };
+            await pool.query(`
+              INSERT INTO creator.email_log (parceiro_id,para,assunto,tipo,estado,detalhe)
+              VALUES ($1,$2,$3,'aprovacao','falhou',$4)`,
+              [id, email || '(sem e-mail)', METRICA_APROVACAO, e.message]).catch(() => {});
+          }
+        }
+
+        return json(200, { ok: true, parceiro: normaliza(novo), cupom: normaliza(cup),
+                           link, slug, shopify_erro: shopifyErro, email: envio });
+      } catch (e) {
+        await cli.query('ROLLBACK').catch(() => {});
+        return json(200, { ok: false, erro: e.message, etapa });
+      } finally { cli.release(); }
+    });
+  }
+
+  // reenvia o e-mail de aprovação de quem já tem cupom
+  if (u.pathname === '/api/reenviar' && req.method === 'POST') {
+    const id = +u.searchParams.get('id');
+    if (!id) return json(400, { erro: 'parceiro ausente' });
+    try {
+      const r = await pool.query(`
+        SELECT p.parceiro_id, p.nome, p.email, p.utm_slug,
+               c.codigo, c.desconto_pct, c.comissao_pct
+        FROM creator.parceiro p
+        LEFT JOIN creator.cupom c ON c.parceiro_id=p.parceiro_id AND c.ativo
+        WHERE p.parceiro_id=$1 ORDER BY c.cupom_id LIMIT 1`, [id]);
+      const p = r.rows[0];
+      if (!p) return json(404, { erro: 'parceiro não encontrado' });
+      if (!p.codigo) return json(400, { erro: 'esta pessoa ainda não tem cupom' });
+      const link = `${SITE}/?utm_source=creator&utm_medium=organic&utm_campaign=${p.utm_slug}`;
+      const props = await eventoAprovacao({ email: p.email, nome: p.nome, cupom: p.codigo, link,
+                                            desconto: p.desconto_pct, comissao: p.comissao_pct });
+      await pool.query(`
+        INSERT INTO creator.email_log (parceiro_id,para,assunto,tipo,estado,payload)
+        VALUES ($1,$2,$3,'aprovacao','evento_enviado',$4)`,
+        [id, p.email, METRICA_APROVACAO, props]);
+      return json(200, { ok: true, para: p.email });
+    } catch (e) {
+      await pool.query(`
+        INSERT INTO creator.email_log (parceiro_id,para,assunto,tipo,estado,detalhe)
+        VALUES ($1,'(reenvio)',$2,'aprovacao','falhou',$3)`,
+        [id, METRICA_APROVACAO, e.message]).catch(() => {});
+      return json(200, { ok: false, erro: e.message });
+    }
   }
 
   // ---------------- cadastros: mudar status ----------------
