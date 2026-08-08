@@ -802,6 +802,20 @@ http.createServer(async (req, res) => {
         const pubs = await cli.query(
           `UPDATE creator.publicacao SET parceiro_id=$1
            WHERE lower(instagram_handle)=$2 AND parceiro_id IS DISTINCT FROM $1`, [alvo, h]);
+
+        // O cupom legado veio com o CÓDIGO no lugar do nome ("AURA10"). Agora que sabemos de
+        // quem é, o nome do perfil vale mais que o código — mas só troca se ainda for o código,
+        // nunca por cima de um nome que alguém escreveu.
+        await cli.query(`
+          UPDATE creator.parceiro p SET nome = s.nome
+          FROM (SELECT nome FROM creator.perfil_snapshot
+                 WHERE lower(instagram_handle)=$2 AND nome IS NOT NULL
+                 ORDER BY coletado_em DESC LIMIT 1) s
+          WHERE p.parceiro_id=$1 AND s.nome <> ''
+            AND upper(regexp_replace(p.nome,'[^A-Za-z0-9]','','g'))
+                = upper(regexp_replace(coalesce(
+                    (SELECT c.codigo FROM creator.cupom c WHERE c.parceiro_id=p.parceiro_id
+                      ORDER BY c.cupom_id LIMIT 1), '@@'),'[^A-Za-z0-9]','','g'))`, [alvo, h]);
         await cli.query('COMMIT');
         cache.at = 0;
         const r = await pool.query(`SELECT * FROM creator.parceiro WHERE parceiro_id=$1`, [alvo]);
