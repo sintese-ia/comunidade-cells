@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Comunidade Cells — painel de creators</title>
+<title>Comunidade Cells</title>
 <style>
   :root{
     --bg:#FFFFFF; --sub:#FAFBFB; --ink:#14181A; --ink2:#3E4749; --mut:#6C7679; --fnt:#98A0A2;
@@ -17,130 +17,9 @@
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
        font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
-  .wrap{max-width:1180px;margin:0 auto;padding:30px 20px 80px}
 
-  header.top{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;justify-content:space-between;
-             padding-bottom:16px;border-bottom:2px solid var(--ink)}
-  .top h1{font-size:24px;margin:0;letter-spacing:-.024em;font-weight:660}
-  .top h1 em{font-style:normal;color:var(--ac)}
-  .top p{margin:5px 0 0;color:var(--mut);font-size:13px}
-  .stamp{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
-         color:var(--fnt);text-align:right;line-height:1.8;white-space:nowrap}
-
-  .strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;
-         background:var(--line);border:1px solid var(--line);margin-top:22px;border-radius:3px;overflow:hidden}
-  .cel{background:var(--bg);padding:14px 15px}
-  .cel .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--mut)}
-  .cel .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:26px;font-weight:520;
-          letter-spacing:-.022em;line-height:1;margin-top:7px}
-  .cel .v.z{font-size:17px;color:var(--vo);letter-spacing:0}
-  .cel .n{font-size:11px;color:var(--fnt);margin-top:6px;line-height:1.4}
-
-  section{margin-top:36px}
-  .hd{display:flex;align-items:baseline;gap:11px;flex-wrap:wrap}
-  .eb{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
-      color:var(--ac);font-weight:600}
-  h2{font-size:18px;margin:0;letter-spacing:-.015em;font-weight:640}
-  .lede{margin:6px 0 16px;color:var(--mut);font-size:13px;max-width:76ch}
-
-  .panel{border:1px solid var(--line);border-radius:3px;overflow:hidden}
-
-  /* busca */
-  .sb{display:flex;gap:9px;align-items:center;padding:12px 14px;background:var(--sub);
-      border-bottom:1px solid var(--line)}
-  .sb .at{font-family:var(--mono);color:var(--fnt);font-size:15px}
-  .sb input{flex:1;border:0;background:transparent;font-family:var(--mono);font-size:15px;
-            color:var(--ink);padding:4px 0;min-width:0}
-  .sb input:focus{outline:2px solid var(--ac);outline-offset:3px;border-radius:2px}
-  .bt{font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
-      background:var(--ink);color:#fff;border:0;border-radius:2px;padding:9px 15px;cursor:pointer}
-  .bt:disabled{background:var(--fnt);cursor:wait}
-  .bt:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
-
-  #res{padding:0}
-  .rhead{display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between;align-items:flex-start;
-         padding:16px 15px 12px}
-  .rhead .nm{font-size:17px;font-weight:620;letter-spacing:-.012em}
-  .rhead .hh{font-family:var(--mono);font-size:12px;color:var(--mut);margin-top:2px}
-  .rhead .bio{font-size:12.5px;color:var(--mut);margin-top:7px;max-width:60ch;white-space:pre-line}
-  .quad{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:1px;
-        background:var(--line2);border-top:1px solid var(--line2)}
-  .quad>div{background:var(--bg);padding:13px 15px}
-  .quad .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--mut)}
-  .quad .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:23px;font-weight:520;
-           margin-top:7px;line-height:1;letter-spacing:-.02em}
-  .quad .n{font-size:11px;color:var(--fnt);margin-top:5px}
-  .msg{padding:16px 15px;font-size:13px;color:var(--mut);line-height:1.6}
-  .msg.err{background:var(--cr-s);color:var(--cr)}
-  .msg.idle{color:var(--fnt)}
-
-  /* tabela */
-  .tools{display:flex;flex-wrap:wrap;gap:9px;align-items:center;padding:11px 14px;
-         background:var(--sub);border-bottom:1px solid var(--line)}
-  .tools input{border:1px solid var(--line);border-radius:2px;padding:6px 9px;font-size:13px;
-               font-family:var(--mono);min-width:170px}
-  .tools input:focus{outline:2px solid var(--ac);outline-offset:1px}
-  .fil{font-family:var(--mono);font-size:10px;letter-spacing:.07em;text-transform:uppercase;
-       border:1px solid var(--line);background:var(--bg);color:var(--mut);border-radius:2px;
-       padding:6px 10px;cursor:pointer}
-  .fil[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
-  .cnt{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--mut)}
-
-  .scroll{overflow-x:auto}
-  table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:900px}
-  th{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);
-     font-weight:600;text-align:right;padding:10px 9px;border-bottom:1px solid var(--line);
-     background:var(--sub);white-space:nowrap;cursor:pointer;user-select:none;position:sticky;top:0}
-  th:first-child,td:first-child{text-align:left;padding-left:15px}
-  th:last-child,td:last-child{padding-right:15px}
-  th[data-s]:hover{color:var(--ink)}
-  th .ar{color:var(--ac)}
-  td{padding:9px;border-bottom:1px solid var(--line2);text-align:right;font-family:var(--mono);
-     font-variant-numeric:tabular-nums;white-space:nowrap}
-  tbody tr:hover td{background:var(--sub)}
-  td.h{font-size:12px;text-align:left}
-  td.h b{font-weight:620}
-  td.h a{color:inherit;text-decoration:none;border-bottom:1px solid var(--line)}
-  td.h a:hover{border-color:var(--ac);color:var(--ac)}
-  .sub2{display:block;font-size:10.5px;color:var(--fnt);font-family:var(--sans);margin-top:1px}
-  .dim{color:var(--fnt)}
-  .mix{font-size:11px;color:var(--ink2)}
-  .mix i{font-style:normal;color:var(--fnt)}
-
-  .chip{display:inline-block;font-family:var(--mono);font-size:9px;letter-spacing:.07em;
-        text-transform:uppercase;padding:3px 7px;border-radius:2px;font-weight:600}
-  .ok{background:var(--ok-s);color:var(--ok)} .wa{background:var(--wa-s);color:var(--wa)}
-  .cr{background:var(--cr-s);color:var(--cr)} .vo{background:var(--vo-s);color:var(--vo)}
-
-  .empty{padding:17px 15px;background:var(--sub);border-top:1px dashed var(--line);
-         display:flex;gap:12px;align-items:flex-start}
-  .empty .tg{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;
-             background:var(--vo-s);color:var(--vo);padding:4px 8px;border-radius:2px;font-weight:600;flex:none}
-  .empty p{margin:0;font-size:12.5px;color:var(--mut);line-height:1.6}
-  .empty p b{color:var(--ink2)}
-
-  .note{margin-top:13px;padding:13px 15px;border-left:2px solid var(--ac);background:var(--ac-s);border-radius:0 3px 3px 0}
-  .note p{margin:0;font-size:12.5px;color:var(--ink2);line-height:1.6}
-  .note p+p{margin-top:7px}
-  .note b{color:var(--ink)}
-  .note.al{border-color:var(--wa);background:var(--wa-s)}
-
-  /* barras por mês */
-  .bars{display:flex;align-items:flex-end;gap:3px;height:96px;padding:16px 15px 0}
-  .bars div{flex:1;background:var(--ac);border-radius:1px 1px 0 0;min-height:2px;position:relative}
-  .bars div:hover{background:var(--ink)}
-  .blab{display:flex;gap:3px;padding:6px 15px 14px}
-  .blab span{flex:1;font-family:var(--mono);font-size:8px;color:var(--fnt);text-align:center;
-             overflow:hidden;white-space:nowrap}
-
-  footer{margin-top:44px;padding-top:16px;border-top:1px solid var(--line);font-size:11.5px;
-         color:var(--fnt);line-height:1.75}
-  footer b{color:var(--mut);font-weight:600}
-
-
-
-  /* ================= LAYOUT COM MENU LATERAL ================= */
-  .app{display:grid;grid-template-columns:216px 1fr;min-height:100vh;align-items:start}
+  /* ---------------- layout com menu lateral ---------------- */
+  .app{display:grid;grid-template-columns:214px 1fr;min-height:100vh;align-items:start}
   aside.nav{position:sticky;top:0;height:100vh;border-right:1px solid var(--line);
             background:var(--sub);display:flex;flex-direction:column;overflow-y:auto}
   aside.nav .marca{padding:20px 18px 14px;border-bottom:1px solid var(--line)}
@@ -149,8 +28,7 @@
   aside.nav .marca .sub{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;
                         text-transform:uppercase;color:var(--fnt);margin-top:5px}
   aside.nav ul{list-style:none;margin:0;padding:9px 0;flex:1}
-  aside.nav li{margin:0}
-  aside.nav a{display:flex;align-items:baseline;gap:9px;padding:9px 18px;text-decoration:none;
+  aside.nav a{display:flex;align-items:baseline;gap:9px;padding:10px 18px;text-decoration:none;
               color:var(--ink2);font-size:13.5px;border-left:2px solid transparent;line-height:1.35}
   aside.nav a:hover{background:var(--bg);color:var(--ink)}
   aside.nav a[aria-current="page"]{background:var(--bg);color:var(--ink);font-weight:600;
@@ -160,19 +38,20 @@
   aside.nav a .bd{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--fnt);
                   font-variant-numeric:tabular-nums;flex:none}
   aside.nav .rodape{padding:13px 18px;border-top:1px solid var(--line);
-                    font-family:var(--mono);font-size:9.5px;color:var(--fnt);line-height:1.7}
+                    font-family:var(--mono);font-size:9.5px;color:var(--fnt);line-height:1.75}
+  aside.nav .rodape b{color:var(--cr)}
 
-  main.conteudo{min-width:0;padding:0}
-  main.conteudo > .wrap{max-width:1120px;padding:26px 26px 70px}
-  .mod{display:none;margin-top:0}
+  main.conteudo{min-width:0}
+  main.conteudo > .wrap{max-width:1160px;padding:26px 26px 70px}
+  .mod{display:none}
   .mod.on{display:block}
-  .mod + .mod{margin-top:0}
-  section.mod > .hd{margin-bottom:0}
 
-  .topo-mod{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;
-            flex-wrap:wrap;padding-bottom:14px;border-bottom:2px solid var(--ink);margin-bottom:22px}
-  .topo-mod .quem{font-family:var(--mono);font-size:10px;letter-spacing:.1em;
-                  text-transform:uppercase;color:var(--fnt);text-align:right;line-height:1.7}
+  .topo{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;
+        padding-bottom:14px;border-bottom:2px solid var(--ink);margin-bottom:20px}
+  .topo h1{font-size:22px;margin:0;letter-spacing:-.022em;font-weight:650}
+  .topo .lede{margin:6px 0 0;color:var(--mut);font-size:13px;max-width:78ch}
+  .topo .stamp{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+               color:var(--fnt);text-align:right;line-height:1.8;white-space:nowrap}
 
   .abrir{display:none;position:fixed;left:11px;top:11px;z-index:60;background:var(--ink);color:#fff;
          border:0;border-radius:3px;padding:9px 12px;font-family:var(--mono);font-size:11px;cursor:pointer}
@@ -183,12 +62,136 @@
     aside.nav.aberto{transform:none}
     .abrir{display:block}
     main.conteudo > .wrap{padding:52px 14px 60px}
+    .topo .stamp{text-align:left}
   }
-  @media(prefers-reduced-motion:reduce){aside.nav{transition:none}}
-  /* ---- galeria ---- */
-  .gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:1px;background:var(--line2)}
+  @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+  /* ---------------- blocos ---------------- */
+  .strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(142px,1fr));gap:1px;
+         background:var(--line);border:1px solid var(--line);border-radius:3px;overflow:hidden;
+         margin-bottom:18px}
+  .cel{background:var(--bg);padding:13px 15px}
+  .cel .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--mut)}
+  .cel .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:24px;font-weight:520;
+          letter-spacing:-.022em;line-height:1;margin-top:7px}
+  .cel .v.z{font-size:16px;color:var(--vo);letter-spacing:0}
+  .cel .n{font-size:11px;color:var(--fnt);margin-top:6px;line-height:1.4}
+
+  .panel{border:1px solid var(--line);border-radius:3px;overflow:hidden}
+  .panel + .panel{margin-top:18px}
+  .ph{padding:12px 15px;border-bottom:1px solid var(--line);background:var(--sub);
+      font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut)}
+
+  .barra{display:flex;gap:7px;flex-wrap:wrap;align-items:center;padding:11px 14px;background:var(--sub);
+         border-bottom:1px solid var(--line)}
+  .barra input,.barra select{border:1px solid var(--line);border-radius:2px;padding:6px 9px;
+                             font-size:12.5px;font-family:var(--mono);background:var(--bg);color:var(--ink)}
+  .barra input:focus,.barra select:focus{outline:2px solid var(--ac);outline-offset:1px}
+  .barra .busca{min-width:170px;flex:1;max-width:280px}
+  .cnt{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--mut);white-space:nowrap}
+  .rot{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--fnt)}
+
+  .aba{font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;border:1px solid var(--line);
+       background:var(--bg);color:var(--mut);border-radius:2px;padding:6px 11px;cursor:pointer}
+  .aba[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .aba b{font-variant-numeric:tabular-nums}
+  .bt{font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
+      background:var(--ink);color:#fff;border:0;border-radius:2px;padding:8px 15px;cursor:pointer}
+  .bt:disabled{background:var(--fnt);cursor:wait}
+  .acbt{font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;border:1px solid var(--line);
+        background:var(--bg);color:var(--mut);border-radius:2px;padding:5px 9px;cursor:pointer;
+        white-space:nowrap;text-decoration:none;display:inline-block}
+  .acbt:hover{border-color:var(--ink);color:var(--ink)}
+  .acbt.ok:hover{background:var(--ok);color:#fff;border-color:var(--ok)}
+  .acbt.no:hover{background:var(--cr);color:#fff;border-color:var(--cr)}
+  .acbt:disabled{opacity:.4;cursor:wait}
+  .acs{display:flex;gap:4px;justify-content:flex-end}
+
+  /* ---------------- tabela ---------------- */
+  .scroll{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:860px}
+  th{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);
+     font-weight:600;text-align:right;padding:10px 9px;border-bottom:1px solid var(--line);
+     background:var(--sub);white-space:nowrap;position:sticky;top:0}
+  th[data-s]{cursor:pointer;user-select:none}
+  th[data-s]:hover{color:var(--ink)}
+  th .ar{color:var(--ac)}
+  th:first-child,td:first-child{text-align:left;padding-left:15px}
+  th:last-child,td:last-child{padding-right:15px}
+  td{padding:8px 9px;border-bottom:1px solid var(--line2);text-align:right;font-family:var(--mono);
+     font-variant-numeric:tabular-nums;white-space:nowrap}
+  tbody tr:hover td{background:var(--sub)}
+  td.h{font-size:12px;text-align:left;font-family:var(--sans)}
+  td.h b{font-weight:620}
+  .sub2{display:block;font-size:10.5px;color:var(--fnt);font-family:var(--sans);margin-top:1px}
+  .dim{color:var(--fnt)}
+  .mix{font-size:11px;color:var(--ink2)}
+  .mix i{font-style:normal;color:var(--fnt)}
+  .lnk{background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer;text-align:left;
+       border-bottom:1px solid var(--line)}
+  .lnk:hover{color:var(--ac);border-color:var(--ac)}
+
+  .chip{display:inline-block;font-family:var(--mono);font-size:9px;letter-spacing:.07em;
+        text-transform:uppercase;padding:3px 7px;border-radius:2px;font-weight:600}
+  .ok{background:var(--ok-s);color:var(--ok)} .wa{background:var(--wa-s);color:var(--wa)}
+  .cr{background:var(--cr-s);color:var(--cr)} .vo{background:var(--vo-s);color:var(--vo)}
+  .ac{background:var(--ac-s);color:var(--ac)}
+
+  /* select de status na linha — some quando salva e volta com o valor do banco */
+  select.st{font-family:var(--mono);font-size:10.5px;border:1px solid var(--line);border-radius:2px;
+            padding:4px 6px;background:var(--bg);color:var(--ink);cursor:pointer}
+  select.st:focus{outline:2px solid var(--ac);outline-offset:1px}
+  select.st[data-v="ativo"]{color:var(--ok);border-color:var(--ok-s)}
+  select.st[data-v="reprovado"]{color:var(--cr)}
+  select.st[data-v="pausado"]{color:var(--wa)}
+  .salvo{font-family:var(--mono);font-size:9px;color:var(--ok);margin-left:5px;
+         text-transform:uppercase;letter-spacing:.08em}
+
+  .empty{padding:16px 15px;background:var(--sub);border-top:1px dashed var(--line);
+         display:flex;gap:12px;align-items:flex-start}
+  .empty .tg{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;
+             background:var(--vo-s);color:var(--vo);padding:4px 8px;border-radius:2px;font-weight:600;flex:none}
+  .empty p{margin:0;font-size:12.5px;color:var(--mut);line-height:1.6}
+  .empty p b{color:var(--ink2)}
+  .msg{padding:16px 15px;font-size:13px;color:var(--mut);line-height:1.6}
+  .msg.err{background:var(--cr-s);color:var(--cr)}
+  .msg.idle{color:var(--fnt)}
+
+  /* ---------------- busca ---------------- */
+  .sb{display:flex;gap:9px;align-items:center;padding:12px 14px;background:var(--sub);
+      border-bottom:1px solid var(--line)}
+  .sb .at{font-family:var(--mono);color:var(--fnt);font-size:15px}
+  .sb input{flex:1;border:0;background:transparent;font-family:var(--mono);font-size:15px;
+            color:var(--ink);padding:4px 0;min-width:0}
+  .sb input:focus{outline:2px solid var(--ac);outline-offset:3px;border-radius:2px}
+  .rhead{display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between;align-items:flex-start;
+         padding:16px 15px 12px}
+  .rhead .nm{font-size:17px;font-weight:620;letter-spacing:-.012em}
+  .rhead .hh{font-family:var(--mono);font-size:12px;color:var(--mut);margin-top:2px}
+  .rhead .bio{font-size:12.5px;color:var(--mut);margin-top:7px;max-width:60ch;white-space:pre-line}
+  .quad{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;
+        background:var(--line2);border-top:1px solid var(--line2)}
+  .quad>div{background:var(--bg);padding:13px 15px}
+  .quad .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--mut)}
+  .quad .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:22px;font-weight:520;
+           margin-top:7px;line-height:1;letter-spacing:-.02em}
+  .quad .n{font-size:11px;color:var(--fnt);margin-top:5px}
+
+  /* ---------------- gráfico de barras ---------------- */
+  .bars{display:flex;align-items:flex-end;gap:3px;height:104px;padding:16px 15px 0}
+  .bars div{flex:1;background:var(--ac);border-radius:1px 1px 0 0;min-height:2px}
+  .bars div:hover{background:var(--ink)}
+  .bars div.v{background:var(--ok)}
+  .blab{display:flex;gap:3px;padding:6px 15px 14px}
+  .blab span{flex:1;font-family:var(--mono);font-size:8px;color:var(--fnt);text-align:center;
+             overflow:hidden;white-space:nowrap}
+
+  /* ---------------- menções ---------------- */
+  .gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:1px;background:var(--line2)}
   .card{background:var(--bg);position:relative}
-  .card .th{display:block;width:100%;aspect-ratio:4/5;object-fit:cover;background:var(--sub)}
+  .card .th{display:block;width:100%;aspect-ratio:4/5;object-fit:cover;background:var(--sub);
+            border:0;padding:0;cursor:pointer}
+  .card .th img{width:100%;height:100%;object-fit:cover;display:block}
   .card .inf{padding:9px 10px}
   .card .who{font-size:11.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .card .met{font-family:var(--mono);font-size:10.5px;color:var(--mut);margin-top:3px;
@@ -197,59 +200,78 @@
   .card .bts .acbt{flex:1;text-align:center;font-size:9px;padding:5px 4px}
   .badge{position:absolute;top:6px;left:6px;font-family:var(--mono);font-size:8.5px;
          letter-spacing:.06em;text-transform:uppercase;background:rgba(20,24,26,.82);color:#fff;
-         padding:3px 6px;border-radius:2px}
+         padding:3px 6px;border-radius:2px;pointer-events:none}
   .badge.ad{background:var(--ok);left:auto;right:6px}
-  /* ---- fila de curadoria ---- */
-  .abas{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:11px 14px;background:var(--sub);
-        border-bottom:1px solid var(--line)}
-  .aba{font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;border:1px solid var(--line);
-       background:var(--bg);color:var(--mut);border-radius:2px;padding:6px 11px;cursor:pointer}
-  .aba[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
-  .aba b{font-variant-numeric:tabular-nums}
-  .abas input{border:1px solid var(--line);border-radius:2px;padding:6px 9px;font-size:12.5px;
-              font-family:var(--mono);min-width:150px;margin-left:auto}
-  .acbt{font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;border:1px solid var(--line);
-        background:var(--bg);color:var(--mut);border-radius:2px;padding:5px 9px;cursor:pointer;white-space:nowrap}
-  .acbt:hover{border-color:var(--ink);color:var(--ink)}
-  .acbt.ok:hover{background:var(--ok);color:#fff;border-color:var(--ok)}
-  .acbt.no:hover{background:var(--cr);color:#fff;border-color:var(--cr)}
-  .acbt:disabled{opacity:.4;cursor:wait}
-  .acs{display:flex;gap:4px;justify-content:flex-end}
-  .tagchip{display:inline-block;font-size:10px;background:var(--ac-s);color:var(--ac);
-           padding:2px 6px;border-radius:2px;margin-right:3px;font-family:var(--mono)}
-  .lnk{background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer;text-align:left;
-       border-bottom:1px solid var(--line)}
-  .lnk:hover{color:var(--ac);border-color:var(--ac)}
+  .play{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:42px;height:42px;
+        border-radius:50%;background:rgba(20,24,26,.5);color:#fff;display:grid;place-items:center;
+        font-size:15px;pointer-events:none}
+  .play.guardado{background:var(--ac)}
 
-  dialog.ficha{border:1px solid var(--line);border-radius:4px;padding:0;width:min(880px,94vw);
+  /* ---------------- diálogos ---------------- */
+  dialog.ficha{border:1px solid var(--line);border-radius:4px;padding:0;width:min(900px,94vw);
                background:var(--bg);color:var(--ink)}
-  dialog.ficha::backdrop{background:rgba(20,24,26,.5)}
-  .fhd{padding:17px 19px 13px;border-bottom:1px solid var(--line);display:flex;
+  dialog.ficha::backdrop{background:rgba(20,24,26,.55)}
+  .fhd{padding:16px 19px 13px;border-bottom:1px solid var(--line);display:flex;
        justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap}
   .fhd h3{margin:0;font-size:18px;font-weight:640}
-  .fhd .hh{font-family:var(--mono);font-size:12px;color:var(--mut);margin-top:2px}
+  .fhd .hh{font-family:var(--mono);font-size:12px;color:var(--mut);margin-top:3px}
   .fhd .bio{font-size:12.5px;color:var(--mut);margin-top:7px;max-width:58ch;white-space:pre-line}
-  .fbody{max-height:min(66vh,620px);overflow:auto}
-  .fq{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:1px;background:var(--line2)}
+  .fbody{max-height:min(70vh,660px);overflow:auto}
+  .fq{display:grid;grid-template-columns:repeat(auto-fit,minmax(116px,1fr));gap:1px;background:var(--line2)}
   .fq>div{background:var(--bg);padding:12px 14px}
   .fq .k{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut)}
-  .fq .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:20px;margin-top:6px;font-weight:520}
+  .fq .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:19px;margin-top:6px;font-weight:520}
+  .fq .n{font-size:10.5px;color:var(--fnt);margin-top:4px}
   .fsec{padding:14px 19px;border-top:1px solid var(--line2)}
-  .fsec h4{margin:0 0 9px;font-size:12px;font-family:var(--mono);letter-spacing:.1em;
+  .fsec h4{margin:0 0 9px;font-size:11px;font-family:var(--mono);letter-spacing:.1em;
            text-transform:uppercase;color:var(--mut);font-weight:600}
+  .obs{font-size:12px;color:var(--mut);line-height:1.6;margin:0}
   .pub{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--line2);font-size:12.5px;align-items:baseline}
   .pub:last-child{border-bottom:0}
   .pub .t{font-family:var(--mono);font-size:9px;text-transform:uppercase;padding:2px 6px;
           border-radius:2px;background:var(--vo-s);color:var(--mut);flex:none}
-  .pub .d{font-family:var(--mono);font-size:11px;color:var(--fnt);flex:none;width:76px}
+  .pub .d{font-family:var(--mono);font-size:11px;color:var(--fnt);flex:none;width:74px}
   .pub .l{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink2)}
   .pub .m{font-family:var(--mono);font-size:11px;color:var(--mut);flex:none}
   .frm{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
-  .frm input,.frm select{border:1px solid var(--line);border-radius:2px;padding:7px 9px;
-                         font-size:12.5px;font-family:var(--mono)}
+  .frm input,.frm select,.frm textarea{border:1px solid var(--line);border-radius:2px;padding:7px 9px;
+                         font-size:12.5px;font-family:var(--mono);background:var(--bg);color:var(--ink)}
+  .frm textarea{font-family:var(--sans);font-size:13px;resize:vertical;width:100%}
+  .frm .larga{font-family:var(--sans);font-size:14px;width:100%}
   .fft{padding:12px 19px;border-top:1px solid var(--line);display:flex;gap:7px;justify-content:flex-end;flex-wrap:wrap}
-  @media(max-width:640px){.wrap{padding:22px 13px 60px}.top h1{font-size:20px}.stamp{text-align:left}}
-  @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+  .fft .esq{margin-right:auto}
+
+  /* escolha de tipo de campanha */
+  .tipos{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  .tipos label{border:1px solid var(--line);border-radius:3px;padding:12px 13px;cursor:pointer;display:block}
+  .tipos label:hover{border-color:var(--ink)}
+  /* o radio some visualmente mas continua focável pelo teclado — por isso 1px e clip,
+     e não display:none, que tiraria o elemento da ordem de foco */
+  .tipos input{position:absolute;width:1px;height:1px;opacity:0;clip-path:inset(50%)}
+  .tipos label:has(input:checked){border-color:var(--ac);background:var(--ac-s)}
+  .tipos label:has(input:focus-visible){outline:2px solid var(--ac);outline-offset:2px}
+  .tipos .t{font-size:13.5px;font-weight:620}
+  .tipos .d{font-size:11.5px;color:var(--mut);margin-top:4px;line-height:1.5}
+  @media(max-width:560px){.tipos{grid-template-columns:1fr}}
+
+  .campcard{padding:15px;border-bottom:1px solid var(--line2)}
+  .campcard:last-child{border-bottom:0}
+  .campcard .lin1{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+  .campcard .nm{font-size:15px;font-weight:640}
+  .campcard .regra{margin-top:9px;display:flex;gap:6px;flex-wrap:wrap}
+  .regra .r{font-family:var(--mono);font-size:10.5px;background:var(--sub);border:1px solid var(--line);
+            border-radius:2px;padding:4px 8px;color:var(--ink2)}
+  .regra .r b{color:var(--ac)}
+  .campcard .res{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:1px;
+                 background:var(--line2);border:1px solid var(--line2);border-radius:3px;margin-top:11px}
+  .campcard .res>div{background:var(--bg);padding:9px 11px}
+  .campcard .res .k{font-family:var(--mono);font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut)}
+  .campcard .res .v{font-family:var(--mono);font-size:17px;margin-top:4px;font-variant-numeric:tabular-nums}
+  .campcard .acs{margin-top:11px;justify-content:flex-start}
+
+  #mplayer{background:#0C0F10;display:grid;place-items:center;min-height:240px}
+  #mplayer video,#mplayer img{max-width:100%;max-height:min(64vh,600px);display:block}
+  #mplayer .aviso{color:#E8ECEB;font-size:13px;padding:34px 22px;text-align:center;line-height:1.7;max-width:44ch}
 </style>
 </head>
 <body>
@@ -258,234 +280,189 @@
 <aside class="nav" id="nav">
   <div class="marca">
     <div class="lg">comunidade <em>cells</em></div>
-    <div class="sub" id="navSub">painel interno</div>
+    <div class="sub" id="navSub">painel de creators</div>
   </div>
   <ul id="navLista"></ul>
   <div class="rodape" id="navRodape"></div>
 </aside>
-<main class="conteudo">
-<div class="wrap">
 
-  <header class="top topo-mod">
-    <div>
-      <h1>comunidade <em>cells</em></h1>
-      <p>Painel interno de creators — busca ao vivo e base coletada.</p>
-    </div>
-    <div class="stamp" id="stamp"></div>
-  </header>
+<main class="conteudo"><div class="wrap">
 
-  <div class="strip" id="strip"></div>
-
-  <!-- 01 BUSCA -->
+  <!-- ============ 01 BUSCA ============ -->
   <section class="mod" data-mod="busca">
-    <div class="hd"><span class="eb">Módulo 01</span><h2>Buscar creator</h2></div>
-    <p class="lede">Digita qualquer @ do Instagram. O servidor consulta a Graph API da Meta na hora — não precisa estar cadastrado nem ter relação com a Cells. Toda busca vira snapshot no banco.</p>
+    <div class="topo">
+      <div><h1>Buscar creator</h1>
+        <p class="lede">Qualquer @ do Instagram. O servidor consulta a Graph API da Meta na hora — a pessoa não precisa estar cadastrada nem ter relação com a Cells. Toda busca vira snapshot no banco.</p></div>
+      <div class="stamp" id="stamp"></div>
+    </div>
     <div class="panel">
       <form class="sb" id="frm">
         <span class="at">@</span>
-        <input id="q" value="gabrielrodrigueso" spellcheck="false" autocomplete="off"
-               aria-label="handle do Instagram" placeholder="handle sem o arroba">
+        <input id="q" spellcheck="false" autocomplete="off" aria-label="handle do Instagram"
+               placeholder="handle sem o arroba">
         <button class="bt" id="go" type="submit">Buscar</button>
       </form>
       <div id="res"><div class="msg idle">Busque um @ para ver seguidores, engajamento, curtidas e cadência de publicação.</div></div>
     </div>
+    <div class="panel" style="margin-top:18px"><div class="empty">
+      <span class="tg">limite da Meta</span>
+      <p>Só aparece perfil <b>Business ou Creator público</b>. Perfil pessoal e perfil privado voltam vazios, e nenhum escopo resolve isso — é limite da API, não permissão que falta.</p>
+    </div></div>
   </section>
 
-  <!-- 02 BASE -->
-  <section class="mod" data-mod="gestao">
-    <div class="hd"><span class="eb">Módulo 03</span><h2>Gestão — quem marca a Cells</h2></div>
-    <p class="lede">Todo perfil já coletado. Marcações vêm da Graph API; engajamento é média por post sobre os últimos 12 posts de cada um.</p>
-    <div class="panel">
-      <div class="tools">
-        <input id="bq" placeholder="filtrar por @ ou nome" aria-label="Filtrar">
-        <button class="fil" data-f="todos" aria-pressed="true">Todos</button>
-        <button class="fil" data-f="marca" aria-pressed="false">Já marcou</button>
-        <button class="fil" data-f="ok" aria-pressed="false">Aprova no critério</button>
-        <button class="fil" data-f="cad" aria-pressed="false">Cadastrado</button>
-        <span class="cnt" id="cnt"></span>
-      </div>
-      <div class="scroll"><table id="tb">
-        <thead><tr>
-          <th data-s="handle">Creator</th>
-          <th data-s="seguidores">Seguidores</th>
-          <th data-s="engajamento_pct">Eng.</th>
-          <th data-s="posts_30d">Posts 30d</th>
-          <th data-s="ultimo_post">Último post</th>
-          <th data-s="marcacoes">Marcações</th>
-          <th>Reels/Carr./Feed</th>
-          <th data-s="ultima_marcacao">Última marc.</th>
-          <th data-s="views_marc">Views</th>
-          <th data-s="media_por_reel">Média/reel</th>
-          <th data-s="vps">Views/seg.</th>
-          <th>Curadoria</th>
-        </tr></thead>
-        <tbody id="tbody"></tbody>
-      </table></div>
-      <div class="empty">
-        <span class="tg">ainda sem dado</span>
-        <p><b>Views só existem em reels.</b> Testado em 06/08: carrossel e foto voltam vazios do Apify — não têm contador público. <b>Views/seg.</b> = views ÷ seguidores, e é a coluna que separa conta grande e parada de conta pequena e viva.<br><b>Nada disso é alcance</b>, que é conta única e continua impossível para post de terceiro. Só com tag de Parceria Paga.<br><b>Cliques, CPC e vendas</b> só existem depois do primeiro cupom nominal emitido — e nenhum foi. Ficam vazios em vez de receber número estimado.</p>
-      </div>
+  <!-- ============ 02 CADASTROS ============ -->
+  <section class="mod" data-mod="cadastros">
+    <div class="topo">
+      <div><h1>Cadastros</h1>
+        <p class="lede">Quem se cadastrou e quem já vende por cupom, com os números do perfil na mesma linha. <b>Trocar o status grava no Postgres na hora</b> — o valor que volta para a tela é o que o banco tem depois do UPDATE.</p></div>
+      <div class="stamp" id="stampCad"></div>
     </div>
-    <div class="note" id="critNote"></div>
-  </section>
-
-  <!-- 03 FILA DE CURADORIA -->
-  <section class="mod" data-mod="fila">
-    <div class="hd"><span class="eb">Módulo 02</span><h2>Fila de curadoria</h2></div>
-    <p class="lede">Quem se cadastrou, com os números do perfil na mesma linha. Aprovar, reprovar ou arquivar sem sair daqui — e sem abrir o Instagram de ninguém.</p>
     <div class="panel">
-      <div class="abas">
-        <button class="aba" data-fl="pendente" aria-pressed="true">pendentes <b id="c-pendente">0</b></button>
-        <button class="aba" data-fl="ativo" aria-pressed="false">aprovados <b id="c-ativo">0</b></button>
+      <div class="barra">
+        <button class="aba" data-fl="todos" aria-pressed="true">todos <b id="c-todos">0</b></button>
+        <button class="aba" data-fl="pendente" aria-pressed="false">pendentes <b id="c-pendente">0</b></button>
+        <button class="aba" data-fl="ativo" aria-pressed="false">ativos <b id="c-ativo">0</b></button>
+        <button class="aba" data-fl="pausado" aria-pressed="false">pausados <b id="c-pausado">0</b></button>
         <button class="aba" data-fl="reprovado" aria-pressed="false">reprovados <b id="c-reprovado">0</b></button>
         <button class="aba" data-fl="arquivado" aria-pressed="false">arquivados <b id="c-arquivado">0</b></button>
-        <button class="aba" data-fl="semtag" aria-pressed="false">sem tag <b id="c-semtag">0</b></button>
-        <input id="fq" placeholder="filtrar por nome, @ ou tag" aria-label="Filtrar fila">
+        <input id="cq" class="busca" placeholder="nome, @ ou cupom" aria-label="Filtrar cadastros">
+        <span class="cnt" id="cntCad"></span>
       </div>
-      <div class="scroll"><table id="tfila">
-        <thead><tr>
-          <th>Pessoa</th><th>Cadastro</th><th>Seguidores</th><th>Eng.</th>
-          <th>Posts 30d</th><th>Último post</th><th>Views/seg.</th>
-          <th>Marcações</th><th>Envios</th><th>Tags</th><th>Ações</th>
-        </tr></thead>
-        <tbody id="tbfila"></tbody>
-      </table></div>
-      <div class="empty">
-        <span class="tg">como decidir</span>
-        <p>O critério sugerido é <b>engajamento ≥ 2%</b> e <b>4+ publicações nos últimos 30 dias</b>, sem piso de seguidores. As linhas que passam vêm com o engajamento em verde. <b>Views/seg.</b> ajuda a separar conta grande e parada de conta pequena e viva.</p>
-      </div>
-    </div>
-    <div class="note al" id="gapNote"></div>
-  </section>
-
-  <!-- 03b VENDAS -->
-  <section class="mod" data-mod="vendas">
-    <div class="hd"><span class="eb">Módulo 04</span><h2>Vendas por cupom nominal</h2></div>
-    <p class="lede" id="ledeVendas"></p>
-    <div class="panel">
       <div class="scroll"><table>
         <thead><tr>
-          <th>Pessoa</th><th>Cupom</th><th>Pedidos</th><th>Receita</th><th>Ticket</th>
-          <th>90 dias</th><th>Primeira</th><th>Última</th><th>Origem</th>
+          <th data-t="nome">Pessoa</th>
+          <th data-t="cadastro">Cadastro</th>
+          <th data-t="seguidores">Seguidores</th>
+          <th data-t="engajamento_pct">Eng.</th>
+          <th data-t="posts_30d">Posts 30d</th>
+          <th data-t="marcacoes">Marcações</th>
+          <th data-t="pedidos">Pedidos</th>
+          <th data-t="receita">Receita</th>
+          <th>Status</th>
+          <th>Ações</th>
         </tr></thead>
-        <tbody id="tbvendas"></tbody>
+        <tbody id="tbCad"></tbody>
       </table></div>
       <div class="empty">
-        <span class="tg">só cupom</span>
-        <p><b>Isto é atribuição por cupom, e só.</b> Venda por clique no link (UTM) e venda assistida na jornada ainda não existem — quando existirem, entram em colunas separadas e <b>nunca somadas</b> com esta, porque são sinais de força diferente.<br>O percentual de desconto aparece vazio nos cupons legados: eles variam entre 8%, 10% e 15%, e assumir 15% retroativamente inventaria margem que não houve.</p>
+        <span class="tg">duas populações</span>
+        <p>Os <b>cadastrados pela LP</b> têm Instagram e métrica de perfil. Os <b>145 do cupom legado</b> vieram da Shopify e não têm Instagram associado — por isso as colunas de perfil ficam vazias neles. É a mesma tabela, gente diferente.</p>
       </div>
     </div>
   </section>
 
-  <!-- 05 GALERIA -->
-  <section class="mod" data-mod="galeria">
-    <div class="hd"><span class="eb">Módulo 05</span><h2>Galeria de conteúdo</h2></div>
-    <p class="lede" id="ledeGal"></p>
-    <div class="panel">
-      <div class="abas">
-        <button class="aba" data-g="todos" aria-pressed="true">todos</button>
-        <button class="aba" data-g="reels" aria-pressed="false">reels</button>
-        <button class="aba" data-g="carrossel" aria-pressed="false">carrossel</button>
-        <button class="aba" data-g="anuncio" aria-pressed="false">virou anúncio</button>
-        <input id="gq" placeholder="filtrar por @ ou legenda" aria-label="Filtrar galeria">
-      </div>
-      <div class="gal" id="gal"></div>
-      <div class="empty">
-        <span class="tg">como funciona</span>
-        <p><b>Baixar</b> puxa o arquivo do CDN da Meta na hora — não guardamos vídeo no banco. A URL expira; se der erro, o job semanal do Apify renova. <b>Virou anúncio</b> marca o conteúdo para o bônus de R$ 300 do business case.</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- 06 SEEDING -->
-  <section class="mod" data-mod="seeding">
-    <div class="hd"><span class="eb">Módulo 06</span><h2>Seeding — quem continua recebendo</h2></div>
-    <p class="lede" id="ledeSeed"></p>
-    <div class="panel">
-      <div class="scroll"><table>
-        <thead><tr>
-          <th>Pessoa</th><th>Decisão</th><th>Conteúdos</th><th>Vendas</th>
-          <th>Última publicação</th><th>Envios</th><th>Custo</th><th>Receita</th>
-          <th>Retorno</th><th>Endereço</th><th>Logística</th>
-        </tr></thead>
-        <tbody id="tbseed"></tbody>
-      </table></div>
-      <div class="empty">
-        <span class="tg">a regra</span>
-        <p>Do business case: seeding entra só a partir de <b>3 conteúdos + 3 vendas</b> e <b>suspende após 90 dias sem publicar</b>. Seeding preso ao cadastro é sangria — 100 creators × R$ 45 dá R$ 4,5 mil/mês sem contrapartida.<br><b>Logística</b> segue sua regra de 28/07: SP inteiro vai de Correios; fora de SP a escolha é por preço, então a coluna diz "cotar" em vez de fingir que sabe qual transportadora.</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- 07 CAMPANHAS -->
+  <!-- ============ 03 CAMPANHAS ============ -->
   <section class="mod" data-mod="campanhas">
-    <div class="hd"><span class="eb">Módulo 07</span><h2>Campanhas e jogos</h2></div>
-    <p class="lede">A campanha é a caixa: agrupa creators, jogos e resultado. Dentro dela, um jogo tem missões com peso próprio — reel vale mais que carrossel, e vender vale ponto igual publicar. O placar soma sozinho do que já é coletado.</p>
+    <div class="topo">
+      <div><h1>Campanhas</h1>
+        <p class="lede">Uma campanha paga <b>comissão</b> (% sobre o que o cupom vendeu) ou dá <b>pontos</b> por ação publicada. Escolha uma das duas na criação — as duas mecânicas não se misturam na mesma campanha.</p></div>
+      <div class="stamp" id="stampCamp"></div>
+    </div>
     <div class="panel">
-      <div class="abas">
-        <button class="acbt ok" id="novaCamp">nova campanha</button>
-        <button class="acbt" id="novoJogo">novo jogo</button>
+      <div class="barra">
+        <button class="bt" id="novaCamp">nova campanha</button>
+        <button class="aba" data-cs="vivas" aria-pressed="true">em uso</button>
+        <button class="aba" data-cs="todas" aria-pressed="false">todas</button>
         <span class="cnt" id="cntCamp"></span>
       </div>
       <div id="listaCamp"></div>
       <div class="empty">
-        <span class="tg">pontuação</span>
-        <p>O ponto sai de <b>publicação capturada</b> e <b>venda atribuída por cupom</b>, dentro da janela do jogo. Ninguém digita nada — apuração que depende de digitação morre no mês 2.</p>
+        <span class="tg">de onde sai o número</span>
+        <p>Comissão sai de <b>venda com cupom nominal</b> dentro do período. Ponto sai de <b>publicação capturada</b> e de venda por cupom. Ninguém digita nada: apuração que depende de digitação morre no mês 2.<br>A comissão é <b>calculada na leitura</b> — nada é gravado como dívida, e mudar o percentual recalcula na hora.</p>
       </div>
     </div>
   </section>
 
-  <!-- 08 APURACAO -->
-  <section class="mod" data-mod="apuracao">
-    <div class="hd"><span class="eb">Módulo 08</span><h2>Apuração e resultado do canal</h2></div>
-    <p class="lede" id="ledeApur"></p>
+  <!-- ============ 04 ANÁLISES ============ -->
+  <section class="mod" data-mod="analises">
+    <div class="topo">
+      <div><h1>Análises</h1>
+        <p class="lede">O canal inteiro no período escolhido — e depois, se quiser, um creator de cada vez.</p></div>
+      <div class="stamp" id="stampAn"></div>
+    </div>
     <div class="panel">
+      <div class="barra">
+        <span class="rot">período</span>
+        <input type="date" id="anDe" aria-label="data inicial">
+        <input type="date" id="anAte" aria-label="data final">
+        <button class="aba" data-per="30">30d</button>
+        <button class="aba" data-per="90">90d</button>
+        <button class="aba" data-per="365">12m</button>
+        <button class="aba" data-per="tudo" aria-pressed="true">tudo</button>
+        <span class="rot" style="margin-left:8px">creator</span>
+        <select id="anCreator" aria-label="filtrar por creator"></select>
+        <button class="bt" id="anAplicar">aplicar</button>
+      </div>
+      <div id="anTopo"></div>
+    </div>
+
+    <div class="panel">
+      <div class="ph">Por mês — marcações e pedidos</div>
+      <div class="bars" id="anBars"></div>
+      <div class="blab" id="anBlab"></div>
+      <div class="empty">
+        <span class="tg">leitura</span>
+        <p>Barra <span style="color:var(--ac)">azul</span> é marcação no Instagram, <span style="color:var(--ok)">verde</span> é pedido com cupom. Estão na mesma escala relativa de cada série, então compare a <b>forma</b> de cada uma, não a altura entre as duas.</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="barra">
+        <span class="rot">por creator</span>
+        <input id="anq" class="busca" placeholder="filtrar por @ ou nome" aria-label="Filtrar creators">
+        <span class="cnt" id="anCnt"></span>
+      </div>
       <div class="scroll"><table>
-        <thead><tr><th>Mês</th><th>Creators</th><th>Pedidos</th><th>Clientes novos</th>
-        <th>Receita</th><th>Ticket</th></tr></thead>
-        <tbody id="tbcanal"></tbody>
+        <thead><tr>
+          <th data-a="nome">Creator</th>
+          <th data-a="seguidores">Seguidores</th>
+          <th data-a="marcacoes">Marcações</th>
+          <th>Reels/Carr./Feed/Story</th>
+          <th data-a="views">Views</th>
+          <th data-a="curtidas">Curtidas</th>
+          <th data-a="comentarios">Coment.</th>
+          <th data-a="cliques">Cliques</th>
+          <th data-a="pedidos">Pedidos</th>
+          <th data-a="receita">Receita</th>
+          <th data-a="ultima">Última</th>
+        </tr></thead>
+        <tbody id="tbAn"></tbody>
       </table></div>
       <div class="empty">
-        <span class="tg">comissão</span>
-        <p id="obsApur"></p>
+        <span class="tg">o que ainda é zero, e por quê</span>
+        <p><b>Story</b> fica em zero até o webhook da Meta ser ligado — falta a variável <code>META_APP_SECRET</code> no serviço, e sem ela o endpoint recusa POST de propósito. Não há histórico de story para buscar depois: ou captura na hora, ou não existe.<br><b>Cliques</b> ficam em zero até alguém usar um link com <code>utm_source=creator</code>. Os links já existem na ficha de cada cadastro.<br><b>Views</b> só existem em reels — carrossel e foto não têm contador público.</p>
       </div>
     </div>
   </section>
 
-  <!-- 09 IMPULSO -->
-  <section class="mod" data-mod="impulso">
-    <div class="hd"><span class="eb">Módulo 09</span><h2>Impulso de pedidos em 24h</h2></div>
-    <p class="lede">Quando alguém publica, os pedidos da loja sobem nas 24h seguintes? Compara com a média diária dos 14 dias anteriores.</p>
+  <!-- ============ 05 MENÇÕES ============ -->
+  <section class="mod" data-mod="mencoes">
+    <div class="topo">
+      <div><h1>Menções</h1>
+        <p class="lede">Todo conteúdo que marcou a Cells e teve mídia coletada. <b>Clique para assistir aqui</b> — o vídeo toca no painel, sem abrir o Instagram.</p></div>
+      <div class="stamp" id="stampMen"></div>
+    </div>
     <div class="panel">
-      <div class="scroll"><table>
-        <thead><tr><th>Creator</th><th>Tipo</th><th>Data</th><th>Pedidos 24h</th>
-        <th>Base diária</th><th>Impulso</th></tr></thead>
-        <tbody id="tbimp"></tbody>
-      </table></div>
+      <div class="barra">
+        <button class="aba" data-g="todos" aria-pressed="true">todos</button>
+        <button class="aba" data-g="video" aria-pressed="false">com vídeo</button>
+        <button class="aba" data-g="reels" aria-pressed="false">reels</button>
+        <button class="aba" data-g="carrossel" aria-pressed="false">carrossel</button>
+        <button class="aba" data-g="anuncio" aria-pressed="false">virou anúncio</button>
+        <input id="gq" class="busca" placeholder="filtrar por @ ou legenda" aria-label="Filtrar menções">
+        <span class="cnt" id="cntGal"></span>
+      </div>
+      <div class="gal" id="gal"></div>
       <div class="empty">
-        <span class="tg">o que isto não é</span>
-        <p><b>Isto não credita venda a ninguém.</b> Crédito é cupom e UTM. Aqui só entram leituras limpas: 14 dias inteiros de histórico antes do post, base de pelo menos 1 pedido/dia, e <b>um único creator publicando naquele dia</b>. Sem essas guardas, o post de 16/jan/25 aparecia com impulso de 10,89× só porque a série de pedidos começava ali.</p>
+        <span class="tg">como funciona</span>
+        <p>O arquivo mora no CDN da Meta — nós repassamos, não guardamos. A URL <b>expira</b>: se o player reclamar, rode o job do Apify ali no botão que aparece e ela é renovada. <b>Baixar</b> serve para o conteúdo virar anúncio sem produção nova.</p>
       </div>
     </div>
   </section>
 
-  <!-- 04 VOLUME -->
-  <section class="mod" data-mod="volume">
-    <div class="hd"><span class="eb">Módulo 10</span><h2>Volume de marcações por mês</h2></div>
-    <p class="lede">Quanto a Cells é marcada espontaneamente, sem programa nenhum rodando. É a linha de base contra a qual o piloto vai ser medido.</p>
-    <div class="panel">
-      <div class="bars" id="bars"></div>
-      <div class="blab" id="blab"></div>
-    </div>
-  </section>
-
-  <footer id="ft"></footer>
-</div>
-</main>
+</div></main>
 </div>
 
-
-
+<!-- ---------------- ficha do cadastro ---------------- -->
 <dialog class="ficha" id="dlgFicha">
   <div class="fhd">
     <div><h3 id="fnome">—</h3><div class="hh" id="fhandle"></div><div class="bio" id="fbio"></div></div>
@@ -497,10 +474,10 @@
       <div class="frm">
         <input id="fcupom" readonly style="width:170px" aria-label="cupom">
         <button class="acbt" id="copiacupom">copiar cupom</button>
-        <input id="flink" readonly style="flex:1;min-width:260px" aria-label="link">
+        <input id="flink" readonly style="flex:1;min-width:250px" aria-label="link">
         <button class="acbt" id="copialink">copiar link</button>
       </div>
-      <p class="obs" style="margin-top:7px">O link carrega <span style="font-family:var(--mono);font-size:11px">utm_campaign</span> do creator. Cupom e link são atribuições <b>diferentes</b> — quando as duas apontam para pessoas diferentes no mesmo pedido, o cupom ganha a comissão e o link fica como assistida.</p>
+      <p class="obs" style="margin-top:8px">O link carrega o <span style="font-family:var(--mono)">utm_campaign</span> do creator. Cupom e link são atribuições <b>diferentes</b>: quando apontam para pessoas diferentes no mesmo pedido, o cupom leva a comissão e o link fica como assistida.</p>
     </div>
     <div class="fsec"><h4>Acesso do creator</h4>
       <div class="frm">
@@ -508,7 +485,7 @@
         <input id="flinkcr" readonly placeholder="o link aparece aqui" style="flex:1;min-width:240px">
         <button class="acbt" id="fcopiacr">copiar</button>
       </div>
-      <p class="obs" style="margin-top:7px">Link pessoal, vale 90 dias. <b>Eu não envio</b> — você copia e manda por onde preferir. Ele mostra só os dados dessa pessoa.</p>
+      <p class="obs" style="margin-top:8px">Link pessoal, vale 90 dias. <b>Eu não envio</b> — você copia e manda por onde preferir. Ele mostra só os dados dessa pessoa.</p>
     </div>
     <div class="fsec"><h4>Tags</h4>
       <div class="frm"><input id="ftags" placeholder="nutri, sp, alto-engajamento" style="flex:1;min-width:220px">
@@ -530,289 +507,265 @@
     <div class="fsec"><h4>Publicações que marcaram a Cells</h4><div id="fpubs"></div></div>
   </div>
   <div class="fft">
-    <button class="acbt no" id="freprovar">reprovar</button>
-    <button class="acbt" id="farquivar">arquivar</button>
-    <button class="acbt ok" id="faprovar">aprovar</button>
+    <span class="esq frm">
+      <span class="rot">status</span>
+      <select id="fstatusSel" class="st"></select>
+    </span>
+    <button class="acbt no" id="farquivar">arquivar</button>
     <button class="acbt" id="ffechar">fechar</button>
   </div>
 </dialog>
 
+<!-- ---------------- nova campanha ---------------- -->
 <dialog class="ficha" id="dlgCamp">
-  <div class="fhd"><div><h3 id="dcTitulo">Nova campanha</h3>
-    <div class="hh">A caixa que agrupa creators, jogos e resultado.</div></div></div>
-  <div class="fbody"><div class="fsec">
-    <div class="frm" style="flex-direction:column;align-items:stretch;gap:9px">
-      <input id="dcNome" placeholder="nome da campanha" style="font-family:var(--sans);font-size:14px">
-      <textarea id="dcBrief" placeholder="briefing — o que se espera do creator" rows="3"
-        style="border:1px solid var(--line);border-radius:2px;padding:9px;font:inherit;font-size:13px;resize:vertical"></textarea>
+  <div class="fhd"><div><h3>Nova campanha</h3>
+    <div class="hh">Nome, descrição e uma das duas mecânicas.</div></div></div>
+  <div class="fbody">
+    <div class="fsec">
+      <div class="frm" style="flex-direction:column;align-items:stretch;gap:9px">
+        <input id="dcNome" class="larga" placeholder="nome da campanha" maxlength="120">
+        <textarea id="dcBrief" rows="3" placeholder="descrição — o que se espera do creator"></textarea>
+      </div>
+    </div>
+    <div class="fsec"><h4>Como essa campanha remunera</h4>
+      <div class="tipos">
+        <label><input type="radio" name="dctipo" value="comissao" checked>
+          <div class="t">Comissão</div>
+          <div class="d">% sobre o valor vendido. Sempre atrelado ao uso do cupom nominal do creator.</div></label>
+        <label><input type="radio" name="dctipo" value="pontuacao">
+          <div class="t">Pontuação</div>
+          <div class="d">Pontos por ação publicada. Você define quanto vale cada tipo de conteúdo.</div></label>
+      </div>
+
+      <div id="dcComissao" style="margin-top:13px">
+        <div class="frm">
+          <input id="dcPct" style="width:92px" inputmode="decimal" placeholder="15" aria-label="percentual de comissão">
+          <span class="obs">% sobre a receita líquida dos pedidos feitos com o cupom do creator, dentro do período.</span>
+        </div>
+      </div>
+
+      <div id="dcPontos" style="margin-top:13px;display:none">
+        <div id="dcAcoes"></div>
+        <button class="acbt" id="dcAddAcao" type="button" style="margin-top:8px">+ ação</button>
+        <p class="obs" style="margin-top:9px">O ponto é contado sozinho a partir do que já é coletado: publicação com marcação à Cells e pedido com cupom, dentro do período da campanha.</p>
+      </div>
+    </div>
+    <div class="fsec"><h4>Período <span style="text-transform:none;letter-spacing:0;font-family:var(--sans);color:var(--fnt)">— o fim é opcional</span></h4>
       <div class="frm">
-        <input id="dcIni" type="date" aria-label="início"><input id="dcFim" type="date" aria-label="fim">
-        <input id="dcBudget" placeholder="budget R$" style="width:110px" inputmode="decimal">
+        <input id="dcIni" type="date" aria-label="início">
+        <input id="dcFim" type="date" aria-label="fim">
         <select id="dcStatus"><option value="rascunho">rascunho</option><option value="ativa">ativa</option></select>
       </div>
     </div>
-  </div></div>
-  <div class="fft"><button class="acbt" id="dcFechar">cancelar</button>
-    <button class="acbt ok" id="dcSalvar">criar campanha</button></div>
+  </div>
+  <div class="fft">
+    <span class="esq obs" id="dcErro"></span>
+    <button class="acbt" id="dcFechar">cancelar</button>
+    <button class="acbt ok" id="dcSalvar">criar campanha</button>
+  </div>
 </dialog>
 
-<dialog class="ficha" id="dlgJogo">
-  <div class="fhd"><div><h3>Novo jogo</h3>
-    <div class="hh">Título e briefing são <b>visíveis para o creator</b> — escreva pensando nele.</div></div></div>
-  <div class="fbody"><div class="fsec">
-    <div class="frm" style="flex-direction:column;align-items:stretch;gap:9px">
-      <select id="djCamp" aria-label="campanha"></select>
-      <input id="djTitulo" placeholder="título do jogo" style="font-family:var(--sans);font-size:14px">
-      <textarea id="djBrief" placeholder="briefing do jogo" rows="2"
-        style="border:1px solid var(--line);border-radius:2px;padding:9px;font:inherit;font-size:13px"></textarea>
-      <div class="frm">
-        <select id="djTipo">
-          <option value="pontos_brindes">pontos e brindes</option>
-          <option value="metas_fixas">metas fixas (bônus %)</option>
-        </select>
-        <input id="djIni" type="date" aria-label="início"><input id="djFim" type="date" aria-label="fim">
-      </div>
-    </div>
-    <h4 style="margin-top:16px">Missões</h4>
-    <div id="djMissoes"></div>
-    <button class="acbt" id="djAdd" style="margin-top:8px">+ missão</button>
-  </div></div>
-  <div class="fft"><button class="acbt" id="djFechar">cancelar</button>
-    <button class="acbt ok" id="djSalvar">criar jogo</button></div>
+<!-- ---------------- player de mídia ---------------- -->
+<dialog class="ficha" id="dlgMidia">
+  <div class="fhd">
+    <div><h3 id="mTitulo">—</h3><div class="hh" id="mSub"></div></div>
+    <div id="mChips"></div>
+  </div>
+  <div id="mplayer"></div>
+  <div class="fsec"><p class="obs" id="mLegenda"></p></div>
+  <div class="fft">
+    <span class="esq acs">
+      <a class="acbt" id="mInsta" target="_blank" rel="noopener">abrir no instagram</a>
+      <a class="acbt" id="mBaixar">baixar</a>
+      <button class="acbt" id="mAnuncio">virou anúncio</button>
+    </span>
+    <button class="acbt" id="mFechar">fechar</button>
+  </div>
 </dialog>
+
 <script>
 const D = __DATA__;
 const n  = v => v==null ? '—' : Number(v).toLocaleString('pt-BR');
+const rs = v => v==null ? '—' : 'R$ ' + Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
 const pc = v => v==null ? '—' : Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'%';
-const dt = s => s ? s.slice(8,10)+'/'+s.slice(5,7)+'/'+s.slice(2,4) : '—';
-const el = (h)=>{const d=document.createElement('div');d.innerHTML=h;return d.firstElementChild};
+const dt = s => s ? String(s).slice(8,10)+'/'+String(s).slice(5,7)+'/'+String(s).slice(2,4) : '—';
+const esc = s => String(s==null?'':s).replace(/[<>&"]/g, m => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[m]));
+const hoje = new Date().toISOString().slice(0,10);
+const R = (D.resumo||[])[0] || {};
 
-// Critério de curadoria: engajamento >= 2% E pelo menos 4 posts nos últimos 30 dias.
+const STATUS = ['pendente','ativo','pausado','reprovado'];
+const ACOES = [['reels','reel'],['carrossel','carrossel'],['feed_imagem','post de feed'],
+               ['story','story'],['venda','venda pelo cupom']];
+const rotAcao = k => (ACOES.find(a=>a[0]===k)||[,k])[1];
+
+/* carimbo do topo, repetido em cada módulo */
+const carimbo = 'Cells · canal influencer<br>base de '+dt(R.desde)+' a '+dt(R.ate)+'<br>atualizado '+(D.ger||'');
+['stamp','stampCad','stampCamp','stampAn','stampMen'].forEach(id => {
+  const e = document.getElementById(id); if (e) e.innerHTML = carimbo;
+});
+
+/* =================================================== 01 BUSCA =================== */
+const res = document.getElementById('res'), go = document.getElementById('go');
+const cel = (k,v,nn) => '<div><div class="k">'+k+'</div><div class="v">'+v+'</div><div class="n">'+nn+'</div></div>';
+
+// Critério: engajamento >= 2% E pelo menos 4 posts nos últimos 30 dias.
 // Sem piso de seguidores — micro engajado vale mais que conta grande e parada.
 function verdito(p){
-  if(p.engajamento_pct==null) return ['vo','sem dado'];
-  if(p.engajamento_pct>=2 && p.posts_30d>=4) return ['ok','aprova'];
-  if(p.engajamento_pct<1) return ['cr','corta'];
+  if (p.engajamento_pct == null) return ['vo','sem dado'];
+  if (p.engajamento_pct >= 2 && p.posts_30d >= 4) return ['ok','aprova'];
+  if (p.engajamento_pct < 1) return ['cr','corta'];
   return ['wa','revisar'];
 }
 
-/* ---------- topo ---------- */
-const r = D.resumo[0]||{};
-document.getElementById('stamp').innerHTML =
-  'Cells · canal influencer<br>base de '+dt(r.desde)+' a '+dt(r.ate)+'<br>atualizado '+(D.ger||'');
-document.getElementById('strip').innerHTML = [
-  ['Marcações', n(r.publicacoes), 'coletadas da Graph API'],
-  ['Perfis que marcam', n(r.perfis), 'contas distintas'],
-  ['Cadastrados', n(r.cadastrados), (r.ativos||0)+' aprovados · '+((r.cadastrados||0)-(r.ativos||0))+' na fila'],
-  ['Cupons ativos', r.cupons ? n(r.cupons) : 'nenhum', r.cupons?'nominais':'sem atribuição de venda ainda'],
-  ['Vendas atribuídas', r.vendas ? n(r.vendas) : 'sem dado', r.vendas?'no período':'depende do cupom'],
-].map(([k,v,nn])=>'<div class="cel"><div class="k">'+k+'</div><div class="v'+
-  (/^(sem dado|nenhum)$/.test(v)?' z':'')+'">'+v+'</div><div class="n">'+nn+'</div></div>').join('');
-
-/* ---------- busca ao vivo ---------- */
-const res=document.getElementById('res'), go=document.getElementById('go');
-document.getElementById('frm').addEventListener('submit', async e=>{
+document.getElementById('frm').addEventListener('submit', async e => {
   e.preventDefault();
-  const h=document.getElementById('q').value.trim().replace(/^@/,'');
-  if(!h) return;
-  go.disabled=true; go.textContent='Buscando';
-  res.innerHTML='<div class="msg">Consultando a Meta…</div>';
-  try{
-    const j=await (await fetch('/api/buscar?h='+encodeURIComponent(h))).json();
-    if(!j.ok){ res.innerHTML='<div class="msg err">'+j.erro+'</div>'; return; }
-    const p=j.perfil, c=j.cells||{}, [cls,txt]=verdito({engajamento_pct:p.eng,posts_30d:p.posts_30d});
+  const h = document.getElementById('q').value.trim().replace(/^@/,'');
+  if (!h) return;
+  go.disabled = true; go.textContent = 'Buscando';
+  res.innerHTML = '<div class="msg">Consultando a Meta…</div>';
+  try {
+    const j = await (await fetch('/api/buscar?h='+encodeURIComponent(h))).json();
+    if (!j.ok) { res.innerHTML = '<div class="msg err">'+esc(j.erro)+'</div>'; return; }
+    const p = j.perfil, c = j.cells||{}, [cls,txt] = verdito({engajamento_pct:p.eng, posts_30d:p.posts_30d});
     res.innerHTML =
-      '<div class="rhead"><div><div class="nm">'+(p.nome||'@'+p.handle)+'</div>'+
-      '<div class="hh">@'+p.handle+' · '+n(p.total_posts)+' posts no perfil</div>'+
-      (p.bio?'<div class="bio">'+p.bio.replace(/[<>]/g,'')+'</div>':'')+'</div>'+
+      '<div class="rhead"><div><div class="nm">'+esc(p.nome||'@'+p.handle)+'</div>'+
+      '<div class="hh">@'+esc(p.handle)+' · '+n(p.total_posts)+' posts no perfil</div>'+
+      (p.bio?'<div class="bio">'+esc(p.bio)+'</div>':'')+'</div>'+
       '<span class="chip '+cls+'">'+txt+'</span></div>'+
       '<div class="quad">'+
         cel('Seguidores', n(p.seguidores), 'followers_count') +
         cel('Engajamento', pc(p.eng), 'média por post · últimos '+p.base_calculo) +
         cel('Curtidas', n(p.likes_medios), 'média por post · +'+n(p.coment_medios)+' coment.') +
         cel('Publicações', p.posts_30d+(p.piso_30d?'+':''), 'últimos 30 dias'+(p.piso_30d?' (piso — amostra de 12)':'')) +
-        cel('Último post', dt(p.ultimo_post), p.posts_90d+' nos últimos 90d') +
+        cel('Último post', dt(p.ultimo_post), (p.posts_90d||0)+' nos últimos 90d') +
         cel('Marcou a Cells', c.total?n(c.total)+'×':'nunca',
             c.total?(c.reels+'R · '+c.carrossel+'C · '+c.feed+'F · última '+dt(c.ultima)):'sem histórico na base') +
       '</div>'+
-      (j.aviso?'<div class="msg err">'+j.aviso+'</div>':'')+
-      (c.cadastrado?'<div class="empty"><span class="tg">cadastrado</span><p><b>'+
-        c.cadastrado.nome+'</b> já está na base, status <b>'+c.cadastrado.status+'</b>.</p></div>':'');
-  }catch(err){ res.innerHTML='<div class="msg err">Falhou: '+err.message+'</div>'; }
-  finally{ go.disabled=false; go.textContent='Buscar'; }
-});
-const cel=(k,v,nn)=>'<div><div class="k">'+k+'</div><div class="v">'+v+'</div><div class="n">'+nn+'</div></div>';
-
-/* views por seguidor: quanta audiência o creator entrega POR seguidor que tem. É o número que
-   separa conta grande e parada de conta pequena e viva — e é MEDIDO, não estimado.
-   Só existe em reels: carrossel e foto não têm contador público (testado 06/08).
-   Não confundir com alcance, que é conta única e a Meta não entrega para post de terceiro. */
-D.perfis.forEach(p => {
-  p.vps = (p.views_marc && p.seguidores) ? +(p.views_marc / p.seguidores).toFixed(2) : null;
+      (j.aviso?'<div class="msg err">'+esc(j.aviso)+'</div>':'')+
+      (c.cadastrado?'<div class="empty"><span class="tg">já cadastrado</span><p><b>'+
+        esc(c.cadastrado.nome)+'</b> está na base, status <b>'+esc(c.cadastrado.status)+'</b>.</p></div>':'');
+  } catch(err){ res.innerHTML = '<div class="msg err">Falhou: '+esc(err.message)+'</div>'; }
+  finally { go.disabled = false; go.textContent = 'Buscar'; }
 });
 
-/* ---------- tabela ---------- */
-let ordem={c:'engajamento_pct',d:-1}, filtro='todos', busca='';
-function linhas(){
-  let L=D.perfis.slice();
-  if(filtro==='marca') L=L.filter(p=>p.marcacoes>0);
-  if(filtro==='ok')    L=L.filter(p=>verdito(p)[1]==='aprova');
-  if(filtro==='cad')   L=L.filter(p=>p.parceiro_id);
-  if(busca) L=L.filter(p=>((p.handle||'')+' '+(p.nome||'')).toLowerCase().includes(busca));
-  const c=ordem.c;
-  L.sort((a,b)=>{
-    let x=a[c], y=b[c];
-    if(x==null) return 1; if(y==null) return -1;
-    if(typeof x==='string') return x.localeCompare(y)*ordem.d;
-    return (x-y)*ordem.d;
-  });
-  return L;
-}
-function render(){
-  const L=linhas();
-  document.getElementById('cnt').textContent=L.length+' de '+D.perfis.length+' perfis';
-  document.getElementById('tbody').innerHTML=L.map(p=>{
-    const [cls,txt]=verdito(p);
-    return '<tr><td class="h"><b><a href="https://instagram.com/'+p.handle+'" target="_blank" rel="noopener">@'+
-      p.handle+'</a></b>'+(p.nome?'<span class="sub2">'+p.nome+'</span>':'')+'</td>'+
-      '<td>'+n(p.seguidores)+'</td>'+
-      '<td'+(p.engajamento_pct>=2?' style="color:var(--ok)"':p.engajamento_pct<1?' style="color:var(--cr)"':'')+'>'+pc(p.engajamento_pct)+'</td>'+
-      '<td>'+(p.posts_30d==null?'—':p.posts_30d)+'</td>'+
-      '<td class="dim">'+dt(p.ultimo_post)+'</td>'+
-      '<td>'+(p.marcacoes||'—')+'</td>'+
-      '<td class="mix">'+p.reels+' <i>/ '+p.carrossel+' / '+p.feed+'</i></td>'+
-      '<td class="dim">'+dt(p.ultima_marcacao)+'</td>'+
-      '<td'+(p.views_marc?'':' class="dim"')+'>'+(p.views_marc?n(p.views_marc):'—')+
-        (p.reels_medidos?'<span class="sub2">'+p.reels_medidos+' reels</span>':'')+'</td>'+
-      '<td class="dim">'+(p.media_por_reel?n(p.media_por_reel):'—')+'</td>'+
-      '<td'+(p.vps==null?' class="dim"':p.vps>=0.5?' style="color:var(--ok);font-weight:600"':p.vps<0.1?' style="color:var(--cr)"':'')+'>'+
-        (p.vps==null?'—':p.vps.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}))+'</td>'+
-      '<td><span class="chip '+cls+'">'+txt+'</span></td></tr>';
-  }).join('') || '<tr><td colspan="12" class="h dim" style="padding:20px 15px">Nenhum perfil com esse filtro.</td></tr>';
-  document.querySelectorAll('th[data-s]').forEach(t=>{
-    t.innerHTML=t.textContent.replace(/[▲▼]\s*$/,'').trim()+(t.dataset.s===ordem.c?' <span class="ar">'+(ordem.d<0?'▼':'▲')+'</span>':'');
-  });
-}
-document.querySelectorAll('th[data-s]').forEach(t=>t.addEventListener('click',()=>{
-  const c=t.dataset.s;
-  ordem = ordem.c===c ? {c,d:-ordem.d} : {c,d:(c==='handle'?1:-1)};
-  render();
-}));
-document.querySelectorAll('.fil').forEach(b=>b.addEventListener('click',()=>{
-  document.querySelectorAll('.fil').forEach(x=>x.setAttribute('aria-pressed','false'));
-  b.setAttribute('aria-pressed','true'); filtro=b.dataset.f; render();
-}));
-document.getElementById('bq').addEventListener('input',e=>{busca=e.target.value.trim().toLowerCase();render()});
-render();
+/* =================================================== 02 CADASTROS =============== */
+const CAD = D.cadastros || [], ENVIOS = D.envios || [], PUBS = D.fichaPubs || [];
+let cAba = 'todos', cBusca = '', cOrd = {c:'cadastro', d:-1};
 
-const aprova=D.perfis.filter(p=>verdito(p)[1]==='aprova').length;
-const corta =D.perfis.filter(p=>verdito(p)[1]==='corta').length;
-document.getElementById('critNote').innerHTML=
-  '<p><b>Critério da coluna Curadoria:</b> engajamento ≥ 2% <em>e</em> pelo menos 4 publicações nos últimos 30 dias. Sem piso de seguidores.</p>'+
-  '<p>Na base atual: <b>'+aprova+' aprovam</b>, '+corta+' cortam, o resto fica para revisão manual. '+
-  'Seguidor sozinho engana — ordene por Seguidores e depois por Eng. para ver o quanto.</p>';
-
-
-/* ================= FILA DE CURADORIA ================= */
-const FILA = D.fila || [];
-const ENVIOS = D.envios || [];
-const PUBS  = D.fichaPubs || [];
-let flAba = 'pendente', flBusca = '';
-
-// mesmo critério da coluna Curadoria do módulo 02 — um só lugar decide o que é "aprova"
-const passaCriterio = f => f.engajamento_pct != null && f.engajamento_pct >= 2 && (f.posts_30d||0) >= 4;
-
-function contaFila(){
-  const c = {pendente:0, ativo:0, reprovado:0, arquivado:0, semtag:0};
-  FILA.forEach(f => {
+function contaCad(){
+  const c = {todos:0, pendente:0, ativo:0, pausado:0, reprovado:0, arquivado:0};
+  CAD.forEach(f => {
     if (f.arquivado) { c.arquivado++; return; }
+    c.todos++;
     if (c[f.status] != null) c[f.status]++;
-    if (!f.tags || !f.tags.length) c.semtag++;
   });
-  for (const k in c) { const el = document.getElementById('c-'+k); if (el) el.textContent = c[k]; }
+  for (const k in c) { const e = document.getElementById('c-'+k); if (e) e.textContent = c[k]; }
 }
 
-function filtraFila(){
-  return FILA.filter(f => {
-    if (flAba === 'arquivado') { if (!f.arquivado) return false; }
-    else if (flAba === 'semtag') { if (f.arquivado || (f.tags && f.tags.length)) return false; }
-    else { if (f.arquivado || f.status !== flAba) return false; }
-    if (flBusca) {
-      const alvo = ((f.nome||'') + ' ' + (f.instagram_handle||'') + ' ' + (f.tags||[]).join(' ')).toLowerCase();
-      if (!alvo.includes(flBusca)) return false;
+function filtraCad(){
+  let L = CAD.filter(f => {
+    if (cAba === 'arquivado') { if (!f.arquivado) return false; }
+    else if (cAba !== 'todos') { if (f.arquivado || f.status !== cAba) return false; }
+    else if (f.arquivado) return false;
+    if (cBusca) {
+      const alvo = ((f.nome||'')+' '+(f.instagram_handle||'')+' '+(f.cupom||'')+' '+(f.tags||[]).join(' ')).toLowerCase();
+      if (!alvo.includes(cBusca)) return false;
     }
     return true;
   });
+  const c = cOrd.c;
+  L.sort((a,b) => {
+    let x = a[c], y = b[c];
+    if (x == null) return 1; if (y == null) return -1;
+    if (typeof x === 'string') return x.localeCompare(y) * cOrd.d;
+    return (x - y) * cOrd.d;
+  });
+  return L;
 }
 
-function pintaFila(){
-  contaFila();
-  const L = filtraFila();
-  document.getElementById('tbfila').innerHTML = L.map(f => {
-    const okc = passaCriterio(f);
-    const eng = f.perfil_indisponivel ? '<span class="chip vo" title="perfil pessoal ou privado — a Meta não expõe">perfil pessoal</span>'
+function selStatus(f){
+  return '<select class="st" data-st="'+f.parceiro_id+'" data-v="'+esc(f.status)+'" aria-label="status de '+esc(f.nome||'')+'">'
+    + STATUS.map(s => '<option value="'+s+'"'+(s===f.status?' selected':'')+'>'+s+'</option>').join('')
+    + '</select><span class="salvo" id="sv-'+f.parceiro_id+'"></span>';
+}
+
+function pintaCad(){
+  contaCad();
+  const L = filtraCad();
+  document.getElementById('cntCad').textContent = L.length + ' de ' + CAD.length;
+  document.getElementById('tbCad').innerHTML = L.map(f => {
+    const eng = f.perfil_indisponivel
+      ? '<span class="chip vo" title="perfil pessoal ou privado — a Meta não expõe">pessoal</span>'
       : f.engajamento_pct == null ? '<span class="dim">—</span>'
-      : '<span style="color:var(--'+(okc?'ok':f.engajamento_pct<1?'cr':'ink')+');font-weight:'+(okc?600:400)+'">'
-        + pc(f.engajamento_pct) + '</span>';
-    const acoes = f.arquivado
-      ? '<button class="acbt" data-ac="desarquivar" data-id="'+f.parceiro_id+'">desarquivar</button>'
-      : (f.status === 'pendente'
-          ? '<button class="acbt ok" data-ac="aprovar" data-id="'+f.parceiro_id+'">aprovar</button>'
-            + '<button class="acbt no" data-ac="reprovar" data-id="'+f.parceiro_id+'">reprovar</button>'
-            + '<button class="acbt" data-ac="arquivar" data-id="'+f.parceiro_id+'">arquivar</button>'
-          : '<button class="acbt" data-ficha="'+f.parceiro_id+'">abrir ficha</button>');
+      : '<span style="color:var(--'+(f.engajamento_pct>=2?'ok':f.engajamento_pct<1?'cr':'ink')+')">'+pc(f.engajamento_pct)+'</span>';
     return '<tr>'
-      + '<td class="h"><button class="lnk" data-ficha="'+f.parceiro_id+'"><b>'+(f.nome||'—')+'</b></button>'
-        + '<span class="sub2">@'+(f.instagram_handle||'—')+'</span></td>'
+      + '<td class="h"><button class="lnk" data-ficha="'+f.parceiro_id+'"><b>'+esc(f.nome||'—')+'</b></button>'
+        + (f.instagram_handle ? '<span class="sub2">@'+esc(f.instagram_handle)+'</span>'
+                             : '<span class="sub2 dim">'+(f.cupom?'cupom '+esc(f.cupom):'sem instagram')+'</span>')+'</td>'
       + '<td class="dim">'+dt(f.cadastro)+'</td>'
       + '<td>'+n(f.seguidores)+'</td>'
       + '<td>'+eng+'</td>'
-      + '<td>'+(f.posts_30d==null?'—':f.posts_30d)+'</td>'
-      + '<td class="dim">'+dt(f.ultimo_post)+'</td>'
-      + '<td'+(f.vps>=0.5?' style="color:var(--ok)"':'')+'>'+(f.vps==null?'—':f.vps)+'</td>'
-      + '<td>'+(f.marcacoes||'—')+(f.ja_marcou?'':'')+'</td>'
-      + '<td class="dim">'+(f.envios||'—')+'</td>'
-      + '<td class="h">'+((f.tags||[]).map(x=>'<span class="tagchip">'+x+'</span>').join('')||'<span class="dim">—</span>')+'</td>'
-      + '<td><div class="acs">'+acoes+'</div></td></tr>';
-  }).join('') || '<tr><td colspan="11" class="h dim" style="padding:20px 15px">Nada nesta aba.</td></tr>';
+      + '<td>'+(f.posts_30d==null?'<span class="dim">—</span>':f.posts_30d)+'</td>'
+      + '<td'+(f.marcacoes?'':' class="dim"')+'>'+(f.marcacoes||'—')+'</td>'
+      + '<td'+(f.pedidos?'':' class="dim"')+'>'+(f.pedidos||'—')+'</td>'
+      + '<td'+(f.receita?' style="font-weight:600"':' class="dim"')+'>'+(f.receita?nm(f.receita):'—')+'</td>'
+      + '<td>'+selStatus(f)+'</td>'
+      + '<td><div class="acs">'
+        + '<button class="acbt" data-ficha="'+f.parceiro_id+'">ficha</button>'
+        + '<button class="acbt no" data-ac="'+(f.arquivado?'desarquivar':'arquivar')+'" data-id="'+f.parceiro_id+'">'
+        + (f.arquivado?'desarquivar':'arquivar')+'</button>'
+      + '</div></td></tr>';
+  }).join('') || '<tr><td colspan="10" class="h dim" style="padding:20px 15px">Nada com esse filtro.</td></tr>';
 }
 
-document.querySelectorAll('.aba').forEach(b => b.addEventListener('click', () => {
-  document.querySelectorAll('.aba').forEach(x => x.setAttribute('aria-pressed','false'));
-  b.setAttribute('aria-pressed','true'); flAba = b.dataset.fl; pintaFila();
+document.querySelectorAll('[data-fl]').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('[data-fl]').forEach(x => x.setAttribute('aria-pressed','false'));
+  b.setAttribute('aria-pressed','true'); cAba = b.dataset.fl; pintaCad();
 }));
-document.getElementById('fq').addEventListener('input', e => {
-  flBusca = e.target.value.trim().toLowerCase(); pintaFila();
+document.getElementById('cq').addEventListener('input', e => {
+  cBusca = e.target.value.trim().toLowerCase(); pintaCad();
+});
+document.querySelectorAll('th[data-t]').forEach(t => t.addEventListener('click', () => {
+  const c = t.dataset.t;
+  cOrd = cOrd.c === c ? {c, d:-cOrd.d} : {c, d:(c==='nome'?1:-1)};
+  document.querySelectorAll('th[data-t]').forEach(x =>
+    x.innerHTML = x.textContent.replace(/[▲▼]\s*$/,'').trim() +
+      (x.dataset.t===cOrd.c ? ' <span class="ar">'+(cOrd.d<0?'▼':'▲')+'</span>' : ''));
+  pintaCad();
+}));
+
+/* mudar status — grava e repinta com o que o BANCO devolveu */
+document.getElementById('tbCad').addEventListener('change', async e => {
+  const s = e.target.closest('[data-st]'); if (!s) return;
+  const id = +s.dataset.st, antes = s.dataset.v;
+  s.disabled = true;
+  try {
+    const j = await (await fetch('/api/parceiro?id='+id+'&acao=status&valor='+encodeURIComponent(s.value),
+                                 {method:'POST'})).json();
+    if (!j.ok) throw new Error(j.erro || 'erro');
+    const f = CAD.find(x => x.parceiro_id === id);
+    if (f) { Object.assign(f, j.parceiro); f.cadastro = String(j.parceiro.criado_em||f.cadastro).slice(0,10); }
+    // o valor que aparece agora é o que voltou do RETURNING, não o que foi clicado
+    s.value = j.parceiro.status; s.dataset.v = j.parceiro.status;
+    const sv = document.getElementById('sv-'+id);
+    if (sv) { sv.textContent = 'salvo'; setTimeout(() => { sv.textContent=''; }, 1800); }
+    contaCad();
+  } catch (err) {
+    s.value = antes;
+    alert('Não gravou: ' + err.message);
+  } finally { s.disabled = false; }
 });
 
-/* ---- ações ---- */
-async function acao(id, ac, extra){
-  const q = new URLSearchParams({id, acao: ac, ...(extra||{})});
-  const r = await fetch('/api/parceiro?'+q, {method:'POST'});
-  const j = await r.json();
-  if (!j.ok) { alert('Não deu certo: ' + (j.erro||'erro')); return null; }
-  const f = FILA.find(x => x.parceiro_id === id);
-  if (f) {
-    f.status = j.parceiro.status; f.arquivado = j.parceiro.arquivado;
-    f.tags = j.parceiro.tags; f.reprovado_motivo = j.parceiro.reprovado_motivo;
-  }
-  pintaFila();
-  return j.parceiro;
-}
-
-document.addEventListener('click', async e => {
+document.getElementById('tbCad').addEventListener('click', async e => {
   const b = e.target.closest('[data-ac]');
   if (b) {
-    const id = +b.dataset.id, ac = b.dataset.ac;
-    // reprovar sem motivo vira lista de gente reprovada sem ninguém lembrar por quê
-    let extra = {};
-    if (ac === 'reprovar') {
-      const m = prompt('Motivo da reprovação (fica registrado):');
-      if (m === null) return;
-      extra.motivo = m;
-    }
     b.disabled = true;
-    await acao(id, ac, extra);
+    const j = await (await fetch('/api/parceiro?id='+b.dataset.id+'&acao='+b.dataset.ac, {method:'POST'})).json();
+    b.disabled = false;
+    if (!j.ok) return alert('Não gravou: ' + (j.erro||'erro'));
+    const f = CAD.find(x => x.parceiro_id === +b.dataset.id);
+    if (f) Object.assign(f, j.parceiro);
+    pintaCad();
     return;
   }
   const fb = e.target.closest('[data-ficha]');
@@ -822,35 +775,35 @@ document.addEventListener('click', async e => {
 /* ---- ficha ---- */
 let fichaId = null;
 const dlgF = document.getElementById('dlgFicha');
+document.getElementById('fstatusSel').innerHTML = STATUS.map(s=>'<option value="'+s+'">'+s+'</option>').join('');
+
 function abreFicha(id){
-  const f = FILA.find(x => x.parceiro_id === id); if (!f) return;
+  const f = CAD.find(x => x.parceiro_id === id); if (!f) return;
   fichaId = id;
   document.getElementById('fnome').textContent = f.nome || '—';
-  document.getElementById('fhandle').innerHTML = '@'+(f.instagram_handle||'—')
-    + ' · cadastro '+dt(f.cadastro) + (f.decidido_por ? ' · decidido por '+f.decidido_por : '');
+  document.getElementById('fhandle').innerHTML = (f.instagram_handle ? '@'+esc(f.instagram_handle) : 'sem Instagram')
+    + ' · cadastro '+dt(f.cadastro) + (f.decidido_por ? ' · decidido por '+esc(f.decidido_por) : '');
   document.getElementById('fbio').textContent = f.bio || '';
-  const okc = passaCriterio(f);
   document.getElementById('fstatus').innerHTML =
-    '<span class="chip '+(f.arquivado?'vo':f.status==='ativo'?'ok':f.status==='reprovado'?'cr':'wa')+'">'
-    + (f.arquivado?'arquivado':f.status) + '</span>'
-    + (f.status==='pendente' ? ' <span class="chip '+(okc?'ok':'wa')+'">'
-        + (okc?'passa no critério':'revisar') + '</span>' : '')
-    + (f.reprovado_motivo ? '<div class="obs" style="margin-top:6px;max-width:34ch">'+f.reprovado_motivo+'</div>' : '');
+    '<span class="chip '+(f.arquivado?'vo':f.status==='ativo'?'ok':f.status==='reprovado'?'cr':f.status==='pausado'?'wa':'wa')+'">'
+    + (f.arquivado?'arquivado':esc(f.status)) + '</span>'
+    + (f.reprovado_motivo ? '<div class="obs" style="margin-top:6px;max-width:32ch">'+esc(f.reprovado_motivo)+'</div>' : '');
+  const sel = document.getElementById('fstatusSel');
+  sel.value = f.status; sel.dataset.v = f.status;
 
   document.getElementById('fquad').innerHTML = [
     ['Seguidores', n(f.seguidores), ''],
     ['Engajamento', pc(f.engajamento_pct), 'últimos 12 posts'],
     ['Posts 30d', f.posts_30d==null?'—':f.posts_30d, 'último '+dt(f.ultimo_post)],
     ['Marcações', f.marcacoes||'—', 'à Cells'],
-    ['Views', n(f.views_marc), (f.reels_medidos||0)+' reels'],
-    ['Views/seg.', f.vps==null?'—':f.vps, ''],
+    ['Pedidos', f.pedidos||'—', 'pelo cupom'],
+    ['Receita', f.receita?nm(f.receita):'—', f.cupom?'cupom '+f.cupom:'sem cupom'],
   ].map(([k,v,nn]) => '<div><div class="k">'+k+'</div><div class="v">'+v+'</div>'
-      + (nn?'<div class="n" style="font-size:10.5px;color:var(--fnt);margin-top:4px">'+nn+'</div>':'')+'</div>').join('');
+      + (nn?'<div class="n">'+esc(nn)+'</div>':'')+'</div>').join('');
 
-  const p3 = (D.p360||[]).find(x => x.parceiro_id === id) || {};
-  document.getElementById('fcupom').value = p3.cupom || '(sem cupom)';
-  document.getElementById('flink').value = p3.utm_slug
-    ? 'https://cells.com.br/?utm_source=creator&utm_medium=organic&utm_campaign=' + p3.utm_slug
+  document.getElementById('fcupom').value = f.cupom || '(sem cupom)';
+  document.getElementById('flink').value = f.utm_slug
+    ? 'https://cells.com.br/?utm_source=creator&utm_medium=organic&utm_campaign=' + f.utm_slug
     : '(sem slug)';
   document.getElementById('flinkcr').value = '';
   document.getElementById('ftags').value = (f.tags||[]).join(', ');
@@ -858,53 +811,57 @@ function abreFicha(id){
 
   const ps = PUBS.filter(p => p.parceiro_id === id);
   document.getElementById('fpubs').innerHTML = ps.length ? ps.map(p =>
-    '<div class="pub"><span class="t">'+p.tipo.replace('feed_','')+'</span>'
+    '<div class="pub"><span class="t">'+esc(p.tipo.replace('feed_',''))+'</span>'
     + '<span class="d">'+dt(p.data)+'</span>'
-    + '<span class="l">'+(p.permalink?'<a href="'+p.permalink+'" target="_blank" rel="noopener" style="color:inherit">'+(p.legenda||'(sem legenda)')+'</a>':(p.legenda||'—'))+'</span>'
+    + '<span class="l">'+(p.permalink?'<a href="'+esc(p.permalink)+'" target="_blank" rel="noopener" style="color:inherit">'+esc(p.legenda||'(sem legenda)')+'</a>':esc(p.legenda||'—'))+'</span>'
     + '<span class="m">'+(p.curtidas!=null?n(p.curtidas)+'❤ ':'')
     + (p.visualizacoes?n(p.visualizacoes)+' views':'')+'</span></div>').join('')
-    : '<p class="dim" style="font-size:12.5px;margin:0">Nenhuma publicação capturada ainda.</p>';
+    : '<p class="obs">Nenhuma publicação capturada ainda.</p>';
 
-  const pend = f.status === 'pendente' && !f.arquivado;
-  ['faprovar','freprovar','farquivar'].forEach(x =>
-    document.getElementById(x).style.display = pend ? '' : 'none');
   dlgF.showModal();
 }
+
 function pintaEnvios(id){
   const es = ENVIOS.filter(x => x.parceiro_id === id);
   document.getElementById('elista').innerHTML = es.length ? es.map(x =>
-    '<div class="pub"><span class="t">'+x.tipo.replace('_',' ')+'</span>'
+    '<div class="pub"><span class="t">'+esc(x.tipo.replace('_',' '))+'</span>'
     + '<span class="d">'+dt(x.solicitado)+'</span>'
-    + '<span class="l">'+(x.itens||'—')+(x.rastreio?' · '+x.rastreio:'')+'</span>'
-    + '<span class="m">'+(x.valor?'R$ '+n(x.valor):'')+'</span>'
+    + '<span class="l">'+esc(x.itens||'—')+(x.rastreio?' · '+esc(x.rastreio):'')+'</span>'
+    + '<span class="m">'+(x.valor?rs(x.valor):'')+'</span>'
     + '<select class="acbt" data-envio="'+x.envio_id+'">'
     + ['solicitado','separado','nf_emitida','postado','entregue','cancelado']
-        .map(s=>'<option value="'+s+'"'+(s===x.status?' selected':'')+'>'+s.replace('_',' ')+'</option>').join('')
+        .map(s => '<option value="'+s+'"'+(s===x.status?' selected':'')+'>'+s.replace('_',' ')+'</option>').join('')
     + '</select></div>').join('')
-    : '<p class="dim" style="font-size:12.5px;margin:0">Nenhum envio registrado.</p>';
+    : '<p class="obs">Nenhum envio registrado.</p>';
 }
+
 document.getElementById('elista').addEventListener('change', async e => {
   const s = e.target.closest('[data-envio]'); if (!s) return;
-  const r = await fetch('/api/envio?envio_id='+s.dataset.envio+'&status='+s.value, {method:'POST'});
-  const j = await r.json();
-  if (!j.ok) alert('Não deu certo: '+(j.erro||'erro'));
-  else { const x = ENVIOS.find(v=>v.envio_id==s.dataset.envio); if (x) x.status = j.envio.status; }
+  const j = await (await fetch('/api/envio?envio_id='+s.dataset.envio+'&status='+s.value, {method:'POST'})).json();
+  if (!j.ok) alert('Não gravou: '+(j.erro||'erro'));
+  else { const x = ENVIOS.find(v => v.envio_id == s.dataset.envio); if (x) x.status = j.envio.status; }
 });
+
 document.getElementById('ecriar').addEventListener('click', async () => {
-  const q = new URLSearchParams({id: fichaId, tipo: etipo.value,
-    itens: eitens.value, valor: evalor.value.replace(',','.')});
+  const q = new URLSearchParams({id: fichaId, tipo: etipo.value, itens: eitens.value,
+                                valor: evalor.value.replace(',','.')});
   const j = await (await fetch('/api/envio?'+q, {method:'POST'})).json();
-  if (!j.ok) return alert('Não deu certo: '+(j.erro||'erro'));
+  if (!j.ok) return alert('Não gravou: '+(j.erro||'erro'));
   ENVIOS.unshift({...j.envio, solicitado: String(j.envio.solicitado_em).slice(0,10)});
-  const f = FILA.find(x=>x.parceiro_id===fichaId); if (f) f.envios = (f.envios||0)+1;
-  eitens.value=''; evalor.value=''; pintaEnvios(fichaId); pintaFila();
+  const f = CAD.find(x => x.parceiro_id === fichaId); if (f) f.envios = (f.envios||0)+1;
+  eitens.value=''; evalor.value=''; pintaEnvios(fichaId); pintaCad();
 });
+
 async function copia(el, btn){
   const v = document.getElementById(el).value;
-  try { await navigator.clipboard.writeText(v); } catch(e) { document.getElementById(el).select(); document.execCommand('copy'); }
+  try { await navigator.clipboard.writeText(v); }
+  catch(e){ document.getElementById(el).select(); document.execCommand('copy'); }
   const b = document.getElementById(btn), o = b.textContent;
   b.textContent = 'copiado'; setTimeout(() => b.textContent = o, 1400);
 }
+document.getElementById('copiacupom').addEventListener('click', () => copia('fcupom','copiacupom'));
+document.getElementById('copialink').addEventListener('click', () => copia('flink','copialink'));
+document.getElementById('fcopiacr').addEventListener('click', () => copia('flinkcr','fcopiacr'));
 document.getElementById('fgeralink').addEventListener('click', async () => {
   const b = document.getElementById('fgeralink'); b.disabled = true;
   const j = await (await fetch('/api/acesso?id='+fichaId+'&dias=90', {method:'POST'})).json();
@@ -912,305 +869,438 @@ document.getElementById('fgeralink').addEventListener('click', async () => {
   if (!j.ok) return alert('Não deu certo: '+(j.erro||'erro'));
   document.getElementById('flinkcr').value = j.url;
 });
-document.getElementById('fcopiacr').addEventListener('click', () => copia('flinkcr','fcopiacr'));
-document.getElementById('copiacupom').addEventListener('click', () => copia('fcupom','copiacupom'));
-document.getElementById('copialink').addEventListener('click', () => copia('flink','copialink'));
 document.getElementById('fsalvatags').addEventListener('click', async () => {
-  await acao(fichaId, 'tags', {tags: document.getElementById('ftags').value});
+  const j = await (await fetch('/api/parceiro?id='+fichaId+'&acao=tags&tags='
+    + encodeURIComponent(document.getElementById('ftags').value), {method:'POST'})).json();
+  if (!j.ok) return alert('Não gravou: '+(j.erro||'erro'));
+  const f = CAD.find(x => x.parceiro_id === fichaId); if (f) f.tags = j.parceiro.tags;
+  pintaCad();
 });
-document.getElementById('faprovar').addEventListener('click', async () => { await acao(fichaId,'aprovar'); dlgF.close(); });
-document.getElementById('farquivar').addEventListener('click', async () => { await acao(fichaId,'arquivar'); dlgF.close(); });
-document.getElementById('freprovar').addEventListener('click', async () => {
-  const m = prompt('Motivo da reprovação (fica registrado):'); if (m === null) return;
-  await acao(fichaId,'reprovar',{motivo:m}); dlgF.close();
+document.getElementById('fstatusSel').addEventListener('change', async e => {
+  const j = await (await fetch('/api/parceiro?id='+fichaId+'&acao=status&valor='+encodeURIComponent(e.target.value),
+                               {method:'POST'})).json();
+  if (!j.ok) { alert('Não gravou: '+(j.erro||'erro')); e.target.value = e.target.dataset.v; return; }
+  const f = CAD.find(x => x.parceiro_id === fichaId);
+  if (f) Object.assign(f, j.parceiro);
+  e.target.dataset.v = j.parceiro.status;
+  abreFicha(fichaId); pintaCad();
+});
+document.getElementById('farquivar').addEventListener('click', async () => {
+  const f = CAD.find(x => x.parceiro_id === fichaId);
+  const ac = f && f.arquivado ? 'desarquivar' : 'arquivar';
+  const j = await (await fetch('/api/parceiro?id='+fichaId+'&acao='+ac, {method:'POST'})).json();
+  if (!j.ok) return alert('Não gravou: '+(j.erro||'erro'));
+  if (f) Object.assign(f, j.parceiro);
+  dlgF.close(); pintaCad();
 });
 document.getElementById('ffechar').addEventListener('click', () => dlgF.close());
+pintaCad();
 
-pintaFila();
-
-const marcam=r.cadastrados_que_marcam||0;
-document.getElementById('gapNote').innerHTML=
-  '<p><b>O buraco que a base revelou:</b> dos '+n(r.cadastrados)+' cadastrados, apenas <b>'+marcam+
-  '</b> já marcaram a Cells alguma vez. E dos '+n(r.perfis)+' perfis que marcam de verdade, quase nenhum se cadastrou.</p>'+
-  '<p>São dois grupos quase sem interseção. Recrutar pela lista de cadastro é começar do zero com gente que nunca postou; '+
-  'os '+n(r.perfis)+' do Módulo 02 já fazem de graça. <b>O piloto deveria sair daí.</b></p>';
-
-/* ---------- vendas ---------- */
-const VD = D.vendas || [], CN = (D.canal||[])[0] || {};
-document.getElementById('ledeVendas').innerHTML =
-  CN.pedidos
-    ? 'Operação de cupom nominal que já rodava na Shopify desde ' + dt(CN.de) + ', importada em 06/08. '
-      + '<b>' + n(CN.pedidos) + ' pedidos</b> · <b>R$ ' + n(CN.receita) + '</b> · ticket R$ ' + n(CN.ticket)
-      + ' · ' + n(CN.pessoas_que_venderam) + ' pessoas venderam. '
-      + '<br><b>' + n(CN.clientes_novos) + ' clientes novos</b> (R$ ' + n(CN.receita_novos) + '). '
-      + 'Últimos 90 dias: ' + n(CN.pedidos_90d) + ' pedidos · R$ ' + n(CN.receita_90d) + '. '
-      + (CN.sem_flag ? '<span style="color:var(--wa)">' + n(CN.sem_flag) + ' pedidos sem marcação de cliente novo — são anteriores à atribuição v5.</span>' : '')
-    : 'Nenhuma venda atribuída ainda.';
-document.getElementById('tbvendas').innerHTML = VD.map(v =>
-  '<tr><td class="h"><b>'+(v.nome||'—')+'</b>'
-  + (v.instagram_handle?'<span class="sub2">@'+v.instagram_handle+'</span>':'')+'</td>'
-  + '<td class="dim">'+(v.cupom||'—')+'</td>'
-  + '<td>'+n(v.pedidos)+'</td>'
-  + '<td style="font-weight:600">'+n(v.receita)+'</td>'
-  + '<td class="dim">'+n(v.ticket)+'</td>'
-  + '<td'+(v.pedidos_90d?'':' class="dim"')+'>'+(v.pedidos_90d||'—')+'</td>'
-  + '<td class="dim">'+dt(v.primeira)+'</td>'
-  + '<td class="dim">'+dt(v.ultima)+'</td>'
-  + '<td><span class="chip '+(v.origem==='cupom_legado'?'vo':'ok')+'">'
-  + (v.origem==='cupom_legado'?'cupom legado':'cadastro')+'</span></td></tr>').join('')
-  || '<tr><td colspan="9" class="h dim" style="padding:20px 15px">Nenhuma venda atribuída.</td></tr>';
-
-/* ---------- apuração e impulso ---------- */
-const CM = D.canalMes || [], AP = D.apuracao || [], IMP = D.impulso || [];
-const semRegra = AP.filter(a => a.situacao === 'sem regra de comissao');
-const totSemRegra = semRegra.reduce((a,x) => a + Number(x.receita||0), 0);
-const ult = CM[0] || {};
-document.getElementById('ledeApur').innerHTML = CM.length
-  ? 'Mês corrente: <b>'+n(ult.pedidos)+' pedidos</b>, '+n(ult.clientes_novos)+' clientes novos, R$ '+n(ult.receita)+'.'
-  : 'Nenhuma venda atribuída ainda.';
-document.getElementById('tbcanal').innerHTML = CM.map(m =>
-  '<tr><td class="h"><b>'+String(m.competencia).slice(0,7)+'</b></td>'
-  + '<td>'+n(m.creators_que_venderam)+'</td><td>'+n(m.pedidos)+'</td>'
-  + '<td'+(m.clientes_novos?' style="color:var(--ok);font-weight:600"':'')+'>'+n(m.clientes_novos)+'</td>'
-  + '<td style="font-weight:600">'+n(m.receita)+'</td><td class="dim">'+n(m.ticket)+'</td></tr>').join('')
-  || '<tr><td colspan="6" class="h dim" style="padding:20px 15px">Sem vendas.</td></tr>';
-document.getElementById('obsApur').innerHTML = semRegra.length
-  ? '<b>'+semRegra.length+' linhas de apuração ficam sem valor a pagar</b> porque o cupom não tem percentual de comissão combinado — são os '
-    + 'cupons legados, que somam R$ '+n(totSemRegra)+' no período. Deixei o campo vazio de propósito: '
-    + 'assumir os 15% da regra nova criaria uma dívida retroativa que ninguém acordou.'
-  : 'Todos os cupons têm percentual de comissão definido.';
-
-document.getElementById('tbimp').innerHTML = IMP.map(i =>
-  '<tr><td class="h"><b>@'+i.instagram_handle+'</b>'+(i.nome?'<span class="sub2">'+i.nome+'</span>':'')+'</td>'
-  + '<td class="dim">'+String(i.tipo).replace('feed_','')+'</td>'
-  + '<td class="dim">'+dt(i.publicado_em)+'</td>'
-  + '<td>'+n(i.pedidos_24h)+'</td><td class="dim">'+n(i.base_diaria_arred)+'</td>'
-  + '<td'+(i.impulso_x>=2?' style="color:var(--ok);font-weight:600"':'')+'>'+i.impulso_x+'×</td></tr>').join('')
-  || '<tr><td colspan="6" class="h dim" style="padding:20px 15px">Nenhuma leitura limpa ainda.</td></tr>';
-
-/* ---------- campanhas e jogos ---------- */
-const CAMP = D.campanhas || [], JOGOS = D.jogos || [], PLACAR = D.placar || [];
-const TIPOS = [['reels','reel'],['carrossel','carrossel'],['feed_imagem','imagem'],
-               ['story','story'],['venda','venda pelo cupom']];
-document.getElementById('cntCamp').textContent =
-  CAMP.length + ' campanha' + (CAMP.length===1?'':'s') + ' · ' + JOGOS.length + ' jogo' + (JOGOS.length===1?'':'s');
+/* =================================================== 03 CAMPANHAS ============== */
+const CAMP = D.campanhas || [], PLACAR = D.placar || [];
+let campAba = 'vivas';
 
 function pintaCamp(){
-  document.getElementById('listaCamp').innerHTML = CAMP.length ? CAMP.map(c => {
-    const js = JOGOS.filter(j => j.campanha_id === c.campanha_id);
-    return '<div class="row" style="flex-direction:column;align-items:stretch;gap:8px">'
-      + '<div style="display:flex;gap:12px;align-items:baseline;flex-wrap:wrap">'
-      + '<b style="font-size:14px">'+c.nome+'</b>'
-      + '<span class="chip '+(c.status==='ativa'?'ok':'vo')+'">'+c.status+'</span>'
-      + '<span class="dim" style="font-family:var(--mono);font-size:11px">'+dt(c.inicio)+' → '+dt(c.fim)+'</span>'
+  const L = CAMP.filter(c => campAba === 'todas' || c.status !== 'arquivada');
+  document.getElementById('cntCamp').textContent =
+    L.length + ' campanha' + (L.length===1?'':'s');
+  document.getElementById('listaCamp').innerHTML = L.length ? L.map(c => {
+    const pl = PLACAR.filter(p => p.campanha_id === c.campanha_id).slice(0,6);
+    const regra = c.tipo === 'comissao'
+      ? '<span class="r"><b>'+pc(c.comissao_pct)+'</b> sobre o vendido pelo cupom</span>'
+      : ((c.acoes||[]).map(a => '<span class="r">'+esc(rotAcao(a.acao))+' <b>'+a.pontos+' pts</b></span>').join('')
+         || '<span class="r dim">sem ação definida</span>');
+    const res = c.tipo === 'comissao'
+      ? [['Creators', n(c.creators)], ['Pedidos', n(c.pedidos)], ['Receita', c.receita?nm(c.receita):'—'],
+         ['Clientes novos', n(c.clientes_novos)], ['Comissão', c.comissao_a_pagar?rs(c.comissao_a_pagar):'—']]
+      : [['Creators', n(c.creators)], ['Publicações', n(c.publicacoes)], ['Pontos', n(c.pontos)],
+         ['Pedidos', n(c.pedidos)], ['Receita', c.receita?nm(c.receita):'—']];
+    return '<div class="campcard">'
+      + '<div class="lin1"><span class="nm">'+esc(c.nome)+'</span>'
+      + '<span class="chip '+(c.tipo==='comissao'?'ac':'wa')+'">'+(c.tipo==='comissao'?'comissão':'pontuação')+'</span>'
+      + '<span class="chip '+(c.status==='ativa'?'ok':c.status==='arquivada'?'vo':'vo')+'">'+esc(c.status)+'</span>'
+      + '<span class="dim" style="font-family:var(--mono);font-size:11px">'+dt(c.inicio)+' → '+(c.fim?dt(c.fim):'sem fim')+'</span>'
       + '<span class="dim" style="font-family:var(--mono);font-size:11px;margin-left:auto">'
-      + c.participantes+' creators · '+c.jogos+' jogos'+(c.budget?' · R$ '+n(c.budget):'')+'</span></div>'
-      + (c.briefing ? '<div class="obs">'+c.briefing+'</div>' : '')
-      + (js.length ? js.map(j => {
-          const pl = PLACAR.filter(p => p.jogo_id === j.jogo_id).sort((a,b)=>b.pontos-a.pontos);
-          return '<div style="border-left:2px solid var(--ac);padding:7px 0 7px 11px;margin-top:4px">'
-            + '<div style="font-size:13px;font-weight:600">'+j.titulo
-            + ' <span class="chip vo">'+(j.tipo==='metas_fixas'?'metas fixas':'pontos e brindes')+'</span></div>'
-            + '<div class="obs">'+(j.missoes||[]).map(m =>
-                (TIPOS.find(x=>x[0]===m.tipo)||[,m.tipo])[1] + ' · ' + m.pontos + ' pts'
-                + (m.meta?' · meta '+m.meta:'')).join('  |  ')+'</div>'
-            + (pl.length ? '<div class="obs" style="margin-top:5px">'
-                + pl.slice(0,5).map(p => '<b>'+p.pontos+'</b> '+(p.nome||'@'+p.instagram_handle)).join(' · ')
-                + '</div>' : '<div class="obs" style="margin-top:5px">Nenhum creator vinculado ainda.</div>')
-            + '</div>';
-        }).join('') : '<div class="obs">Sem jogos nesta campanha.</div>')
+        + n(c.creators)+' creator'+(c.creators===1?'':'s')+'</span></div>'
+      + (c.briefing ? '<p class="obs" style="margin-top:6px">'+esc(c.briefing)+'</p>' : '')
+      + '<div class="regra">'+regra+'</div>'
+      + '<div class="res">'+res.map(([k,v])=>'<div><div class="k">'+k+'</div><div class="v">'+v+'</div></div>').join('')+'</div>'
+      + (pl.length ? '<p class="obs" style="margin-top:9px"><b>Placar:</b> '
+          + pl.map(p => n(p.pontos)+' pts — '+esc(p.nome||'@'+p.instagram_handle)).join(' · ')+'</p>' : '')
+      + '<div class="acs">'
+      + '<select class="acbt" data-cst="'+c.campanha_id+'">'
+        + ['rascunho','ativa','encerrada','arquivada'].map(s =>
+            '<option value="'+s+'"'+(s===c.status?' selected':'')+'>'+s+'</option>').join('')
+      + '</select>'
+      + '<select class="acbt" data-cadd="'+c.campanha_id+'"><option value="">+ vincular creator…</option>'
+        + CAD.filter(f => f.status==='ativo' && !f.arquivado
+                     && !(c.participantes||[]).some(p => p.parceiro_id===f.parceiro_id))
+             .map(f => '<option value="'+f.parceiro_id+'">'+esc(f.nome||('#'+f.parceiro_id))+'</option>').join('')
+      + '</select></div>'
+      + ((c.participantes||[]).length
+          ? '<p class="obs" style="margin-top:8px">'+(c.participantes||[]).map(p =>
+              '<span class="chip vo" style="margin-right:4px">'+esc(p.nome||p.handle||('#'+p.parceiro_id))
+              + ' <button class="lnk" data-csai="'+c.campanha_id+':'+p.parceiro_id+'" '
+              + 'style="border:0;color:var(--cr)" title="tirar da campanha">×</button></span>').join('')+'</p>'
+          : '<p class="obs" style="margin-top:8px">Nenhum creator vinculado — sem creator a campanha não mede nada.</p>')
       + '</div>';
-  }).join('') : '<div class="row"><span class="dim" style="font-size:13px">Nenhuma campanha ainda. Crie a primeira para começar a agrupar creators e jogos.</span></div>';
+  }).join('') : '<div class="msg idle">Nenhuma campanha ainda. Crie a primeira ali em cima.</div>';
 }
-pintaCamp();
 
-const dC = document.getElementById('dlgCamp'), dJ = document.getElementById('dlgJogo');
-document.getElementById('novaCamp').addEventListener('click', () => {
-  const hoje = new Date().toISOString().slice(0,10);
-  dcIni.value = hoje; dC.showModal();
+document.querySelectorAll('[data-cs]').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('[data-cs]').forEach(x => x.setAttribute('aria-pressed','false'));
+  b.setAttribute('aria-pressed','true'); campAba = b.dataset.cs; pintaCamp();
+}));
+
+document.getElementById('listaCamp').addEventListener('change', async e => {
+  const st = e.target.closest('[data-cst]');
+  if (st) {
+    const j = await (await fetch('/api/campanha', {method:'POST', headers:{'content-type':'application/json'},
+      body: JSON.stringify({campanha_id:+st.dataset.cst, status:st.value})})).json();
+    if (!j.ok) return alert('Não gravou: '+(j.erro||'erro'));
+    location.reload(); return;
+  }
+  const ad = e.target.closest('[data-cadd]');
+  if (ad && ad.value) {
+    const j = await (await fetch('/api/campanha/parceiro?campanha='+ad.dataset.cadd+'&parceiro='+ad.value,
+      {method:'POST'})).json();
+    if (!j.ok) return alert('Não gravou: '+(j.erro||'erro'));
+    location.reload();
+  }
 });
-document.getElementById('dcFechar').addEventListener('click', () => dC.close());
-document.getElementById('dcSalvar').addEventListener('click', async () => {
-  if (!dcNome.value.trim() || !dcIni.value) return alert('Nome e início são obrigatórios.');
-  const q = new URLSearchParams({nome:dcNome.value, briefing:dcBrief.value,
-    inicio:dcIni.value, fim:dcFim.value, status:dcStatus.value, budget:dcBudget.value.replace(',','.')});
-  const j = await (await fetch('/api/campanha?'+q, {method:'POST'})).json();
-  if (!j.ok) return alert('Não deu certo: '+(j.erro||'erro'));
+document.getElementById('listaCamp').addEventListener('click', async e => {
+  const b = e.target.closest('[data-csai]'); if (!b) return;
+  const [c, p] = b.dataset.csai.split(':');
+  const j = await (await fetch('/api/campanha/parceiro?campanha='+c+'&parceiro='+p+'&sair=1',
+    {method:'POST'})).json();
+  if (!j.ok) return alert('Não gravou: '+(j.erro||'erro'));
   location.reload();
 });
 
-function linhaMissao(){
+/* ---- diálogo de nova campanha ---- */
+const dC = document.getElementById('dlgCamp');
+function linhaAcao(acao, pontos){
   const d = document.createElement('div');
   d.className = 'frm'; d.style.marginTop = '6px';
-  d.innerHTML = '<select class="mt">'+TIPOS.map(t=>'<option value="'+t[0]+'">'+t[1]+'</option>').join('')+'</select>'
-    + '<input class="mp" placeholder="pontos" style="width:82px" inputmode="numeric">'
-    + '<input class="mm" placeholder="meta (opcional)" style="width:130px" inputmode="numeric">'
+  d.innerHTML = '<select class="ma">'+ACOES.map(a =>
+      '<option value="'+a[0]+'"'+(a[0]===acao?' selected':'')+'>'+a[1]+'</option>').join('')+'</select>'
+    + '<input class="mp" style="width:88px" inputmode="numeric" placeholder="pontos" value="'+(pontos||'')+'">'
     + '<button class="acbt no" type="button">remover</button>';
   d.querySelector('button').addEventListener('click', () => d.remove());
   return d;
 }
-document.getElementById('novoJogo').addEventListener('click', () => {
-  if (!CAMP.length) return alert('Crie uma campanha antes — o jogo mora dentro dela.');
-  djCamp.innerHTML = CAMP.map(c=>'<option value="'+c.campanha_id+'">'+c.nome+'</option>').join('');
-  djMissoes.innerHTML = ''; djMissoes.appendChild(linhaMissao());
-  const hoje = new Date().toISOString().slice(0,10);
-  djIni.value = hoje; dJ.showModal();
+function tipoEscolhido(){
+  const r = document.querySelector('input[name="dctipo"]:checked');
+  return r ? r.value : 'comissao';
+}
+function trocaTipo(){
+  const t = tipoEscolhido();
+  document.getElementById('dcComissao').style.display = t==='comissao' ? '' : 'none';
+  document.getElementById('dcPontos').style.display   = t==='pontuacao' ? '' : 'none';
+}
+document.querySelectorAll('input[name="dctipo"]').forEach(r => r.addEventListener('change', trocaTipo));
+document.getElementById('dcAddAcao').addEventListener('click', () =>
+  document.getElementById('dcAcoes').appendChild(linhaAcao()));
+
+document.getElementById('novaCamp').addEventListener('click', () => {
+  dcNome.value = ''; dcBrief.value = ''; dcPct.value = '15';
+  dcIni.value = hoje; dcFim.value = ''; dcStatus.value = 'ativa';
+  document.querySelector('input[name="dctipo"][value="comissao"]').checked = true;
+  trocaTipo();
+  const box = document.getElementById('dcAcoes'); box.innerHTML = '';
+  // pré-carrega a sugestão do business case: reel vale mais que carrossel, venda vale ponto
+  box.appendChild(linhaAcao('reels', 50));
+  box.appendChild(linhaAcao('carrossel', 20));
+  box.appendChild(linhaAcao('venda', 30));
+  document.getElementById('dcErro').textContent = '';
+  dC.showModal();
 });
-document.getElementById('djAdd').addEventListener('click', () => djMissoes.appendChild(linhaMissao()));
-document.getElementById('djFechar').addEventListener('click', () => dJ.close());
-document.getElementById('djSalvar').addEventListener('click', async () => {
-  if (!djTitulo.value.trim() || !djIni.value || !djFim.value)
-    return alert('Título, início e fim são obrigatórios.');
-  const missoes = [...djMissoes.querySelectorAll('.frm')].map(r => ({
-    tipo: r.querySelector('.mt').value,
-    pontos: r.querySelector('.mp').value || 0,
-    meta: r.querySelector('.mm').value || null,
-  })).filter(m => m.tipo);
-  if (!missoes.length) return alert('Um jogo sem missão não pontua nada. Adicione pelo menos uma.');
-  const j = await (await fetch('/api/jogo', {method:'POST',
-    headers:{'content-type':'application/json'},
-    body: JSON.stringify({campanha_id:+djCamp.value, titulo:djTitulo.value, briefing:djBrief.value,
-      tipo:djTipo.value, inicio:djIni.value, fim:djFim.value, missoes})})).json();
-  if (!j.ok) return alert('Não deu certo: '+(j.erro||'erro'));
+document.getElementById('dcFechar').addEventListener('click', () => dC.close());
+document.getElementById('dcSalvar').addEventListener('click', async () => {
+  const err = document.getElementById('dcErro');
+  const b = document.getElementById('dcSalvar');
+  const corpo = {
+    nome: dcNome.value.trim(), briefing: dcBrief.value.trim() || null,
+    tipo: tipoEscolhido(), comissao_pct: dcPct.value,
+    inicio: dcIni.value || hoje, fim: dcFim.value || null, status: dcStatus.value,
+    acoes: [...document.querySelectorAll('#dcAcoes .frm')].map(r => ({
+      acao: r.querySelector('.ma').value, pontos: r.querySelector('.mp').value })),
+  };
+  if (!corpo.nome) { err.textContent = 'A campanha precisa de um nome.'; return; }
+  b.disabled = true; err.textContent = '';
+  const j = await (await fetch('/api/campanha', {method:'POST',
+    headers:{'content-type':'application/json'}, body: JSON.stringify(corpo)})).json();
+  b.disabled = false;
+  if (!j.ok) { err.textContent = j.erro || 'não gravou'; return; }
   location.reload();
 });
+pintaCamp();
 
-/* ---------- seeding ---------- */
-const SEED = D.seeding || [];
-const cSeed = SEED.reduce((a,s)=>{a[s.decisao]=(a[s.decisao]||0)+1;return a},{});
-const semEnd = SEED.filter(s=>!s.endereco_completo).length;
-document.getElementById('ledeSeed').innerHTML =
-  (cSeed.elegivel||0)+' elegíveis · '+(cSeed.ainda_nao||0)+' ainda não atingiram o piso · '
-  + '<b>'+(cSeed.suspender||0)+' para suspender</b> (90+ dias sem publicar). '
-  + (semEnd ? '<span style="color:var(--wa)">'+semEnd+' sem endereço completo — não dá para postar para eles hoje.</span>' : '');
-document.getElementById('tbseed').innerHTML = SEED.map(s =>
-  '<tr><td class="h"><b>'+(s.nome||'—')+'</b>'
-  + (s.instagram_handle?'<span class="sub2">@'+s.instagram_handle+'</span>':'')+'</td>'
-  + '<td><span class="chip '+(s.decisao==='elegivel'?'ok':s.decisao==='suspender'?'cr':'wa')+'">'
-  + s.decisao.replace('_',' ')+'</span></td>'
-  + '<td>'+(s.conteudos||'—')+'</td><td>'+(s.vendas||'—')+'</td>'
-  + '<td class="dim">'+dt(s.ultima_publicacao)+'</td>'
-  + '<td class="dim">'+(s.envios||'—')+'</td>'
-  + '<td class="dim">'+(s.custo_total>0?n(s.custo_total):'—')+'</td>'
-  + '<td>'+(s.receita>0?n(s.receita):'—')+'</td>'
-  + '<td'+(s.retorno_x>=1?' style="color:var(--ok);font-weight:600"':s.retorno_x!=null?' style="color:var(--cr)"':' class="dim"')+'>'
-  + (s.retorno_x!=null?s.retorno_x+'x':'—')+'</td>'
-  + '<td><span class="chip '+(s.endereco_completo?'ok':'vo')+'">'+(s.endereco_completo?'ok':'falta')+'</span></td>'
-  + '<td class="dim">'+(s.logistica_sugerida||'—')+'</td></tr>').join('')
-  || '<tr><td colspan="11" class="h dim" style="padding:20px 15px">Nenhum parceiro ativo.</td></tr>';
+/* =================================================== 04 ANÁLISES =============== */
+const OPC = D.opcoes || [];
+let AN = null, anOrd = {c:'receita', d:-1}, anBusca = '';
 
-/* ---------- galeria ---------- */
-const GAL = D.galeria || [];
-let gAba='todos', gQ='';
-document.getElementById('ledeGal').innerHTML =
-  GAL.length ? n(GAL.length)+' conteúdos com mídia coletada. Ordenados por visualização. '
-    + 'Baixar aqui é criativo que você não precisa produzir — julho gastou R$ 18.333 em mídia.'
-    : 'Nenhuma mídia coletada ainda. Rode o job do Apify.';
-function pintaGal(){
-  const L = GAL.filter(g => {
-    if (gAba==='reels' && g.tipo!=='reels') return false;
-    if (gAba==='carrossel' && g.tipo!=='carrossel') return false;
-    if (gAba==='anuncio' && !g.virou_anuncio) return false;
+document.getElementById('anCreator').innerHTML =
+  '<option value="">todos os creators</option>' + OPC.map(o =>
+    '<option value="'+esc(o.chave)+'">' + esc(o.nome || '@'+o.handle)
+    + (o.marcacoes ? ' — '+o.marcacoes+' marc.' : o.pedidos ? ' — '+o.pedidos+' ped.' : '')
+    + '</option>').join('');
+
+document.getElementById('anDe').value = R.desde || '2025-01-01';
+document.getElementById('anAte').value = hoje;
+
+async function carregaAnalise(){
+  const de = document.getElementById('anDe').value || '2020-01-01';
+  const ate = document.getElementById('anAte').value || hoje;
+  const c = document.getElementById('anCreator').value;
+  const topo = document.getElementById('anTopo');
+  topo.innerHTML = '<div class="msg">Somando…</div>';
+  try {
+    const j = await (await fetch('/api/analise?de='+de+'&ate='+ate+'&c='+encodeURIComponent(c))).json();
+    if (!j.ok) { topo.innerHTML = '<div class="msg err">'+esc(j.erro)+'</div>'; return; }
+    AN = j; pintaAnalise();
+  } catch(e){ topo.innerHTML = '<div class="msg err">Falhou: '+esc(e.message)+'</div>'; }
+}
+
+function pintaAnalise(){
+  const g = AN.geral || {};
+  const quem = AN.creator
+    ? (OPC.find(o => o.chave === AN.creator) || {})
+    : null;
+  document.getElementById('anTopo').innerHTML =
+    (quem ? '<div class="ph">só <b>'+esc(quem.nome || '@'+quem.handle)+'</b> · '
+            + dt(AN.de)+' a '+dt(AN.ate)+'</div>'
+          : '<div class="ph">canal inteiro · '+dt(AN.de)+' a '+dt(AN.ate)+'</div>')
+    + '<div class="strip" style="margin:0;border:0;border-radius:0">'
+    + [
+      ['Pedidos', n(g.pedidos), g.creators_que_venderam + ' creators venderam'],
+      ['Receita', g.receita?nm(g.receita):'—', 'ticket '+(g.ticket?rs(g.ticket):'—')],
+      ['Clientes novos', n(g.clientes_novos), 'na primeira compra'],
+      ['Marcações', n(g.marcacoes), (g.perfis||0)+' perfis distintos'],
+      ['Feed', n(g.feed), 'imagem e vídeo de feed'],
+      ['Reels', n(g.reels), (g.reels_medidos||0)+' com views medidas'],
+      ['Carrossel', n(g.carrossel), 'sem contador de views'],
+      ['Stories', g.stories ? n(g.stories) : 'sem dado', g.stories ? 'capturados' : 'webhook não ligado'],
+      ['Views', g.views?n(g.views):'—', 'só em reels'],
+      ['Curtidas', n(g.curtidas), n(g.comentarios)+' comentários'],
+      ['Cliques no link', g.cliques ? n(g.cliques) : 'sem dado', g.cliques ? n(g.sessoes)+' sessões' : 'nenhum link usado ainda'],
+    ].map(([k,v,nn]) => '<div class="cel"><div class="k">'+k+'</div><div class="v'
+        + (/^(sem dado|—)$/.test(v)?' z':'')+'">'+v+'</div><div class="n">'+nn+'</div></div>').join('')
+    + '</div>';
+
+  /* barras: marcações (azul) e pedidos (verde), cada série na própria escala */
+  const S = AN.serie || [];
+  const mxM = Math.max(1, ...S.map(x => x.marcacoes));
+  const mxP = Math.max(1, ...S.map(x => x.pedidos));
+  document.getElementById('anBars').innerHTML = S.map(x =>
+    '<div style="height:'+Math.round(x.marcacoes/mxM*100)+'%" title="'+x.mes+': '+x.marcacoes+' marcações"></div>'
+    + '<div class="v" style="height:'+Math.round(x.pedidos/mxP*100)+'%" title="'+x.mes+': '+x.pedidos+' pedidos · '+rs(x.receita)+'"></div>'
+  ).join('') || '<div style="height:2%"></div>';
+  document.getElementById('anBlab').innerHTML = S.map(x =>
+    '<span style="flex:2">'+(x.mes.slice(5)==='01' ? x.mes.slice(2,4)+'/' : '')+x.mes.slice(5)+'</span>').join('');
+
+  pintaAnTabela();
+}
+
+function pintaAnTabela(){
+  let L = (AN.porCreator || []).slice();
+  if (anBusca) L = L.filter(x => ((x.handle||'')+' '+(x.nome||'')).toLowerCase().includes(anBusca));
+  const c = anOrd.c;
+  L.sort((a,b) => {
+    let x = a[c], y = b[c];
+    if (x == null) return 1; if (y == null) return -1;
+    if (typeof x === 'string') return x.localeCompare(y) * anOrd.d;
+    return (x - y) * anOrd.d;
+  });
+  document.getElementById('anCnt').textContent = L.length + ' creators';
+  document.getElementById('tbAn').innerHTML = L.map(x =>
+    '<tr><td class="h"><b>'+esc(x.nome || '@'+(x.handle||'—'))+'</b>'
+    + (x.handle && x.nome ? '<span class="sub2">@'+esc(x.handle)+'</span>'
+       : !x.handle ? '<span class="sub2 dim">cupom, sem instagram</span>' : '')+'</td>'
+    + '<td'+(x.seguidores?'':' class="dim"')+'>'+n(x.seguidores)+'</td>'
+    + '<td'+(x.marcacoes?'':' class="dim"')+'>'+(x.marcacoes||'—')+'</td>'
+    + '<td class="mix">'+x.reels+' <i>/ '+x.carrossel+' / '+x.feed+' / '+x.stories+'</i></td>'
+    + '<td'+(x.views?'':' class="dim"')+'>'+(x.views?n(x.views):'—')+'</td>'
+    + '<td'+(x.curtidas?'':' class="dim"')+'>'+(x.curtidas?n(x.curtidas):'—')+'</td>'
+    + '<td'+(x.comentarios?'':' class="dim"')+'>'+(x.comentarios?n(x.comentarios):'—')+'</td>'
+    + '<td'+(x.cliques?'':' class="dim"')+'>'+(x.cliques||'—')+'</td>'
+    + '<td'+(x.pedidos?'':' class="dim"')+'>'+(x.pedidos||'—')+'</td>'
+    + '<td'+(x.receita?' style="font-weight:600"':' class="dim"')+'>'+(x.receita?nm(x.receita):'—')+'</td>'
+    + '<td class="dim">'+dt(x.ultima)+'</td></tr>').join('')
+    || '<tr><td colspan="11" class="h dim" style="padding:20px 15px">Ninguém publicou nem vendeu nesse período.</td></tr>';
+}
+
+document.querySelectorAll('th[data-a]').forEach(t => t.addEventListener('click', () => {
+  const c = t.dataset.a;
+  anOrd = anOrd.c === c ? {c, d:-anOrd.d} : {c, d:(c==='nome'?1:-1)};
+  document.querySelectorAll('th[data-a]').forEach(x =>
+    x.innerHTML = x.textContent.replace(/[▲▼]\s*$/,'').trim() +
+      (x.dataset.a===anOrd.c ? ' <span class="ar">'+(anOrd.d<0?'▼':'▲')+'</span>' : ''));
+  if (AN) pintaAnTabela();
+}));
+document.getElementById('anq').addEventListener('input', e => {
+  anBusca = e.target.value.trim().toLowerCase(); if (AN) pintaAnTabela();
+});
+document.getElementById('anAplicar').addEventListener('click', carregaAnalise);
+document.getElementById('anCreator').addEventListener('change', carregaAnalise);
+document.querySelectorAll('[data-per]').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('[data-per]').forEach(x => x.setAttribute('aria-pressed','false'));
+  b.setAttribute('aria-pressed','true');
+  const p = b.dataset.per;
+  document.getElementById('anAte').value = hoje;
+  document.getElementById('anDe').value = p === 'tudo' ? (R.desde || '2025-01-01')
+    : new Date(Date.now() - (+p) * 864e5).toISOString().slice(0,10);
+  carregaAnalise();
+}));
+
+/* =================================================== 05 MENÇÕES ================ */
+const GAL = D.mencoes || [];
+let gAba = 'todos', gQ = '';
+
+function filtraGal(){
+  return GAL.filter(g => {
+    if (gAba === 'video' && !g.tem_video) return false;
+    if (gAba === 'reels' && g.tipo !== 'reels') return false;
+    if (gAba === 'carrossel' && g.tipo !== 'carrossel') return false;
+    if (gAba === 'anuncio' && !g.virou_anuncio) return false;
     if (gQ && !((g.instagram_handle+' '+(g.legenda||'')).toLowerCase().includes(gQ))) return false;
     return true;
   });
+}
+function pintaGal(){
+  const L = filtraGal();
+  document.getElementById('cntGal').textContent = L.length + ' de ' + GAL.length;
   document.getElementById('gal').innerHTML = L.map(g =>
     '<div class="card">'
-    + '<span class="badge">'+g.tipo.replace('feed_','')+'</span>'
-    + (g.virou_anuncio?'<span class="badge ad">anúncio</span>':'')
-    + '<a href="'+(g.permalink||'#')+'" target="_blank" rel="noopener">'
-    + '<img class="th" loading="lazy" src="'+(g.thumb||'')+'" alt="conteúdo de @'+g.instagram_handle+'"></a>'
-    + '<div class="inf"><div class="who">@'+g.instagram_handle+'</div>'
-    + '<div class="met">'+(g.visualizacoes?n(g.visualizacoes)+' views':(g.curtidas!=null?n(g.curtidas)+' curt.':'—'))
-    + ' · '+dt(g.data)+'</div></div>'
+    + '<span class="badge">'+esc(g.tipo.replace('feed_',''))+'</span>'
+    + (g.virou_anuncio ? '<span class="badge ad">anúncio</span>' : '')
+    + '<button class="th" data-ver="'+g.publicacao_id+'" aria-label="ver conteúdo de @'+esc(g.instagram_handle)+'">'
+      + '<img loading="lazy" src="/api/midia?pub='+g.publicacao_id+'&tipo=capa" alt="">'
+      + (g.tem_video ? '<span class="play'+(g.tem_arquivo?' guardado':'')+'" title="'
+          + (g.tem_arquivo?'vídeo guardado — toca aqui':'vídeo ainda não guardado')+'">▶</span>' : '')
+    + '</button>'
+    + '<div class="inf"><div class="who">@'+esc(g.instagram_handle)+'</div>'
+    + '<div class="met">'+(g.visualizacoes ? n(g.visualizacoes)+' views'
+        : (g.curtidas!=null ? n(g.curtidas)+' curt.' : '—'))+' · '+dt(g.data)+'</div></div>'
     + '<div class="bts">'
-    + '<a class="acbt" href="/api/midia?pub='+g.publicacao_id+(g.tem_video?'':'&tipo=imagem')+'">baixar</a>'
-    + '<button class="acbt'+(g.virou_anuncio?' ok':'')+'" data-ad="'+g.publicacao_id+'" data-v="'+(g.virou_anuncio?0:1)+'">'
-    + (g.virou_anuncio?'desmarcar':'virou anúncio')+'</button>'
-    + '</div></div>').join('') || '<div class="card"><div class="inf dim" style="padding:18px">Nada neste filtro.</div></div>';
+      + '<button class="acbt" data-ver="'+g.publicacao_id+'">'+(g.tem_video?'assistir':'ver')+'</button>'
+      + '<a class="acbt" href="/api/midia?pub='+g.publicacao_id+(g.tem_video?'':'&tipo=imagem')+'">baixar</a>'
+    + '</div></div>').join('')
+    || '<div class="card"><div class="inf dim" style="padding:18px">Nada neste filtro.</div></div>';
 }
 document.querySelectorAll('[data-g]').forEach(b => b.addEventListener('click', () => {
   document.querySelectorAll('[data-g]').forEach(x => x.setAttribute('aria-pressed','false'));
-  b.setAttribute('aria-pressed','true'); gAba=b.dataset.g; pintaGal();
+  b.setAttribute('aria-pressed','true'); gAba = b.dataset.g; pintaGal();
 }));
-document.getElementById('gq').addEventListener('input', e => { gQ=e.target.value.trim().toLowerCase(); pintaGal(); });
-document.getElementById('gal').addEventListener('click', async e => {
-  const b = e.target.closest('[data-ad]'); if (!b) return;
-  b.disabled = true;
-  const j = await (await fetch('/api/publicacao?pub='+b.dataset.ad+'&anuncio='+b.dataset.v, {method:'POST'})).json();
-  b.disabled = false;
-  if (!j.ok) return alert('Não deu certo: '+(j.erro||'erro'));
-  const g = GAL.find(x => x.publicacao_id == b.dataset.ad);
-  if (g) g.virou_anuncio = j.publicacao.virou_anuncio;
+document.getElementById('gq').addEventListener('input', e => { gQ = e.target.value.trim().toLowerCase(); pintaGal(); });
+
+/* ---- player ---- */
+const dM = document.getElementById('dlgMidia');
+let midiaAtual = null;
+
+function abreMidia(id){
+  const g = GAL.find(x => x.publicacao_id === id); if (!g) return;
+  midiaAtual = g;
+  document.getElementById('mTitulo').textContent = '@' + g.instagram_handle;
+  document.getElementById('mSub').innerHTML = esc(g.tipo.replace('feed_','')) + ' · ' + dt(g.data)
+    + (g.parceiro ? ' · ' + esc(g.parceiro) : '')
+    + ' · mídia coletada em ' + dt(g.midia_de);
+  document.getElementById('mChips').innerHTML =
+    (g.visualizacoes ? '<span class="chip ac">'+n(g.visualizacoes)+' views</span> ' : '')
+    + (g.curtidas!=null ? '<span class="chip vo">'+n(g.curtidas)+' curtidas</span> ' : '')
+    + (g.comentarios!=null ? '<span class="chip vo">'+n(g.comentarios)+' coment.</span> ' : '')
+    + (g.virou_anuncio ? '<span class="chip ok">virou anúncio</span>' : '');
+  document.getElementById('mLegenda').textContent = g.legenda || '(sem legenda)';
+  document.getElementById('mInsta').href = g.permalink || '#';
+  document.getElementById('mBaixar').href = '/api/midia?pub='+g.publicacao_id+(g.tem_video?'':'&tipo=imagem');
+  document.getElementById('mAnuncio').textContent = g.virou_anuncio ? 'desmarcar anúncio' : 'virou anúncio';
+
+  const box = document.getElementById('mplayer');
+  if (g.tem_video) {
+    const capa = '/api/midia?pub='+g.publicacao_id+'&tipo=capa';
+    box.innerHTML = '<video controls autoplay playsinline preload="metadata" '
+      + 'poster="'+capa+'" src="/api/midia?pub='+g.publicacao_id+'&inline=1"></video>';
+    // Vídeo só toca a partir do arquivo guardado: a URL do CDN da Meta morre em menos de 48h.
+    // Sem este aviso o player fica preto e ninguém entende por quê.
+    box.querySelector('video').addEventListener('error', () => {
+      box.innerHTML = '<div class="aviso">Este vídeo não está guardado aqui'
+        + (g.erro_midia ? ' — a última tentativa deu: ' + esc(g.erro_midia) : '')
+        + '.<br>Só o conteúdo dos últimos 90 dias fica guardado; a URL do Instagram expira '
+        + 'em menos de dois dias, então não dá para tocar direto do CDN.<br><br>'
+        + '<button class="acbt" id="mBuscar">buscar este vídeo agora</button></div>';
+      document.getElementById('mBuscar').addEventListener('click', async ev => {
+        ev.target.disabled = true; ev.target.textContent = 'buscando no Apify… ~40s';
+        const j = await (await fetch('/api/midia/buscar?pub='+g.publicacao_id, {method:'POST'})).json();
+        if (!j.ok) { ev.target.textContent = 'não deu: ' + (j.erro||''); return; }
+        g.tem_arquivo = true;
+        box.innerHTML = '<video controls autoplay playsinline poster="'+capa
+          + '" src="/api/midia?pub='+g.publicacao_id+'&inline=1&t='+Date.now()+'"></video>';
+        pintaGal();
+      });
+    });
+  } else {
+    box.innerHTML = '<img src="/api/midia?pub='+g.publicacao_id+'&tipo=capa" '
+      + 'alt="conteúdo de @'+esc(g.instagram_handle)+'">';
+  }
+  dM.showModal();
+}
+
+document.getElementById('gal').addEventListener('click', e => {
+  const b = e.target.closest('[data-ver]'); if (!b) return;
+  abreMidia(+b.dataset.ver);
+});
+document.getElementById('mAnuncio').addEventListener('click', async e => {
+  if (!midiaAtual) return;
+  e.target.disabled = true;
+  const j = await (await fetch('/api/publicacao?pub='+midiaAtual.publicacao_id
+    + '&anuncio='+(midiaAtual.virou_anuncio?0:1), {method:'POST'})).json();
+  e.target.disabled = false;
+  if (!j.ok) return alert('Não gravou: '+(j.erro||'erro'));
+  midiaAtual.virou_anuncio = j.publicacao.virou_anuncio;
+  e.target.textContent = midiaAtual.virou_anuncio ? 'desmarcar anúncio' : 'virou anúncio';
   pintaGal();
 });
+function fechaMidia(){
+  const v = document.querySelector('#mplayer video'); if (v) v.pause();
+  document.getElementById('mplayer').innerHTML = '';   // solta a conexão com o CDN
+  dM.close();
+}
+document.getElementById('mFechar').addEventListener('click', fechaMidia);
+dM.addEventListener('close', () => { document.getElementById('mplayer').innerHTML = ''; });
 pintaGal();
 
-/* ---------- barras ---------- */
-const M=D.porMes||[]; const mx=Math.max(1,...M.map(m=>m.total));
-document.getElementById('bars').innerHTML=M.map(m=>
-  '<div style="height:'+Math.round(m.total/mx*100)+'%" title="'+m.mes+': '+m.total+' marcações"></div>').join('');
-document.getElementById('blab').innerHTML=M.map(m=>
-  '<span>'+(m.mes.slice(5)==='01'?m.mes.slice(2,4)+'/':'')+m.mes.slice(5)+'</span>').join('');
-
-const JB=D.jobs||[];
-if(JB.length){
-  const nomes={tags:'marcações (/tags)',perfis:'perfis (business_discovery)',apify:'views (Apify)',story:'stories (webhook)'};
-  document.getElementById('ft').insertAdjacentHTML('beforebegin',
-    '<section class="mod" data-mod="jobs"><div class="hd"><span class="eb">Coleta</span><h2>Saúde dos jobs</h2></div>'+
-    '<p class="lede">Rodam dentro deste app, não no n8n. Se um parar, some daqui — log com timestamp não apodrece como alerta de lista fixa.</p>'+
-    '<div class="panel"><div class="scroll"><table><thead><tr><th>Job</th><th>Última</th><th>Itens</th><th>Estado</th><th>Detalhe</th></tr></thead><tbody>'+
-    JB.map(j=>'<tr><td class="h"><b>'+(nomes[j.job]||j.job)+'</b></td>'+
-      '<td class="dim">'+String(j.rodou_em).slice(0,16).replace('T',' ')+'</td>'+
-      '<td>'+(j.itens??'—')+'</td>'+
-      '<td><span class="chip '+(j.sucesso?'ok':'cr')+'">'+(j.sucesso?'ok':'falhou')+'</span></td>'+
-      '<td class="h dim" style="white-space:normal;max-width:340px">'+String(j.detalhe||'').slice(0,160)+'</td></tr>').join('')+
-    '</tbody></table></div></div></section>');
-}
-document.getElementById('ft').innerHTML=
-  '<b>Busca ao vivo</b> — chama a Graph API da Meta no servidor. O token nunca chega ao browser. Toda busca grava snapshot em <code>creator.perfil_snapshot</code>.<br>'+
-  '<b>Engajamento</b> — média de (curtidas + comentários) por post sobre os últimos 12 posts, dividida por seguidores. Não é janela de 30 dias: quem não posta há meses continua tendo número, por isso a coluna Último post existe.<br>'+
-  '<b>Views vs reprodução vs alcance</b> — três coisas. View é a "visualização" que o Instagram mostra; reprodução conta cada replay (~3× maior); alcance é conta única e <b>não existe aqui</b>, porque a Meta não entrega insight de post de terceiro. Só com tag de Parceria Paga.<br>'+
-  '<b>Story</b> — capturado por webhook a partir da ativação, sem histórico. A mídia é baixada no ato: o CDN da Meta expira em 24h.';
-
-/* ================= NAVEGAÇÃO POR MÓDULO ================= */
+/* =================================================== NAVEGAÇÃO ================= */
 const MODULOS = [
-  ['busca',     'Buscar creator',    () => null],
-  ['fila',      'Fila de curadoria', () => (D.fila||[]).filter(f=>!f.arquivado && f.status==='pendente').length],
-  ['gestao',    'Quem marca',        () => (D.perfis||[]).length],
-  ['vendas',    'Vendas',            () => (D.vendas||[]).length],
-  ['galeria',   'Conteúdo',          () => (D.galeria||[]).length],
-  ['seeding',   'Seeding',           () => (D.seeding||[]).filter(s=>s.decisao==='elegivel').length || null],
-  ['campanhas', 'Campanhas',         () => (D.campanhas||[]).length || null],
-  ['apuracao',  'Apuração',          () => null],
-  ['impulso',   'Impulso 24h',       () => (D.impulso||[]).length],
-  ['volume',    'Volume por mês',    () => null],
-  ['jobs',      'Saúde da coleta',   () => (D.jobs||[]).filter(j=>!j.sucesso).length || null],
+  ['busca',     'Buscar creator', () => null],
+  ['cadastros', 'Cadastros',      () => CAD.filter(f => !f.arquivado && f.status==='pendente').length || null],
+  ['campanhas', 'Campanhas',      () => CAMP.filter(c => c.status==='ativa').length || null],
+  ['analises',  'Análises',       () => null],
+  ['mencoes',   'Menções',        () => GAL.length || null],
 ];
 
 document.getElementById('navLista').innerHTML = MODULOS.map(([k,rot,cont],i) => {
   let c = null; try { c = cont(); } catch(e) {}
   return '<li><a href="#'+k+'" data-nav="'+k+'">'
-    + '<span class="num">'+String(i+1).padStart(2,'0')+'</span>'
-    + '<span>'+rot+'</span>'
+    + '<span class="num">'+String(i+1).padStart(2,'0')+'</span><span>'+rot+'</span>'
     + (c ? '<span class="bd">'+c+'</span>' : '') + '</a></li>';
 }).join('');
 
-const secoes = [...document.querySelectorAll('.mod')];
+let jaAnalisou = false;
 function abrir(k, semHash){
   const alvo = MODULOS.some(m => m[0] === k) ? k : MODULOS[0][0];
-  secoes.forEach(s => s.classList.toggle('on', s.dataset.mod === alvo));
+  document.querySelectorAll('.mod').forEach(s => s.classList.toggle('on', s.dataset.mod === alvo));
   document.querySelectorAll('[data-nav]').forEach(a =>
     a.setAttribute('aria-current', a.dataset.nav === alvo ? 'page' : 'false'));
   const rot = (MODULOS.find(m => m[0] === alvo) || [,''])[1];
-  const sub = document.getElementById('navSub');
-  if (sub) sub.textContent = rot;
+  document.getElementById('navSub').textContent = rot;
   document.title = rot + ' — Comunidade Cells';
   if (!semHash && location.hash !== '#'+alvo) history.replaceState(null,'','#'+alvo);
   document.getElementById('nav').classList.remove('aberto');
   // diálogo aberto sobrevive à troca de módulo e fica boiando sobre a tela nova
   document.querySelectorAll('dialog[open]').forEach(d => d.close());
   window.scrollTo(0,0);
+  // as Análises só vão ao servidor quando alguém abre a tela
+  if (alvo === 'analises' && !jaAnalisou) { jaAnalisou = true; carregaAnalise(); }
 }
 document.getElementById('navLista').addEventListener('click', e => {
   const a = e.target.closest('[data-nav]'); if (!a) return;
@@ -1220,15 +1310,15 @@ window.addEventListener('hashchange', () => abrir(location.hash.slice(1), true))
 document.getElementById('abrirNav').addEventListener('click', () =>
   document.getElementById('nav').classList.toggle('aberto'));
 
-const rp = document.getElementById('navRodape');
-if (rp) rp.innerHTML = ((D.resumo||[])[0]||{}).publicacoes + ' publicações<br>'
-  + ((D.resumo||[])[0]||{}).cadastrados + ' parceiros<br>atualizado ' + (D.ger || '');
+/* rodapé do menu: contagem + saúde da coleta, que some daqui se um job parar */
+const JB = D.jobs || [], ruins = JB.filter(j => !j.sucesso);
+document.getElementById('navRodape').innerHTML =
+  n(R.publicacoes)+' publicações<br>'+n(R.cadastrados)+' cadastros<br>'
+  + n(R.vendas)+' vendas · '+(R.receita?nm(R.receita):'—')+'<br>'
+  + (ruins.length ? '<b>'+ruins.length+' job com falha</b><br>' : '')
+  + 'atualizado ' + (D.ger||'');
 
-// a seção de jobs é injetada por JS mais acima; recolhe as seções de novo antes de abrir
-secoes.length = 0;
-secoes.push(...document.querySelectorAll('.mod'));
 abrir(location.hash.slice(1) || MODULOS[0][0], true);
-
 </script>
 </body>
 </html>

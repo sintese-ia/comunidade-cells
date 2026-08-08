@@ -1,10 +1,15 @@
 // Queries do painel. Tudo sai do schema `creator` — ver
-// cells-skills-novo/4. canais/influencer/lp-creators/sql/2026-08-05-schema-gestao-creators.sql
+// cells-skills-novo/4. canais/influencer/lp-creators/sql/
 //
-// REGRA: se um número não existe ainda (venda, clique, view), a query devolve NULL/0 e o
-// template mostra estado vazio. Nunca preencher com estimativa — foi decisão explícita.
+// Duas famílias:
+//   PAINEL  — sem parâmetro, carregadas de uma vez e cacheadas. Alimentam o HTML.
+//   ANALISE — com parâmetro (período e creator), rodadas sob demanda no /api/analise.
+//
+// REGRA: se um número não existe ainda (venda, clique, view), a query devolve NULL/0 e a tela
+// mostra estado vazio. Nunca preencher com estimativa — foi decisão explícita.
 
-module.exports = {
+// ------------------------------------------------------------------ PAINEL
+const painel = {
 
   // ---- topo: os números que resumem o canal ----
   resumo: `
@@ -13,92 +18,36 @@ module.exports = {
       (SELECT count(DISTINCT lower(instagram_handle)) FROM creator.publicacao)  AS perfis,
       (SELECT count(*) FROM creator.parceiro)                                   AS cadastrados,
       (SELECT count(*) FROM creator.parceiro WHERE status='ativo')              AS ativos,
-      (SELECT count(*) FROM creator.parceiro p
-         WHERE EXISTS (SELECT 1 FROM creator.publicacao u
-                       WHERE lower(u.instagram_handle)=lower(p.instagram_handle))) AS cadastrados_que_marcam,
+      (SELECT count(*) FROM creator.parceiro WHERE status='pendente' AND NOT arquivado) AS pendentes,
       (SELECT count(*) FROM creator.venda)                                      AS vendas,
+      (SELECT round(sum(receita_liquida),2) FROM creator.venda)                 AS receita,
       (SELECT count(*) FROM creator.cupom WHERE ativo)                          AS cupons,
       (SELECT min(publicado_em)::date FROM creator.publicacao)                  AS desde,
       (SELECT max(publicado_em)::date FROM creator.publicacao)                  AS ate
   `,
 
-  // ---- a base de perfis, com o último snapshot de cada um ----
-  // DISTINCT ON pega a foto mais recente por handle; o LEFT JOIN traz o que a pessoa já postou.
-  perfis: `
-    WITH snap AS (
-      SELECT DISTINCT ON (lower(instagram_handle))
-             lower(instagram_handle) AS h, nome, bio, seguidores, total_posts,
-             posts_30d, posts_90d, engajamento_pct, likes_medios, coment_medios,
-             base_calculo, ultimo_post, coletado_em
-      FROM creator.perfil_snapshot
-      ORDER BY lower(instagram_handle), coletado_em DESC
-    ),
-    pub AS (
-      SELECT lower(instagram_handle) AS h,
-             count(*)                                    AS marcacoes,
-             count(*) FILTER (WHERE tipo='reels')        AS reels,
-             count(*) FILTER (WHERE tipo='carrossel')    AS carrossel,
-             count(*) FILTER (WHERE tipo='story')        AS stories,
-             count(*) FILTER (WHERE tipo IN ('feed_imagem','feed_video')) AS feed,
-             max(publicado_em)::date                     AS ultima_marcacao
-      FROM creator.publicacao GROUP BY 1
-    ),
-    -- ATENÇÃO: existe MAIS DE UMA linha de métrica por publicação — uma por dia de coleta e uma
-    -- por fonte (tags_api e apify). Somar a tabela direto multiplica tudo. O LATERAL colapsa
-    -- para um valor por publicação ANTES de somar; max() porque contador de rede só cresce,
-    -- então o maior já observado é o melhor que temos.
-    met AS (
-      SELECT lower(u.instagram_handle) AS h,
-             sum(x.curtidas)      AS curtidas_marc,
-             sum(x.comentarios)   AS coment_marc,
-             sum(x.visualizacoes) AS views_marc,
-             sum(x.reproducoes)   AS plays_marc,
-             count(*) FILTER (WHERE x.visualizacoes IS NOT NULL) AS reels_medidos,
-             round(avg(x.visualizacoes) FILTER (WHERE x.visualizacoes IS NOT NULL)) AS media_por_reel
-      FROM creator.publicacao u
-      JOIN LATERAL (
-        SELECT max(curtidas) AS curtidas, max(comentarios) AS comentarios,
-               max(visualizacoes) AS visualizacoes, max(reproducoes) AS reproducoes
-        FROM creator.publicacao_metrica m WHERE m.publicacao_id = u.publicacao_id
-      ) x ON true
-      GROUP BY 1
-    )
-    SELECT
-      COALESCE(s.h, p.h)                       AS handle,
-      s.nome, s.bio, s.seguidores, s.total_posts,
-      s.posts_30d, s.posts_90d, s.engajamento_pct,
-      s.likes_medios, s.coment_medios, s.base_calculo, s.ultimo_post,
-      COALESCE(p.marcacoes,0) AS marcacoes,
-      COALESCE(p.reels,0) AS reels, COALESCE(p.carrossel,0) AS carrossel,
-      COALESCE(p.stories,0) AS stories, COALESCE(p.feed,0) AS feed,
-      p.ultima_marcacao,
-      m.curtidas_marc, m.coment_marc, m.views_marc, m.plays_marc,
-      m.reels_medidos, m.media_por_reel,
-      pa.parceiro_id, pa.status AS status_parceiro, pa.nome AS nome_cadastro
-    FROM snap s
-    FULL OUTER JOIN pub p ON p.h = s.h
-    LEFT JOIN met m       ON m.h = COALESCE(s.h, p.h)
-    LEFT JOIN creator.parceiro pa ON lower(pa.instagram_handle) = COALESCE(s.h, p.h)
-    ORDER BY s.engajamento_pct DESC NULLS LAST
-  `,
-
-  // ---- FILA DE CURADORIA: candidato + métrica do perfil na mesma linha ----
-  // É a tela que o Gabriel abre de manhã. Tudo que decide aprovar tem que estar aqui,
+  // ---- CADASTROS: candidato + métrica do perfil na mesma linha ----
+  // É a tela que o Gabriel abre de manhã. Tudo que decide o status tem que estar aqui,
   // sem precisar abrir o Instagram de ninguém.
-  fila: `
+  cadastros: `
     SELECT p.parceiro_id, p.nome, p.instagram_handle, p.email, p.telefone_e164,
-           p.status, p.arquivado, p.tags, p.criado_em::date AS cadastro,
+           p.status, p.arquivado, p.tags, p.utm_slug, p.criado_em::date AS cadastro,
            p.aprovado_em::date AS aprovado, p.reprovado_motivo, p.decidido_por,
+           p.atualizado_em,
            s.seguidores, s.engajamento_pct, s.posts_30d, s.ultimo_post, s.bio,
            (s.fonte = 'indisponivel') AS perfil_indisponivel,
-           EXISTS (SELECT 1 FROM creator.publicacao u
-                   WHERE lower(u.instagram_handle)=lower(p.instagram_handle)) AS ja_marcou,
            (SELECT count(*) FROM creator.publicacao u
             WHERE lower(u.instagram_handle)=lower(p.instagram_handle))::int AS marcacoes,
            v.views_marc, v.reels_medidos,
            CASE WHEN s.seguidores > 0 AND v.views_marc > 0
                 THEN round(v.views_marc::numeric / s.seguidores, 2) END AS vps,
-           (SELECT count(*) FROM creator.envio e WHERE e.parceiro_id=p.parceiro_id)::int AS envios
+           (SELECT count(*) FROM creator.envio e WHERE e.parceiro_id=p.parceiro_id)::int AS envios,
+           (SELECT c.codigo FROM creator.cupom c
+             WHERE c.parceiro_id=p.parceiro_id AND c.ativo ORDER BY c.cupom_id LIMIT 1) AS cupom,
+           (SELECT count(*) FROM creator.venda vn
+             WHERE vn.parceiro_id=p.parceiro_id AND vn.atribuicao='cupom')::int AS pedidos,
+           (SELECT round(sum(vn.receita_liquida),2) FROM creator.venda vn
+             WHERE vn.parceiro_id=p.parceiro_id AND vn.atribuicao='cupom') AS receita
     FROM creator.parceiro p
     LEFT JOIN LATERAL (
       SELECT seguidores, engajamento_pct, posts_30d, ultimo_post, bio, fonte
@@ -116,20 +65,16 @@ module.exports = {
     ORDER BY p.criado_em DESC
   `,
 
-  // ---- envios ----
+  // ---- envios, para a ficha do cadastro ----
   envios: `
-    SELECT e.envio_id, e.parceiro_id, p.nome, p.instagram_handle,
-           e.tipo, e.itens, e.valor, e.status, e.rastreio,
-           e.solicitado_em::date AS solicitado, e.enviado_em::date AS enviado,
-           e.entregue_em::date AS entregue, e.obs
-    FROM creator.envio e
-    JOIN creator.parceiro p ON p.parceiro_id = e.parceiro_id
-    ORDER BY e.solicitado_em DESC LIMIT 200
+    SELECT e.envio_id, e.parceiro_id, e.tipo, e.itens, e.valor, e.status, e.rastreio,
+           e.solicitado_em::date AS solicitado
+    FROM creator.envio e ORDER BY e.solicitado_em DESC LIMIT 300
   `,
 
   // ---- publicações por parceiro, para a ficha ----
   fichaPubs: `
-    SELECT u.parceiro_id, u.instagram_handle, u.tipo, u.publicado_em::date AS data,
+    SELECT u.parceiro_id, u.tipo, u.publicado_em::date AS data,
            u.permalink, left(coalesce(u.legenda,''),140) AS legenda,
            m.curtidas, m.comentarios, m.visualizacoes
     FROM creator.publicacao u
@@ -141,109 +86,53 @@ module.exports = {
     ORDER BY u.publicado_em DESC
   `,
 
-  // ---- cadastrados aguardando curadoria (legado — a `fila` substitui) ----
-  cadastrados: `
-    SELECT p.parceiro_id, p.nome, p.instagram_handle, p.email, p.status,
-           p.criado_em::date AS cadastro,
-           EXISTS (SELECT 1 FROM creator.publicacao u
-                   WHERE lower(u.instagram_handle)=lower(p.instagram_handle)) AS ja_marcou,
-           s.seguidores, s.engajamento_pct, s.posts_30d, s.ultimo_post
-    FROM creator.parceiro p
-    LEFT JOIN LATERAL (
-      SELECT seguidores, engajamento_pct, posts_30d, ultimo_post
-      FROM creator.perfil_snapshot ps
-      WHERE lower(ps.instagram_handle)=lower(p.instagram_handle)
-      ORDER BY coletado_em DESC LIMIT 1
-    ) s ON true
-    ORDER BY p.criado_em DESC
+  // ---- CAMPANHAS: uma linha por campanha, já com resultado ----
+  campanhas: `
+    SELECT c.*,
+           (SELECT json_agg(json_build_object(
+                     'acao', m.tipo_conteudo, 'pontos', m.pontos, 'meta', m.meta_qtd)
+                     ORDER BY m.ordem, m.missao_id)
+              FROM creator.jogo j JOIN creator.missao m ON m.jogo_id=j.jogo_id
+             WHERE j.campanha_id=c.campanha_id AND j.ativo) AS acoes,
+           (SELECT json_agg(json_build_object(
+                     'parceiro_id', p.parceiro_id, 'nome', p.nome,
+                     'handle', p.instagram_handle) ORDER BY p.nome)
+              FROM creator.campanha_parceiro cp
+              JOIN creator.parceiro p ON p.parceiro_id=cp.parceiro_id
+             WHERE cp.campanha_id=c.campanha_id AND cp.saiu_em IS NULL) AS participantes
+    FROM creator.vw_campanha_resultado c
+    ORDER BY (c.status='ativa') DESC, c.inicio DESC
   `,
 
-  // ---- volume por mês, para o gráfico ----
-  porMes: `
-    SELECT to_char(date_trunc('month', publicado_em),'YYYY-MM') AS mes,
-           count(*)                                 AS total,
-           count(*) FILTER (WHERE tipo='reels')     AS reels,
-           count(*) FILTER (WHERE tipo='carrossel') AS carrossel,
-           count(*) FILTER (WHERE tipo='story')     AS stories,
-           count(*) FILTER (WHERE tipo IN ('feed_imagem','feed_video')) AS feed
-    FROM creator.publicacao
-    GROUP BY 1 ORDER BY 1
+  // ---- placar por creator dentro de cada campanha de pontuação ----
+  placar: `
+    SELECT campanha_id, parceiro_id, nome, instagram_handle,
+           sum(pontos_unitarios * feito)::int AS pontos,
+           sum(feito)::int AS entregas,
+           string_agg(tipo_conteudo || ' ' || feito, ' · ' ORDER BY tipo_conteudo) AS detalhe
+    FROM creator.vw_pontuacao
+    GROUP BY 1,2,3,4
+    HAVING sum(feito) > 0
+    ORDER BY 5 DESC
   `,
 
-  // ---- metas do mês corrente ----
-  metas: `
-    SELECT m.parceiro_id, p.nome, p.instagram_handle,
-           m.meta_stories, m.meta_reels, m.meta_vendas,
-           m.feito_stories, m.feito_reels, m.feito_vendas, m.bateu
-    FROM creator.meta_mes m
-    JOIN creator.parceiro p ON p.parceiro_id = m.parceiro_id
-    WHERE m.competencia = date_trunc('month', current_date)::date
-    ORDER BY p.nome
-  `,
-
-  // ---- custo do mês ----
-  custos: `
-    SELECT tipo, sum(valor) AS total, count(*) AS lancamentos
-    FROM creator.custo
-    WHERE competencia = date_trunc('month', current_date)::date
-    GROUP BY 1 ORDER BY 2 DESC
-  `,
-
-  // ---- visão 360 por parceiro ----
-  p360: `SELECT * FROM creator.vw_parceiro_360
-         WHERE NOT arquivado AND (pedidos_cupom > 0 OR publicacoes > 0 OR cliques > 0)
-         ORDER BY receita_cupom DESC NULLS LAST, publicacoes DESC`,
-
-  conflitos: `SELECT * FROM creator.vw_conflito_atribuicao ORDER BY pedido_em DESC LIMIT 50`,
-
-  // ---- vendas por parceiro (cupom nominal) ----
-  // ⚠️ Só atribuição por CUPOM. Clique/UTM e assistida ainda não existem — quando existirem,
-  // ficam em colunas separadas e NUNCA somadas com esta.
-  vendas: `
-    SELECT p.parceiro_id, p.nome, p.instagram_handle, p.origem, p.tipo,
-           c.codigo AS cupom, c.desconto_pct,
-           count(*)::int                          AS pedidos,
-           round(sum(v.receita_liquida),2)        AS receita,
-           round(avg(v.receita_liquida),2)        AS ticket,
-           min(v.pedido_em)::date                 AS primeira,
-           max(v.pedido_em)::date                 AS ultima,
-           count(*) FILTER (WHERE v.pedido_em >= current_date - 90)::int AS pedidos_90d
-    FROM creator.venda v
-    JOIN creator.parceiro p ON p.parceiro_id = v.parceiro_id
-    LEFT JOIN creator.cupom c ON c.cupom_id = v.cupom_id
-    GROUP BY 1,2,3,4,5,6,7
-    ORDER BY sum(v.receita_liquida) DESC
-  `,
-
-  // ---- o canal em um número ----
-  canal: `
-    SELECT count(DISTINCT v.parceiro_id)::int AS pessoas_que_venderam,
-           count(*)::int                      AS pedidos,
-           round(sum(v.receita_liquida),2)    AS receita,
-           round(avg(v.receita_liquida),2)    AS ticket,
-           count(*) FILTER (WHERE v.pedido_em >= current_date - 90)::int AS pedidos_90d,
-           round(sum(v.receita_liquida) FILTER (WHERE v.pedido_em >= current_date - 90),2) AS receita_90d,
-           count(*) FILTER (WHERE v.cliente_novo)::int AS clientes_novos,
-           round(sum(v.receita_liquida) FILTER (WHERE v.cliente_novo),2) AS receita_novos,
-           count(*) FILTER (WHERE v.cliente_novo IS NULL)::int AS sem_flag,
-           min(v.pedido_em)::date AS de, max(v.pedido_em)::date AS ate
-    FROM creator.venda v
-  `,
-
-  // ---- galeria de conteúdo ----
+  // ---- MENÇÕES: todo conteúdo com mídia coletada ----
   // A URL de mídia vem do payload do Apify e EXPIRA. Não guardamos o arquivo: o job semanal
-  // renova a URL, e o download é feito na hora pelo servidor. Guardar vídeo em bytea inflaria
-  // o banco por nada.
-  galeria: `
+  // renova a URL, e o vídeo é servido na hora pelo /api/midia. Guardar em bytea inflaria o banco.
+  mencoes: `
     SELECT u.publicacao_id, u.instagram_handle, u.tipo, u.publicado_em::date AS data,
-           u.permalink, left(coalesce(u.legenda,''),200) AS legenda,
+           u.permalink, left(coalesce(u.legenda,''),240) AS legenda,
            u.parceiro_id, p.nome AS parceiro, u.parceria_paga, u.virou_anuncio,
            m.curtidas, m.comentarios, m.visualizacoes, m.reproducoes,
-           m.payload->>'displayUrl' AS thumb,
+           -- a URL do CDN não vai para o browser: ele não consegue carregá-la (CORP) e ela
+           -- ainda inflaria o HTML em ~100 URLs longas. A capa vem por /api/midia?tipo=capa.
+           (m.payload->>'displayUrl' IS NOT NULL OR md.thumb_bytes IS NOT NULL) AS tem_capa,
            (m.payload->>'videoUrl' IS NOT NULL) AS tem_video,
-           m.coletado_em AS midia_de
+           md.bytes IS NOT NULL AS tem_arquivo, md.tamanho, md.erro AS erro_midia,
+           m.coletado_em::date AS midia_de
     FROM creator.publicacao u
     LEFT JOIN creator.parceiro p ON p.parceiro_id = u.parceiro_id
+    LEFT JOIN creator.publicacao_midia md ON md.publicacao_id = u.publicacao_id
     LEFT JOIN LATERAL (
       SELECT curtidas, comentarios, visualizacoes, reproducoes, payload, coletado_em
       FROM creator.publicacao_metrica pm
@@ -251,82 +140,158 @@ module.exports = {
       ORDER BY coletado_em DESC LIMIT 1
     ) m ON true
     WHERE m.payload IS NOT NULL
-    ORDER BY coalesce(m.visualizacoes,0) DESC, u.publicado_em DESC
-    LIMIT 200
+    ORDER BY u.publicado_em DESC
+    LIMIT 300
   `,
 
-  // ---- seeding: quem continua recebendo, e se o produto enviado voltou em venda ----
-  seeding: `
-    SELECT s.*, e.endereco_completo, e.cpf_valido, e.end_uf, e.logistica_sugerida,
-           r.envios AS envios_feitos, r.custo_total, r.receita, r.retorno_x
-    FROM creator.vw_seeding_elegivel s
-    LEFT JOIN creator.vw_endereco e ON e.parceiro_id = s.parceiro_id
-    LEFT JOIN creator.vw_seeding_retorno r ON r.parceiro_id = s.parceiro_id
-    ORDER BY CASE s.decisao WHEN 'elegivel' THEN 1 WHEN 'ainda_nao' THEN 2 ELSE 3 END,
-             s.conteudos DESC
+  // ---- lista de creators para o seletor das Análises ----
+  // Sem parâmetro de propósito: o seletor não pode encolher junto com o período escolhido,
+  // senão filtrar por data faz o creator sumir da lista antes de você poder escolhê-lo.
+  // A chave repete a regra do bloco ANALISE: handle quando existe, `id:` quando não.
+  opcoes: `
+    WITH hs AS (
+      SELECT DISTINCT lower(instagram_handle) AS chave, NULL::bigint AS parceiro_id
+        FROM creator.publicacao WHERE instagram_handle IS NOT NULL
+      UNION
+      SELECT DISTINCT coalesce(lower(instagram_handle), 'id:' || parceiro_id), parceiro_id
+        FROM creator.parceiro
+    )
+    SELECT hs.chave,
+           CASE WHEN hs.chave LIKE 'id:%' THEN NULL ELSE hs.chave END AS handle,
+           (SELECT p.nome FROM creator.parceiro p
+             WHERE coalesce(lower(p.instagram_handle),'id:'||p.parceiro_id) = hs.chave
+             ORDER BY p.parceiro_id LIMIT 1) AS nome,
+           (SELECT count(*) FROM creator.publicacao u
+             WHERE lower(u.instagram_handle) = hs.chave)::int AS marcacoes,
+           (SELECT count(*) FROM creator.venda v
+             JOIN creator.parceiro p2 ON p2.parceiro_id = v.parceiro_id
+            WHERE coalesce(lower(p2.instagram_handle),'id:'||p2.parceiro_id) = hs.chave
+              AND v.atribuicao='cupom')::int AS pedidos
+    FROM (SELECT DISTINCT chave FROM hs) hs
+    ORDER BY 4 DESC, 5 DESC, 1
   `,
 
-  // ---- endereço: dá para postar hoje? ----
-  enderecos: `
-    SELECT parceiro_id, nome, instagram_handle, end_cidade, end_uf,
-           endereco_completo, cpf_valido, logistica_sugerida
-    FROM creator.vw_endereco
-    WHERE parceiro_id IN (SELECT parceiro_id FROM creator.parceiro WHERE status='ativo' AND NOT arquivado)
-    ORDER BY endereco_completo DESC, nome
-  `,
-
-  // ---- campanhas, jogos e placar ----
-  campanhas: `
-    SELECT c.*,
-           (SELECT count(*) FROM creator.campanha_parceiro cp
-            WHERE cp.campanha_id=c.campanha_id AND cp.saiu_em IS NULL)::int AS participantes,
-           (SELECT count(*) FROM creator.jogo j WHERE j.campanha_id=c.campanha_id AND j.ativo)::int AS jogos
-    FROM creator.campanha c ORDER BY c.inicio DESC
-  `,
-  jogos: `
-    SELECT j.*, c.nome AS campanha,
-           (SELECT json_agg(json_build_object('missao_id',m.missao_id,'tipo',m.tipo_conteudo,
-                    'pontos',m.pontos,'meta',m.meta_qtd,'bonus',m.bonus_pct,'premio',m.premio)
-                    ORDER BY m.ordem, m.missao_id)
-            FROM creator.missao m WHERE m.jogo_id=j.jogo_id) AS missoes
-    FROM creator.jogo j JOIN creator.campanha c USING (campanha_id)
-    ORDER BY j.inicio DESC
-  `,
-  placar: `SELECT * FROM creator.vw_placar ORDER BY pontos DESC, entregas DESC`,
-
-  // ---- apuração mensal ----
-  apuracao: `
-    SELECT * FROM creator.vw_apuracao
-    WHERE competencia >= date_trunc('month', current_date) - interval '3 months'
-    ORDER BY competencia DESC, receita DESC NULLS LAST
-  `,
-  canalMes: `SELECT * FROM creator.vw_canal_mes ORDER BY competencia DESC LIMIT 24`,
-
-  // ---- impulso de pedidos em 24h ----
-  impulso: `
-    SELECT i.*, p.nome
-    FROM creator.vw_impulso_24h i
-    LEFT JOIN creator.parceiro p ON p.parceiro_id = i.parceiro_id
-    WHERE i.leitura_limpa AND i.impulso_x IS NOT NULL
-    ORDER BY i.impulso_x DESC LIMIT 40
-  `,
-
-  // ---- saúde dos jobs de coleta ----
+  // ---- saúde dos jobs de coleta (vai para o rodapé do menu) ----
   jobs: `
-    SELECT DISTINCT ON (job) job, sucesso, itens, detalhe, rodou_em
-    FROM creator.job_log ORDER BY job, rodou_em DESC
-  `,
-
-  // ---- publicações recentes, para a aba de conteúdo ----
-  recentes: `
-    SELECT u.instagram_handle, u.tipo, u.publicado_em::date AS data, u.permalink,
-           left(coalesce(u.legenda,''), 180) AS legenda,
-           m.curtidas, m.comentarios, m.visualizacoes
-    FROM creator.publicacao u
-    LEFT JOIN LATERAL (
-      SELECT curtidas, comentarios, visualizacoes FROM creator.publicacao_metrica pm
-      WHERE pm.publicacao_id = u.publicacao_id ORDER BY coletado_em DESC LIMIT 1
-    ) m ON true
-    ORDER BY u.publicado_em DESC LIMIT 60
+    SELECT DISTINCT ON (job) job, sucesso, itens, rodou_em
+    FROM creator.job_log WHERE job <> 'boot' ORDER BY job, rodou_em DESC
   `,
 };
+
+// ------------------------------------------------------------------ ANÁLISE
+// Parâmetros em TODAS: $1 = de (date), $2 = ate (date), $3 = chave do creator ou ''.
+//
+// ⚠️ A CHAVE NÃO É SÓ O HANDLE. São duas populações que quase não se cruzam:
+//   - quem MARCA a Cells no Instagram: existe por handle, muitos sem cadastro nenhum;
+//   - quem VENDE por cupom nominal: 145 pessoas importadas do legado, TODAS com
+//     `instagram_handle` nulo — nome no cupom, sem Instagram associado.
+// Chavear só por handle jogaria os 237 pedidos e os R$ 38.883 num balde "null". Por isso a
+// chave é o handle quando existe e `id:<parceiro_id>` quando não existe.
+//
+// ⚠️ publicacao_metrica tem MAIS DE UMA linha por publicação — uma por dia de coleta e uma por
+// fonte. Somar a tabela direto multiplica tudo. O LATERAL colapsa para um valor por publicação
+// ANTES de somar; max() porque contador de rede só cresce.
+const CHAVE = `coalesce(lower(p.instagram_handle), 'id:' || p.parceiro_id)`;
+
+const PUB = `
+  SELECT lower(u.instagram_handle) AS ch, u.tipo, u.publicado_em::date AS dia,
+         x.curtidas, x.comentarios, x.visualizacoes
+  FROM creator.publicacao u
+  JOIN LATERAL (SELECT max(curtidas) AS curtidas, max(comentarios) AS comentarios,
+                       max(visualizacoes) AS visualizacoes
+                FROM creator.publicacao_metrica m WHERE m.publicacao_id=u.publicacao_id) x ON true
+  WHERE u.publicado_em::date BETWEEN $1 AND $2
+    AND ($3 = '' OR lower(u.instagram_handle) = $3)`;
+
+const VEN = `
+  SELECT ${CHAVE} AS ch, v.pedido_em::date AS dia, v.receita_liquida, v.cliente_novo
+  FROM creator.venda v
+  JOIN creator.parceiro p ON p.parceiro_id = v.parceiro_id
+  WHERE v.atribuicao = 'cupom' AND v.pedido_em::date BETWEEN $1 AND $2
+    AND ($3 = '' OR ${CHAVE} = $3)`;
+
+const CLQ = `
+  SELECT ${CHAVE} AS ch, c.dia, c.cliques, c.sessoes
+  FROM creator.vw_clique_dia c
+  JOIN creator.parceiro p ON p.parceiro_id = c.parceiro_id
+  WHERE c.dia BETWEEN $1 AND $2 AND ($3 = '' OR ${CHAVE} = $3)`;
+
+const analise = {
+
+  // uma linha só, com tudo que o topo da tela mostra
+  geral: `
+    WITH pub AS (${PUB}), ven AS (${VEN}), clq AS (${CLQ})
+    SELECT
+      (SELECT count(*)                                              FROM pub)::int AS marcacoes,
+      (SELECT count(DISTINCT ch)                                    FROM pub)::int AS perfis,
+      (SELECT count(*) FILTER (WHERE tipo='reels')                  FROM pub)::int AS reels,
+      (SELECT count(*) FILTER (WHERE tipo='carrossel')              FROM pub)::int AS carrossel,
+      (SELECT count(*) FILTER (WHERE tipo IN ('feed_imagem','feed_video')) FROM pub)::int AS feed,
+      (SELECT count(*) FILTER (WHERE tipo='story')                  FROM pub)::int AS stories,
+      (SELECT sum(curtidas)                                         FROM pub)::int AS curtidas,
+      (SELECT sum(comentarios)                                      FROM pub)::int AS comentarios,
+      (SELECT sum(visualizacoes)                                    FROM pub)::int AS views,
+      (SELECT count(*) FILTER (WHERE visualizacoes IS NOT NULL)     FROM pub)::int AS reels_medidos,
+      (SELECT count(*)                                              FROM ven)::int AS pedidos,
+      (SELECT round(sum(receita_liquida),2)                         FROM ven)      AS receita,
+      (SELECT round(avg(receita_liquida),2)                         FROM ven)      AS ticket,
+      (SELECT count(*) FILTER (WHERE cliente_novo)                  FROM ven)::int AS clientes_novos,
+      (SELECT count(DISTINCT ch)                                    FROM ven)::int AS creators_que_venderam,
+      (SELECT coalesce(sum(cliques),0)                              FROM clq)::int AS cliques,
+      (SELECT coalesce(sum(sessoes),0)                              FROM clq)::int AS sessoes
+  `,
+
+  // ranking por creator — quem marcou, quem vendeu, quem trouxe clique
+  porCreator: `
+    WITH pub AS (${PUB}), ven AS (${VEN}), clq AS (${CLQ}),
+    a AS (SELECT ch, count(*)::int marcacoes,
+                 count(*) FILTER (WHERE tipo='reels')::int reels,
+                 count(*) FILTER (WHERE tipo='carrossel')::int carrossel,
+                 count(*) FILTER (WHERE tipo IN ('feed_imagem','feed_video'))::int feed,
+                 count(*) FILTER (WHERE tipo='story')::int stories,
+                 sum(curtidas)::int curtidas, sum(comentarios)::int comentarios,
+                 sum(visualizacoes)::int views, max(dia) ultima
+            FROM pub GROUP BY 1),
+    b AS (SELECT ch, count(*)::int pedidos, round(sum(receita_liquida),2) receita,
+                 count(*) FILTER (WHERE cliente_novo)::int clientes_novos
+            FROM ven GROUP BY 1),
+    c AS (SELECT ch, sum(cliques)::int cliques FROM clq GROUP BY 1),
+    hs AS (SELECT ch FROM a UNION SELECT ch FROM b UNION SELECT ch FROM c)
+    SELECT hs.ch AS chave,
+           CASE WHEN hs.ch LIKE 'id:%' THEN NULL ELSE hs.ch END AS handle,
+           p.parceiro_id, p.nome, p.status,
+           coalesce(a.marcacoes,0) AS marcacoes, coalesce(a.reels,0) AS reels,
+           coalesce(a.carrossel,0) AS carrossel, coalesce(a.feed,0) AS feed,
+           coalesce(a.stories,0) AS stories,
+           a.curtidas, a.comentarios, a.views, a.ultima,
+           coalesce(b.pedidos,0) AS pedidos, b.receita, coalesce(b.clientes_novos,0) AS clientes_novos,
+           coalesce(c.cliques,0) AS cliques,
+           s.seguidores, s.engajamento_pct
+    FROM hs
+    LEFT JOIN a ON a.ch=hs.ch LEFT JOIN b ON b.ch=hs.ch LEFT JOIN c ON c.ch=hs.ch
+    LEFT JOIN creator.parceiro p
+           ON coalesce(lower(p.instagram_handle), 'id:' || p.parceiro_id) = hs.ch
+    LEFT JOIN LATERAL (
+      SELECT seguidores, engajamento_pct FROM creator.perfil_snapshot ps
+      WHERE lower(ps.instagram_handle)=hs.ch AND ps.fonte <> 'indisponivel'
+      ORDER BY coletado_em DESC LIMIT 1) s ON true
+    ORDER BY coalesce(b.receita,0) DESC, coalesce(a.marcacoes,0) DESC
+  `,
+
+  // série mensal, para o gráfico
+  serie: `
+    WITH pub AS (${PUB}), ven AS (${VEN}), clq AS (${CLQ}),
+    m AS (SELECT to_char(dia,'YYYY-MM') mes, count(*)::int marcacoes FROM pub GROUP BY 1),
+    v AS (SELECT to_char(dia,'YYYY-MM') mes, count(*)::int pedidos,
+                 round(sum(receita_liquida),2) receita FROM ven GROUP BY 1),
+    c AS (SELECT to_char(dia,'YYYY-MM') mes, sum(cliques)::int cliques FROM clq GROUP BY 1),
+    ms AS (SELECT mes FROM m UNION SELECT mes FROM v UNION SELECT mes FROM c)
+    SELECT ms.mes, coalesce(m.marcacoes,0) AS marcacoes, coalesce(v.pedidos,0) AS pedidos,
+           coalesce(v.receita,0) AS receita, coalesce(c.cliques,0) AS cliques
+    FROM ms LEFT JOIN m ON m.mes=ms.mes LEFT JOIN v ON v.mes=ms.mes LEFT JOIN c ON c.mes=ms.mes
+    ORDER BY 1
+  `,
+
+};
+
+module.exports = { painel, analise };

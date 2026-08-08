@@ -24,6 +24,9 @@ const APIFY   = process.env.APIFY_TOKEN || '';
 const APP_SECRET   = process.env.META_APP_SECRET || '';
 const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN || '';
 const COOKIE  = 'cc_sess';
+// Os únicos status que um cadastro pode ter. A tela oferece exatamente estes, e o servidor
+// recusa qualquer outro — status livre vira dialeto pessoal e quebra todo filtro depois.
+const STATUS  = ['pendente', 'ativo', 'pausado', 'reprovado'];
 const TOKEN   = require('crypto').createHash('sha256').update('cc|' + SENHA).digest('hex').slice(0, 32);
 
 const pool = new Pool({
@@ -37,21 +40,24 @@ const COOKIE_CR = 'cc_creator';
 let cache = { at: 0, json: null, erro: null };
 
 // ---------------------------------------------------------------- Postgres
+// converte tipos do pg para algo que o JSON do template entende sem surpresa
+function normaliza(row) {
+  const o = {};
+  for (const [c, v] of Object.entries(row)) {
+    o[c] = (v instanceof Date) ? v.toISOString().slice(0, 10)
+         : (typeof v === 'string' && /^-?\d+\.?\d+$|^-?\d+$/.test(v)) ? Number(v)
+         : v;
+  }
+  return o;
+}
+
 async function carregar() {
   const out = {};
   const cli = await pool.connect();
   try {
-    for (const [k, sql] of Object.entries(Q)) {
+    for (const [k, sql] of Object.entries(Q.painel)) {
       const r = await cli.query(sql);
-      out[k] = r.rows.map(row => {
-        const o = {};
-        for (const [c, v] of Object.entries(row)) {
-          o[c] = (v instanceof Date) ? v.toISOString().slice(0, 10)
-               : (typeof v === 'string' && /^-?\d+\.?\d+$|^-?\d+$/.test(v)) ? Number(v)
-               : v;
-        }
-        return o;
-      });
+      out[k] = r.rows.map(normaliza);
     }
   } finally { cli.release(); }
   out.ger = new Date().toISOString().slice(0, 16).replace('T', ' ');
@@ -426,14 +432,98 @@ http.createServer(async (req, res) => {
     }
   }
 
-  // ---------------- download de mídia (para virar anúncio) ----------------
-  // Busca no CDN da Meta e devolve como anexo. Não guardamos o arquivo — a URL é renovada
-  // pelo job do Apify, e vídeo em banco é peso morto.
+  // ---------------- mídia: assistir aqui e baixar ----------------
+  // O CDN da Meta é quem guarda o arquivo — nós só repassamos. Duas razões para não mandar o
+  // browser direto na URL do CDN: ela expira (e o usuário veria um vídeo quebrado sem entender
+  // por quê) e ela vaza o payload do Apify para a tela.
+  //   ?inline=1  → toca no player, com suporte a Range para dar seek
+  //   sem inline → baixa como anexo, para virar anúncio
   if (u.pathname === '/api/midia') {
     const pub = +u.searchParams.get('pub');
     const querVideo = u.searchParams.get('tipo') !== 'imagem';
+    const inline = u.searchParams.get('inline') === '1';
     if (!pub) return json(400, { erro: 'publicacao ausente' });
     try {
+      // ---- capa ----
+      // MEDIDO EM 08/08 abrindo no Chrome: <img src="https://…cdninstagram.com/…"> volta
+      // ERR_BLOCKED_BY_RESPONSE.NotSameOrigin e a galeria inteira aparece EM BRANCO. O CDN da
+      // Meta manda Cross-Origin-Resource-Policy, e nenhum atributo de <img> contorna isso.
+      // A saída é o servidor buscar e servir do mesmo domínio. Guarda na primeira vez: a
+      // segunda visita não toca no CDN.
+      if (u.searchParams.get('tipo') === 'capa') {
+        const c = await pool.query(`
+          SELECT md.thumb_bytes, md.thumb_mime,
+                 (SELECT pm.payload->>'displayUrl' FROM creator.publicacao_metrica pm
+                   WHERE pm.publicacao_id=$1 AND pm.payload->>'displayUrl' IS NOT NULL
+                   ORDER BY pm.coletado_em DESC LIMIT 1) AS url
+          FROM creator.publicacao p
+          LEFT JOIN creator.publicacao_midia md ON md.publicacao_id = p.publicacao_id
+          WHERE p.publicacao_id=$1`, [pub]);
+        const row = c.rows[0];
+        if (!row) return json(404, { erro: 'publicação não encontrada' });
+        const serve = (mime, buf) => {
+          res.writeHead(200, { 'content-type': mime || 'image/jpeg',
+            'content-length': buf.length, 'cache-control': 'private, max-age=604800' });
+          res.end(buf);
+        };
+        if (row.thumb_bytes) return serve(row.thumb_mime, row.thumb_bytes);
+        if (!row.url) return json(404, { erro: 'sem capa coletada' });
+        const up = await new Promise((ok, err) => {
+          https.get(row.url, r2 => ok(r2)).on('error', err)
+            .setTimeout(20000, function(){ this.destroy(new Error('timeout')); });
+        });
+        if (up.statusCode !== 200) { up.resume(); return json(410, { erro: 'capa expirou no CDN' }); }
+        const bufs = [];
+        up.on('data', d => bufs.push(d));
+        return up.on('end', async () => {
+          const buf = Buffer.concat(bufs);
+          pool.query(`
+            INSERT INTO creator.publicacao_midia (publicacao_id,thumb_bytes,thumb_mime,thumb_em)
+            VALUES ($1,$2,$3,now())
+            ON CONFLICT (publicacao_id) DO UPDATE SET
+              thumb_bytes=EXCLUDED.thumb_bytes, thumb_mime=EXCLUDED.thumb_mime, thumb_em=now()`,
+            [pub, buf, up.headers['content-type'] || 'image/jpeg']).catch(e =>
+              console.error('[capa]', e.message));
+          serve(up.headers['content-type'], buf);
+        });
+      }
+
+      // 1) o arquivo guardado, quando existe. É o único caminho confiável para vídeo: a URL do
+      //    CDN morre em menos de 48h e o job é semanal.
+      if (querVideo) {
+        const g = await pool.query(`
+          SELECT md.mime, md.bytes, md.tamanho, pu.instagram_handle, pu.publicado_em
+          FROM creator.publicacao_midia md
+          JOIN creator.publicacao pu ON pu.publicacao_id = md.publicacao_id
+          WHERE md.publicacao_id=$1 AND md.bytes IS NOT NULL`, [pub]);
+        if (g.rows[0]) {
+          const { mime, bytes } = g.rows[0];
+          const nome = `${g.rows[0].instagram_handle}-${String(g.rows[0].publicado_em).slice(0,10)}-${pub}.mp4`;
+          const tot = bytes.length;
+          const faixa = inline && /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
+          if (faixa) {
+            const ini = faixa[1] ? +faixa[1] : 0;
+            const fim = faixa[2] ? Math.min(+faixa[2], tot - 1) : tot - 1;
+            if (ini >= tot || ini > fim) {
+              res.writeHead(416, { 'content-range': `bytes */${tot}` }); return res.end();
+            }
+            res.writeHead(206, {
+              'content-type': mime || 'video/mp4', 'accept-ranges': 'bytes',
+              'content-range': `bytes ${ini}-${fim}/${tot}`, 'content-length': fim - ini + 1,
+              'cache-control': 'private, max-age=3600', 'content-disposition': 'inline',
+            });
+            return res.end(bytes.subarray(ini, fim + 1));
+          }
+          res.writeHead(200, {
+            'content-type': mime || 'video/mp4', 'accept-ranges': 'bytes', 'content-length': tot,
+            'cache-control': 'private, max-age=3600',
+            'content-disposition': inline ? 'inline' : `attachment; filename="${nome}"`,
+          });
+          return res.end(bytes);
+        }
+      }
+
+      // 2) senão, tenta o CDN — vale para imagem, e para vídeo recém-coletado ainda não guardado
       const r = await pool.query(`
         SELECT pu.instagram_handle, pu.tipo, pu.publicado_em,
                m.payload->>'videoUrl' AS video, m.payload->>'displayUrl' AS img,
@@ -450,22 +540,70 @@ http.createServer(async (req, res) => {
 
       const ext = alvo === row.video ? 'mp4' : 'jpg';
       const nome = `${row.instagram_handle}-${String(row.publicado_em).slice(0,10)}-${pub}.${ext}`;
+      // repassar o Range é o que faz a barra do player arrastar em vez de travar
+      const cab = {};
+      if (inline && req.headers.range) cab.range = req.headers.range;
       const up = await new Promise((ok, err) => {
-        https.get(alvo, resp => ok(resp)).on('error', err).setTimeout(45000, function(){ this.destroy(new Error('timeout')); });
+        https.get(alvo, { headers: cab }, resp => ok(resp))
+          .on('error', err).setTimeout(45000, function(){ this.destroy(new Error('timeout')); });
       });
-      if (up.statusCode !== 200) {
+      if (up.statusCode !== 200 && up.statusCode !== 206) {
         up.resume();
         // URL do CDN expira. Dizer isso é melhor que servir 0 bytes e o usuário achar que baixou.
         return json(410, { erro: 'a URL da mídia expirou no CDN da Meta (coletada em ' +
           String(row.coletado_em).slice(0,10) + '). Rode o job do Apify para renovar.' });
       }
-      res.writeHead(200, {
-        'content-type': up.headers['content-type'] || 'application/octet-stream',
-        'content-disposition': `attachment; filename="${nome}"`,
+      const cabeca = {
+        'content-type': up.headers['content-type'] ||
+          (ext === 'mp4' ? 'video/mp4' : 'image/jpeg'),
         'cache-control': 'no-store',
-      });
+        'content-disposition': inline ? 'inline' : `attachment; filename="${nome}"`,
+      };
+      if (up.headers['content-length']) cabeca['content-length'] = up.headers['content-length'];
+      if (up.headers['content-range'])  cabeca['content-range']  = up.headers['content-range'];
+      if (inline) cabeca['accept-ranges'] = 'bytes';
+      res.writeHead(up.statusCode, cabeca);
       return up.pipe(res);
     } catch (e) { return json(500, { erro: e.message }); }
+  }
+
+  // busca um vídeo específico no Apify e guarda — para assistir conteúdo antigo, que o job
+  // automático não guarda de propósito (ver JANELA_AUTO em jobs.js)
+  if (u.pathname === '/api/midia/buscar' && req.method === 'POST') {
+    const pub = +u.searchParams.get('pub');
+    if (!pub) return json(400, { erro: 'publicacao ausente' });
+    try {
+      await J.buscarVideoDe(pool, APIFY, pub);
+      cache.at = 0;
+      return json(200, { ok: true });
+    } catch (e) { return json(200, { ok: false, erro: e.message }); }
+  }
+
+  // ---------------- ANÁLISES ----------------
+  // Sob demanda, nunca cacheada: o período e o creator vêm da tela e mudam a cada clique.
+  if (u.pathname === '/api/analise') {
+    const hoje = new Date().toISOString().slice(0, 10);
+    const data = s => /^\d{4}-\d{2}-\d{2}$/.test(s || '') ? s : null;
+    const de   = data(u.searchParams.get('de'))  || '2020-01-01';
+    const ate  = data(u.searchParams.get('ate')) || hoje;
+    // a chave é handle OU `id:<n>` — ver o comentário do bloco ANALISE em queries.js
+    const c = (u.searchParams.get('c') || '').trim().toLowerCase().slice(0, 60);
+    if (c && !/^[a-z0-9._]+$|^id:\d+$/.test(c)) return json(400, { erro: 'creator inválido' });
+    if (de > ate) return json(400, { erro: 'a data inicial é depois da final' });
+    try {
+      const p = [de, ate, c];
+      const [g, pc, se] = await Promise.all([
+        pool.query(Q.analise.geral, p),
+        pool.query(Q.analise.porCreator, p),
+        pool.query(Q.analise.serie, p),
+      ]);
+      return json(200, {
+        ok: true, de, ate, creator: c || null,
+        geral: normaliza(g.rows[0] || {}),
+        porCreator: pc.rows.map(normaliza),
+        serie: se.rows.map(normaliza),
+      });
+    } catch (e) { return json(200, { ok: false, erro: e.message }); }
   }
 
   // marca conteúdo como "virou anúncio" (bônus de R$300 do business case)
@@ -498,27 +636,66 @@ http.createServer(async (req, res) => {
     } catch (e) { return json(200, { ok: false, erro: e.message }); }
   }
 
-  // ---------------- campanhas, jogos e missões ----------------
+  // ---------------- campanhas ----------------
+  // Uma campanha é de COMISSÃO (% sobre o vendido pelo cupom) ou de PONTUAÇÃO (pontos por
+  // ação). O "jogo" continua existindo no banco porque é onde as missões moram, mas nasce
+  // junto com a campanha e nunca aparece na tela — era uma caixa a mais sem função própria.
   if (u.pathname === '/api/campanha' && req.method === 'POST') {
-    const g = k => u.searchParams.get(k) || null;
-    try {
-      if (g('id')) {
-        const r = await pool.query(
-          `UPDATE creator.campanha SET nome=coalesce($2,nome), briefing=coalesce($3,briefing),
-             inicio=coalesce($4::date,inicio), fim=coalesce($5::date,fim),
-             status=coalesce($6,status), budget=coalesce($7::numeric,budget)
-           WHERE campanha_id=$1 RETURNING *`,
-          [+g('id'), g('nome'), g('briefing'), g('inicio'), g('fim'), g('status'), g('budget')]);
-        cache.at = 0; return json(200, { ok: true, campanha: r.rows[0] });
-      }
-      if (!g('nome') || !g('inicio')) return json(400, { erro: 'nome e início são obrigatórios' });
-      const r = await pool.query(
-        `INSERT INTO creator.campanha (nome,briefing,inicio,fim,status,budget,criado_por)
-         VALUES ($1,$2,$3::date,$4::date,coalesce($5,'rascunho'),$6::numeric,$7) RETURNING *`,
-        [g('nome'), g('briefing'), g('inicio'), g('fim'), g('status'), g('budget'),
-         (g('por') || 'painel').slice(0, 60)]);
-      cache.at = 0; return json(200, { ok: true, campanha: r.rows[0] });
-    } catch (e) { return json(200, { ok: false, erro: e.message }); }
+    let b = ''; req.on('data', c => { b += c; if (b.length > 20000) req.destroy(); });
+    return req.on('end', async () => {
+      const cli = await pool.connect();
+      try {
+        const d = JSON.parse(b || '{}');
+        const hoje = new Date().toISOString().slice(0, 10);
+
+        // mudar só o status (ativar, encerrar, arquivar) — não mexe no resto
+        if (d.campanha_id && d.status && !d.nome) {
+          if (!['rascunho','ativa','encerrada','arquivada'].includes(d.status))
+            return json(400, { erro: 'status desconhecido' });
+          const r = await cli.query(
+            `UPDATE creator.campanha SET status=$2 WHERE campanha_id=$1 RETURNING *`,
+            [d.campanha_id, d.status]);
+          cache.at = 0; return json(200, { ok: true, campanha: r.rows[0] });
+        }
+
+        if (!d.nome || !String(d.nome).trim()) return json(400, { erro: 'nome é obrigatório' });
+        const tipo = d.tipo === 'pontuacao' ? 'pontuacao' : 'comissao';
+        const pct = tipo === 'comissao' ? Number(String(d.comissao_pct || '').replace(',', '.')) : null;
+        if (tipo === 'comissao' && !(pct > 0 && pct <= 100))
+          return json(400, { erro: 'campanha de comissão precisa de um percentual entre 0 e 100' });
+        const acoes = (d.acoes || []).filter(a => a && a.acao && +a.pontos > 0);
+        if (tipo === 'pontuacao' && !acoes.length)
+          return json(400, { erro: 'campanha de pontuação precisa de pelo menos uma ação com pontos' });
+        const inicio = /^\d{4}-\d{2}-\d{2}$/.test(d.inicio || '') ? d.inicio : hoje;
+        const fim    = /^\d{4}-\d{2}-\d{2}$/.test(d.fim || '') ? d.fim : null;
+        if (fim && fim < inicio) return json(400, { erro: 'a data final é antes da inicial' });
+
+        await cli.query('BEGIN');
+        const r = await cli.query(
+          `INSERT INTO creator.campanha (nome,briefing,tipo,comissao_pct,inicio,fim,status,criado_por)
+           VALUES ($1,$2,$3,$4,$5::date,$6::date,$7,$8) RETURNING *`,
+          [String(d.nome).trim().slice(0, 120), d.briefing || null, tipo, pct, inicio, fim,
+           d.status === 'ativa' ? 'ativa' : 'rascunho', (d.por || 'painel').slice(0, 60)]);
+        const camp = r.rows[0];
+
+        if (tipo === 'pontuacao') {
+          const j = await cli.query(
+            `INSERT INTO creator.jogo (campanha_id,titulo,tipo,inicio,fim)
+             VALUES ($1,$2,'pontos_brindes',$3::date,$4::date) RETURNING jogo_id`,
+            [camp.campanha_id, camp.nome, inicio, fim]);
+          for (const [i, a] of acoes.entries())
+            await cli.query(
+              `INSERT INTO creator.missao (jogo_id,tipo_conteudo,pontos,ordem)
+               VALUES ($1,$2,$3,$4)`, [j.rows[0].jogo_id, a.acao, Math.round(+a.pontos), i]);
+        }
+        await cli.query('COMMIT');
+        cache.at = 0;
+        return json(200, { ok: true, campanha: camp });
+      } catch (e) {
+        await cli.query('ROLLBACK').catch(() => {});
+        return json(200, { ok: false, erro: e.message });
+      } finally { cli.release(); }
+    });
   }
 
   // vincular/desvincular creator da campanha
@@ -536,49 +713,39 @@ http.createServer(async (req, res) => {
     } catch (e) { return json(200, { ok: false, erro: e.message }); }
   }
 
-  // jogo + missões numa tacada: jogo sem missão não pontua nada, então nascem juntos
-  if (u.pathname === '/api/jogo' && req.method === 'POST') {
-    let b = ''; req.on('data', c => { b += c; if (b.length > 20000) req.destroy(); });
-    return req.on('end', async () => {
-      try {
-        const d = JSON.parse(b || '{}');
-        if (!d.campanha_id || !d.titulo || !d.inicio || !d.fim)
-          return json(400, { erro: 'campanha, título, início e fim são obrigatórios' });
-        const j = await pool.query(
-          `INSERT INTO creator.jogo (campanha_id,titulo,briefing,tipo,inicio,fim)
-           VALUES ($1,$2,$3,coalesce($4,'pontos_brindes'),$5::date,$6::date) RETURNING *`,
-          [d.campanha_id, d.titulo, d.briefing || null, d.tipo, d.inicio, d.fim]);
-        const jogo = j.rows[0];
-        for (const [i, m] of (d.missoes || []).entries()) {
-          await pool.query(
-            `INSERT INTO creator.missao (jogo_id,tipo_conteudo,pontos,meta_qtd,bonus_pct,premio,ordem)
-             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-            [jogo.jogo_id, m.tipo, +m.pontos || 0, m.meta ? +m.meta : null,
-             m.bonus ? +m.bonus : null, m.premio || null, i]);
-        }
-        cache.at = 0;
-        return json(200, { ok: true, jogo });
-      } catch (e) { return json(200, { ok: false, erro: e.message }); }
-    });
-  }
-
-  // ---------------- ações de curadoria ----------------
-  // POST /api/parceiro?id=1&acao=aprovar|reprovar|arquivar|desarquivar|tags
+  // ---------------- cadastros: mudar status ----------------
+  // POST /api/parceiro?id=1&acao=status&valor=ativo | arquivar | desarquivar | tags
+  //
+  // A resposta devolve a linha com RETURNING *, ou seja, o que o Postgres tem DEPOIS do
+  // UPDATE — não o que a tela achava que ia acontecer. A tela repinta com esse valor, então
+  // ver o status novo na tela é a prova de que ele gravou.
   if (u.pathname === '/api/parceiro' && req.method === 'POST') {
     const id = +u.searchParams.get('id');
     const acao = u.searchParams.get('acao');
+    const valor = u.searchParams.get('valor');
     const por = (u.searchParams.get('por') || 'painel').slice(0, 60);
     const motivo = (u.searchParams.get('motivo') || '').slice(0, 400);
     const tags = (u.searchParams.get('tags') || '').split(',').map(t => t.trim()).filter(Boolean);
     if (!id) return json(400, { erro: 'id ausente' });
 
+    if (acao === 'status') {
+      if (!STATUS.includes(valor))
+        return json(400, { erro: 'status desconhecido: use ' + STATUS.join(', ') });
+      try {
+        const r = await pool.query(`
+          UPDATE creator.parceiro SET status=$2, decidido_por=$3, atualizado_em=now(),
+            arquivado = false,
+            aprovado_em  = CASE WHEN $2='ativo'     THEN coalesce(aprovado_em, now()) ELSE aprovado_em END,
+            reprovado_em = CASE WHEN $2='reprovado' THEN coalesce(reprovado_em, now()) ELSE NULL END,
+            reprovado_motivo = CASE WHEN $2='reprovado' THEN coalesce($4, reprovado_motivo) ELSE NULL END
+          WHERE parceiro_id=$1 RETURNING *`, [id, valor, por, motivo || null]);
+        if (!r.rows[0]) return json(404, { erro: 'parceiro não encontrado' });
+        cache.at = 0;                     // a lista mudou: a próxima leitura tem que ser fresca
+        return json(200, { ok: true, parceiro: normaliza(r.rows[0]) });
+      } catch (e) { return json(200, { ok: false, erro: e.message }); }
+    }
+
     const acoes = {
-      aprovar:     [`UPDATE creator.parceiro SET status='ativo', aprovado_em=now(), decidido_por=$2,
-                       arquivado=false, reprovado_em=NULL, reprovado_motivo=NULL,
-                       atualizado_em=now() WHERE parceiro_id=$1 RETURNING *`, [id, por]],
-      reprovar:    [`UPDATE creator.parceiro SET status='reprovado', reprovado_em=now(),
-                       reprovado_motivo=$3, decidido_por=$2, atualizado_em=now()
-                       WHERE parceiro_id=$1 RETURNING *`, [id, por, motivo]],
       arquivar:    [`UPDATE creator.parceiro SET arquivado=true, arquivado_em=now(),
                        decidido_por=$2, atualizado_em=now() WHERE parceiro_id=$1 RETURNING *`, [id, por]],
       desarquivar: [`UPDATE creator.parceiro SET arquivado=false, arquivado_em=NULL,
@@ -591,8 +758,8 @@ http.createServer(async (req, res) => {
       const [sql, params] = acoes[acao];
       const r = await pool.query(sql, params);
       if (!r.rows[0]) return json(404, { erro: 'parceiro não encontrado' });
-      cache.at = 0;                       // força recarga: a fila mudou
-      return json(200, { ok: true, parceiro: r.rows[0] });
+      cache.at = 0;
+      return json(200, { ok: true, parceiro: normaliza(r.rows[0]) });
     } catch (e) { return json(200, { ok: false, erro: e.message }); }
   }
 

@@ -35,6 +35,105 @@ function req(url, opts = {}) {
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+// ---------------------------------------------------------------- mídia local
+// MEDIDO EM 08/08: a URL de VÍDEO do Apify morre em menos de 48h — coletada em 06/08, no dia 08
+// devolvia 403. A de IMAGEM continua viva. Ou seja: guardar só a URL significa uma galeria onde
+// o vídeo nunca toca, porque o job é semanal e a URL não sobrevive ao intervalo.
+// Por isso o vídeo é BAIXADO na coleta e fica em creator.publicacao_midia (bytea).
+//
+// ⚠️ Isso tem CUSTO: 34 reels deram 361 MB, ~10 MB cada. Guardar tudo para sempre significa
+// ~150 MB por mês de crescimento num banco que hoje inteiro é pequeno. Então há três limites:
+//   1. teto por arquivo;
+//   2. só baixa sozinho o que é recente — conteúdo velho fica com thumbnail e link;
+//   3. o que foi baixado é apagado depois de 90 dias, EXCETO o que virou anúncio.
+// O que passou do corte não some da tela: continua com métrica, capa e o botão de buscar sob
+// demanda, que traz o arquivo de volta na hora.
+const TETO_MIDIA = 60 * 1024 * 1024;   // 60 MB
+const JANELA_AUTO = 90;                // dias: só baixa sozinho post mais novo que isso
+const RETENCAO    = 90;                // dias guardados depois do download
+
+async function guardarVideo(pool, publicacaoId, url) {
+  if (!url) return false;
+  try {
+    const m = await req(url, { raw: true, timeout: 60000 });
+    if (m.status !== 200 || !m.buf.length) throw new Error('HTTP ' + m.status);
+    if (m.buf.length > TETO_MIDIA) throw new Error('acima do teto de 30 MB (' +
+      Math.round(m.buf.length / 1048576) + ' MB)');
+    await pool.query(`
+      INSERT INTO creator.publicacao_midia (publicacao_id,mime,bytes,tamanho,origem_url,erro)
+      VALUES ($1,$2,$3,$4,$5,NULL)
+      ON CONFLICT (publicacao_id) DO UPDATE SET
+        mime=EXCLUDED.mime, bytes=EXCLUDED.bytes, tamanho=EXCLUDED.tamanho,
+        origem_url=EXCLUDED.origem_url, baixado_em=now(), erro=NULL`,
+      [publicacaoId, m.headers['content-type'] || 'video/mp4', m.buf, m.buf.length, url]);
+    await pool.query(`UPDATE creator.publicacao SET media_local='db' WHERE publicacao_id=$1`,
+                     [publicacaoId]);
+    return true;
+
+  } catch (e) {
+    // registra a falha em vez de sumir com ela: assim a tela consegue dizer POR QUE não toca
+    await pool.query(`
+      INSERT INTO creator.publicacao_midia (publicacao_id,origem_url,erro)
+      VALUES ($1,$2,$3) ON CONFLICT (publicacao_id) DO UPDATE SET erro=EXCLUDED.erro`,
+      [publicacaoId, url, e.message]).catch(() => {});
+    return false;
+  }
+}
+
+// Solta o peso do que já passou da validade. O que virou anúncio nunca é apagado — é
+// justamente o arquivo que a Cells está usando em mídia paga.
+async function limparMidia(pool) {
+  const r = await pool.query(`
+    DELETE FROM creator.publicacao_midia md
+    USING creator.publicacao u
+    WHERE u.publicacao_id = md.publicacao_id
+      AND md.bytes IS NOT NULL
+      AND md.baixado_em < now() - ($1 || ' days')::interval
+      AND NOT coalesce(u.virou_anuncio, false)
+    RETURNING md.publicacao_id`, [String(RETENCAO)]);
+  if (r.rowCount) await pool.query(
+    `UPDATE creator.publicacao SET media_local=NULL WHERE publicacao_id = ANY($1)`,
+    [r.rows.map(x => x.publicacao_id)]);
+  return r.rowCount;
+}
+
+// Busca UM post específico no Apify e guarda o vídeo. É o que o botão "buscar este vídeo"
+// chama quando alguém quer assistir algo antigo, que o job automático não guardaria.
+async function buscarVideoDe(pool, apifyToken, publicacaoId) {
+  if (!apifyToken) throw new Error('APIFY_TOKEN ausente');
+  const { rows } = await pool.query(
+    `SELECT publicacao_id, permalink FROM creator.publicacao WHERE publicacao_id=$1`, [publicacaoId]);
+  const p = rows[0];
+  if (!p) throw new Error('publicação não encontrada');
+  if (!p.permalink) throw new Error('esta publicação não tem link — não dá para buscar');
+
+  const run = await req(`https://api.apify.com/v2/acts/apify~instagram-scraper/runs?token=${apifyToken}`,
+    { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ directUrls: [p.permalink], resultsType: 'posts', resultsLimit: 1,
+                             addParentData: false }) });
+  if (!run.data) throw new Error('Apify não devolveu run');
+  const { id, defaultDatasetId } = run.data;
+
+  let status = 'RUNNING';
+  for (let i = 0; i < 16 && !['SUCCEEDED','FAILED','ABORTED','TIMED-OUT'].includes(status); i++) {
+    await sleep(8000);
+    status = (await req(`https://api.apify.com/v2/actor-runs/${id}?token=${apifyToken}`)).data?.status || status;
+  }
+  if (status !== 'SUCCEEDED') throw new Error('run do Apify terminou em ' + status);
+
+  const itens = await req(
+    `https://api.apify.com/v2/datasets/${defaultDatasetId}/items?token=${apifyToken}&format=json&clean=true`);
+  const it = (itens || [])[0];
+  if (!it || !it.videoUrl) throw new Error('o Apify não devolveu vídeo para este post');
+  const ok = await guardarVideo(pool, p.publicacao_id, it.videoUrl);
+  if (!ok) {
+    const e = await pool.query(
+      `SELECT erro FROM creator.publicacao_midia WHERE publicacao_id=$1`, [p.publicacao_id]);
+    throw new Error(e.rows[0]?.erro || 'download falhou');
+  }
+  return { ok: true };
+}
+
 // ---------------------------------------------------------------- log
 async function logJob(pool, nome, ok, detalhe, itens) {
   try {
@@ -251,14 +350,23 @@ async function syncPerfis(pool, token) {
 // Assíncrono com polling. NUNCA run-sync: estoura em 300s.
 async function syncApify(pool, apifyToken, limite = 40) {
   if (!apifyToken) throw new Error('APIFY_TOKEN ausente');
+  // Quem ainda não tem o vídeo guardado vem PRIMEIRO: a métrica desse reel pode até estar
+  // fresca, mas sem o arquivo o player não toca, e a URL de hoje é a única chance de baixar.
   const { rows } = await pool.query(`
-    SELECT u.publicacao_id, u.permalink
+    SELECT u.publicacao_id, u.permalink,
+           EXISTS (SELECT 1 FROM creator.publicacao_midia md
+                   WHERE md.publicacao_id=u.publicacao_id AND md.bytes IS NOT NULL) AS tem_bytes,
+           (u.publicado_em::date >= current_date - ${JANELA_AUTO}
+            OR coalesce(u.virou_anuncio,false)) AS vale_guardar
     FROM creator.publicacao u
     WHERE u.tipo='reels' AND u.permalink IS NOT NULL
-      AND NOT EXISTS (
-        SELECT 1 FROM creator.publicacao_metrica m
-        WHERE m.publicacao_id=u.publicacao_id AND m.fonte='apify' AND m.coletado_em=current_date)
-    ORDER BY u.publicado_em DESC LIMIT $1`, [limite]);
+      AND (NOT EXISTS (
+             SELECT 1 FROM creator.publicacao_metrica m
+             WHERE m.publicacao_id=u.publicacao_id AND m.fonte='apify' AND m.coletado_em=current_date)
+           OR NOT EXISTS (
+             SELECT 1 FROM creator.publicacao_midia md
+             WHERE md.publicacao_id=u.publicacao_id AND md.bytes IS NOT NULL))
+    ORDER BY tem_bytes, u.publicado_em DESC LIMIT $1`, [limite]);
   if (!rows.length) return { pendentes: 0, coletados: 0 };
 
   const run = await req(`https://api.apify.com/v2/acts/apify~instagram-scraper/runs?token=${apifyToken}`,
@@ -283,7 +391,7 @@ async function syncApify(pool, apifyToken, limite = 40) {
   const porCodigo = new Map();
   for (const it of (itens || [])) if (it.shortCode) porCodigo.set(it.shortCode, it);
 
-  let n = 0;
+  let n = 0, videos = 0;
   for (const r of rows) {
     const cod = (r.permalink.match(/\/(?:reel|p|tv)\/([^/?]+)/) || [])[1];
     const it = cod && porCodigo.get(cod);
@@ -298,8 +406,12 @@ async function syncApify(pool, apifyToken, limite = 40) {
       [r.publicacao_id, nn(it.likesCount), nn(it.commentsCount),
        nn(it.videoViewCount), nn(it.videoPlayCount), it]);
     n++;
+    // baixar AGORA: daqui a dois dias essa URL não existe mais
+    if (it.videoUrl && !r.tem_bytes && r.vale_guardar
+        && await guardarVideo(pool, r.publicacao_id, it.videoUrl)) videos++;
   }
-  return { pendentes: rows.length, coletados: n };
+  const apagados = await limparMidia(pool).catch(() => 0);
+  return { pendentes: rows.length, coletados: n, videos_baixados: videos, midia_expirada: apagados };
 }
 
 // ---------------------------------------------------------------- 4. story mention (webhook)
@@ -397,4 +509,5 @@ function agendar(pool, env) {
 }
 
 module.exports = { syncTags, syncPerfis, syncApify, syncCadastros, perfilDe, salvarPerfil,
-                   guardarStory, extrairStories, agendar, logJob };
+                   guardarStory, guardarVideo, buscarVideoDe, limparMidia,
+                   extrairStories, agendar, logJob };
