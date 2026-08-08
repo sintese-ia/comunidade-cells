@@ -331,6 +331,7 @@
         <button class="aba" data-fl="reprovado" aria-pressed="false">reprovados <b id="c-reprovado">0</b></button>
         <button class="aba" data-fl="arquivado" aria-pressed="false">arquivados <b id="c-arquivado">0</b></button>
         <button class="aba" data-fl="semig" aria-pressed="false">sem instagram <b id="c-semig">0</b></button>
+        <button class="aba" data-fl="naoavisado" aria-pressed="false">nunca avisados <b id="c-naoavisado">0</b></button>
         <input id="cq" class="busca" placeholder="nome, @ ou cupom" aria-label="Filtrar cadastros">
         <span class="cnt" id="cntCad"></span>
       </div>
@@ -350,6 +351,10 @@
         </tr></thead>
         <tbody id="tbCad"></tbody>
       </table></div>
+      <div class="empty" id="avisoNaoAvisado" style="display:none">
+        <span class="tg" style="background:var(--wa-s);color:var(--wa)">ativo ≠ avisado</span>
+        <p id="avisoNaoAvisadoTxt"></p>
+      </div>
       <div class="empty">
         <span class="tg">duas populações</span>
         <p>Os <b>cadastrados pela LP</b> têm Instagram e métrica de perfil. Os <b>145 do cupom legado</b> vieram da Shopify e não têm Instagram associado — por isso as colunas de perfil ficam vazias neles. É a mesma tabela, gente diferente.</p>
@@ -809,12 +814,13 @@ const CAD = D.cadastros || [], ENVIOS = D.envios || [], PUBS = D.fichaPubs || []
 let cAba = 'todos', cBusca = '', cOrd = {c:'cadastro', d:-1};
 
 function contaCad(){
-  const c = {todos:0, pendente:0, ativo:0, pausado:0, reprovado:0, arquivado:0, semig:0};
+  const c = {todos:0, pendente:0, ativo:0, pausado:0, reprovado:0, arquivado:0, semig:0, naoavisado:0};
   CAD.forEach(f => {
     if (f.arquivado) { c.arquivado++; return; }
     c.todos++;
     if (c[f.status] != null) c[f.status]++;
     if (!f.instagram_handle) c.semig++;
+    if (f.status === 'ativo' && !f.avisado) c.naoavisado++;
   });
   for (const k in c) { const e = document.getElementById('c-'+k); if (e) e.textContent = c[k]; }
 }
@@ -823,6 +829,7 @@ function filtraCad(){
   let L = CAD.filter(f => {
     if (cAba === 'arquivado') { if (!f.arquivado) return false; }
     else if (cAba === 'semig') { if (f.arquivado || f.instagram_handle) return false; }
+    else if (cAba === 'naoavisado') { if (f.arquivado || f.status !== 'ativo' || f.avisado) return false; }
     else if (cAba !== 'todos') { if (f.arquivado || f.status !== cAba) return false; }
     else if (f.arquivado) return false;
     if (cBusca) {
@@ -873,19 +880,43 @@ function pintaCad(){
       + '<td'+(f.receita?' style="font-weight:600"':' class="dim"')+'>'+(f.receita?nm(f.receita):'—')+'</td>'
       + '<td>'+(() => { const c = cupomDe(f.parceiro_id);
           if (!c) return '<span class="dim">—</span>';
-          return c.shopify_erro
+          const cod = c.shopify_erro
             ? '<span class="chip cr" title="'+esc(c.shopify_erro)+'">só no banco</span>'
-            : '<span class="chip ok">'+esc(c.codigo)+'</span>'; })()+'</td>'
+            : '<span class="chip ok">'+esc(c.codigo)+'</span>';
+          // "ativo" e "avisado" são coisas diferentes e a tela precisa separar
+          return cod + (f.avisado ? '' : '<span class="sub2 dim">nunca avisado</span>'); })()+'</td>'
       + '<td>'+selStatus(f)+'</td>'
       + '<td><div class="acs">'
-        + (f.status === 'pendente' && !f.arquivado
-            ? '<button class="acbt ok" data-aprovar="'+f.parceiro_id+'">aprovar</button>' : '')
+        + (() => {
+            if (f.arquivado) return '';
+            // pendente → o fluxo inteiro (cupom + link + aviso)
+            if (f.status === 'pendente') return '<button class="acbt ok" data-aprovar="'+f.parceiro_id+'">aprovar</button>';
+            // já ativo e com cupom, mas NUNCA avisado: é o caso dos 28 do cupom legado, que
+            // nasceram ativos sem ninguém nunca ter mandado o link para eles
+            if (f.status === 'ativo' && cupomDe(f.parceiro_id) && !f.avisado && f.email)
+              return '<button class="acbt ok" data-avisarum="'+f.parceiro_id+'">avisar</button>';
+            return '';
+          })()
         + '<button class="acbt" data-ficha="'+f.parceiro_id+'">ficha</button>'
         + '<button class="acbt no" data-ac="'+(f.arquivado?'desarquivar':'arquivar')+'" data-id="'+f.parceiro_id+'">'
         + (f.arquivado?'desarquivar':'arquivar')+'</button>'
       + '</div></td></tr>';
   }).join('') || '<tr><td colspan="11" class="h dim" style="padding:20px 15px">Nada com esse filtro.</td></tr>';
 }
+
+(function avisoAtivoSemEmail(){
+  const semEmail = CAD.filter(f => !f.arquivado && f.status === 'ativo' && !f.avisado && !f.email);
+  const comEmail = CAD.filter(f => !f.arquivado && f.status === 'ativo' && !f.avisado && f.email);
+  if (!semEmail.length && !comEmail.length) return;
+  const box = document.getElementById('avisoNaoAvisado');
+  box.style.display = '';
+  document.getElementById('avisoNaoAvisadoTxt').innerHTML =
+    '<b>' + (semEmail.length + comEmail.length) + ' pessoas estão ativas e nunca receberam e-mail nenhum.</b> '
+    + 'Estar ativo só quer dizer que o cupom existe — não que a pessoa saiba disso.<br>'
+    + (comEmail.length ? '<b>' + comEmail.length + '</b> dá para avisar agora, pelo botão na linha. ' : '')
+    + (semEmail.length ? '<b>' + semEmail.length + ' não têm e-mail no cadastro</b> — vieram do cupom '
+      + 'da Shopify, que não guarda contato. Sem e-mail não há como avisar.' : '');
+})();
 
 document.querySelectorAll('[data-fl]').forEach(b => b.addEventListener('click', () => {
   document.querySelectorAll('[data-fl]').forEach(x => x.setAttribute('aria-pressed','false'));
@@ -939,6 +970,22 @@ document.getElementById('tbCad').addEventListener('click', async e => {
   }
   const ab = e.target.closest('[data-aprovar]');
   if (ab) { abreAprovar(+ab.dataset.aprovar); return; }
+  const av1 = e.target.closest('[data-avisarum]');
+  if (av1) {
+    const f = CAD.find(x => x.parceiro_id === +av1.dataset.avisarum);
+    const c = cupomDe(+av1.dataset.avisarum);
+    if (!confirm('Mandar para ' + (f.email||'') + ' o e-mail de boas-vindas com o cupom '
+      + (c ? c.codigo : '') + ' e o link dela?')) return;
+    av1.disabled = true;
+    const j = await (await fetch('/api/reenviar?id='+av1.dataset.avisarum, {method:'POST'})).json();
+    av1.disabled = false;
+    alert(j.ok
+      ? 'Aviso mandado ao Klaviyo para ' + j.para
+        + '.\n\nA entrega depende do flow "Creator Aprovado" estar ligado lá.'
+      : 'Não deu: ' + (j.erro||'erro'));
+    if (j.ok) location.reload();
+    return;
+  }
   const cb = e.target.closest('[data-casar]');
   if (cb) { abreCasar(+cb.dataset.casar); return; }
   const fb = e.target.closest('[data-ficha]');

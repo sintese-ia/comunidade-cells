@@ -47,7 +47,14 @@ const painel = {
            (SELECT count(*) FROM creator.venda vn
              WHERE vn.parceiro_id=p.parceiro_id AND vn.atribuicao='cupom')::int AS pedidos,
            (SELECT round(sum(vn.receita_liquida),2) FROM creator.venda vn
-             WHERE vn.parceiro_id=p.parceiro_id AND vn.atribuicao='cupom') AS receita
+             WHERE vn.parceiro_id=p.parceiro_id AND vn.atribuicao='cupom') AS receita,
+           -- ⚠️ Estar ATIVO não quer dizer que a pessoa foi avisada. Os 28 que vieram do cupom
+           -- legado nasceram ativos e com cupom sem nunca receber um e-mail. Sem esta coluna a
+           -- tela mostra os dois casos igual — e foi exatamente o que confundiu em 08/08.
+           -- (sem crase neste comentário: o SQL mora em template literal e crase encerra a string)
+           EXISTS (SELECT 1 FROM creator.email_log el
+                    WHERE el.parceiro_id=p.parceiro_id AND el.tipo='aprovacao'
+                      AND el.estado='evento_enviado') AS avisado
     FROM creator.parceiro p
     LEFT JOIN LATERAL (
       SELECT seguidores, engajamento_pct, posts_30d, ultimo_post, bio, fonte
