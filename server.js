@@ -745,6 +745,68 @@ http.createServer(async (req, res) => {
       } catch (e) { return json(200, { ok: false, erro: e.message }); }
     }
 
+    // ---- casar cupom com creator ----
+    // O cupom legado chegou só com o código ("JESS"), sem Instagram. Casar é dizer quem é a
+    // pessoa. Dois caminhos, e a diferença importa:
+    //   - handle livre  → só carimba o handle nesta linha;
+    //   - handle JÁ é de outro parceiro → FUNDE, porque `ux_parceiro_handle` é único e porque
+    //     duas linhas para a mesma pessoa é exatamente o problema que estamos resolvendo.
+    // A fusão move cupom e vendas para o parceiro que já existe e guarda a linha antiga em
+    // `_fusao_parceiro`, para dar para desfazer.
+    if (acao === 'casar') {
+      const h = (u.searchParams.get('handle') || '').trim().replace(/^@/, '').toLowerCase();
+      if (!/^[a-z0-9._]{1,30}$/.test(h)) return json(400, { erro: 'handle inválido' });
+      const cli = await pool.connect();
+      try {
+        await cli.query('BEGIN');
+        const eu = (await cli.query(
+          `SELECT * FROM creator.parceiro WHERE parceiro_id=$1 FOR UPDATE`, [id])).rows[0];
+        if (!eu) throw new Error('parceiro não encontrado');
+        if (eu.instagram_handle) throw new Error('este cadastro já tem Instagram: @' + eu.instagram_handle);
+
+        const dono = (await cli.query(
+          `SELECT * FROM creator.parceiro WHERE lower(instagram_handle)=$1 AND parceiro_id<>$2`,
+          [h, id])).rows[0];
+
+        let alvo = id, fundido = false;
+        if (dono) {
+          await cli.query(`
+            CREATE TABLE IF NOT EXISTS creator._fusao_parceiro (
+              parceiro_id bigint, nome text, origem text, para_parceiro_id bigint,
+              handle text, fundido_em timestamptz DEFAULT now())`);
+          await cli.query(
+            `INSERT INTO creator._fusao_parceiro (parceiro_id,nome,origem,para_parceiro_id,handle)
+             VALUES ($1,$2,$3,$4,$5)`, [id, eu.nome, eu.origem, dono.parceiro_id, h]);
+          await cli.query(`UPDATE creator.cupom SET parceiro_id=$1 WHERE parceiro_id=$2`, [dono.parceiro_id, id]);
+          await cli.query(`UPDATE creator.venda SET parceiro_id=$1 WHERE parceiro_id=$2`, [dono.parceiro_id, id]);
+          await cli.query(`UPDATE creator.envio SET parceiro_id=$1 WHERE parceiro_id=$2`, [dono.parceiro_id, id]);
+          await cli.query(`UPDATE creator.custo SET parceiro_id=$1 WHERE parceiro_id=$2`, [dono.parceiro_id, id]);
+          await cli.query(`DELETE FROM creator.campanha_parceiro WHERE parceiro_id=$1`, [id]);
+          await cli.query(`DELETE FROM creator.acesso WHERE parceiro_id=$1`, [id]);
+          await cli.query(`DELETE FROM creator.meta_mes WHERE parceiro_id=$1`, [id]);
+          await cli.query(`DELETE FROM creator.parceiro WHERE parceiro_id=$1`, [id]);
+          alvo = dono.parceiro_id; fundido = true;
+        } else {
+          await cli.query(
+            `UPDATE creator.parceiro SET instagram_handle=$2, atualizado_em=now(), decidido_por=$3
+             WHERE parceiro_id=$1`, [id, h, por]);
+        }
+        // liga as publicações desse handle ao parceiro certo — é o que faz a ficha e a
+        // pontuação passarem a enxergar o conteúdo dessa pessoa
+        const pubs = await cli.query(
+          `UPDATE creator.publicacao SET parceiro_id=$1
+           WHERE lower(instagram_handle)=$2 AND parceiro_id IS DISTINCT FROM $1`, [alvo, h]);
+        await cli.query('COMMIT');
+        cache.at = 0;
+        const r = await pool.query(`SELECT * FROM creator.parceiro WHERE parceiro_id=$1`, [alvo]);
+        return json(200, { ok: true, parceiro: normaliza(r.rows[0]), fundido,
+                           publicacoes_ligadas: pubs.rowCount });
+      } catch (e) {
+        await cli.query('ROLLBACK').catch(() => {});
+        return json(200, { ok: false, erro: e.message });
+      } finally { cli.release(); }
+    }
+
     const acoes = {
       arquivar:    [`UPDATE creator.parceiro SET arquivado=true, arquivado_em=now(),
                        decidido_por=$2, atualizado_em=now() WHERE parceiro_id=$1 RETURNING *`, [id, por]],

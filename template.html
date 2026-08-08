@@ -330,6 +330,7 @@
         <button class="aba" data-fl="pausado" aria-pressed="false">pausados <b id="c-pausado">0</b></button>
         <button class="aba" data-fl="reprovado" aria-pressed="false">reprovados <b id="c-reprovado">0</b></button>
         <button class="aba" data-fl="arquivado" aria-pressed="false">arquivados <b id="c-arquivado">0</b></button>
+        <button class="aba" data-fl="semig" aria-pressed="false">sem instagram <b id="c-semig">0</b></button>
         <input id="cq" class="busca" placeholder="nome, @ ou cupom" aria-label="Filtrar cadastros">
         <span class="cnt" id="cntCad"></span>
       </div>
@@ -521,6 +522,30 @@
   </div>
 </dialog>
 
+<!-- ---------------- casar cupom com creator ---------------- -->
+<dialog class="ficha" id="dlgCasar">
+  <div class="fhd">
+    <div><h3 id="csTitulo">Quem é essa pessoa?</h3>
+      <div class="hh" id="csSub"></div></div>
+  </div>
+  <div class="fbody">
+    <div class="fsec">
+      <p class="obs">O cupom legado chegou só com o código, sem Instagram. Escolha o perfil da
+        pessoa e as publicações dela passam a contar na ficha e na pontuação.
+        <b>Se o perfil já estiver cadastrado, as duas linhas viram uma só</b> — cupom e vendas
+        vão para o cadastro que já existe.</p>
+      <div class="frm" style="margin-top:10px">
+        <input id="csBusca" placeholder="filtrar por @ ou nome" style="flex:1;min-width:220px">
+      </div>
+      <div id="csLista" style="margin-top:10px"></div>
+    </div>
+  </div>
+  <div class="fft">
+    <span class="esq obs" id="csErro"></span>
+    <button class="acbt" id="csFechar">fechar</button>
+  </div>
+</dialog>
+
 <!-- ---------------- nova campanha ---------------- -->
 <dialog class="ficha" id="dlgCamp">
   <div class="fhd"><div><h3>Nova campanha</h3>
@@ -659,11 +684,12 @@ const CAD = D.cadastros || [], ENVIOS = D.envios || [], PUBS = D.fichaPubs || []
 let cAba = 'todos', cBusca = '', cOrd = {c:'cadastro', d:-1};
 
 function contaCad(){
-  const c = {todos:0, pendente:0, ativo:0, pausado:0, reprovado:0, arquivado:0};
+  const c = {todos:0, pendente:0, ativo:0, pausado:0, reprovado:0, arquivado:0, semig:0};
   CAD.forEach(f => {
     if (f.arquivado) { c.arquivado++; return; }
     c.todos++;
     if (c[f.status] != null) c[f.status]++;
+    if (!f.instagram_handle) c.semig++;
   });
   for (const k in c) { const e = document.getElementById('c-'+k); if (e) e.textContent = c[k]; }
 }
@@ -671,6 +697,7 @@ function contaCad(){
 function filtraCad(){
   let L = CAD.filter(f => {
     if (cAba === 'arquivado') { if (!f.arquivado) return false; }
+    else if (cAba === 'semig') { if (f.arquivado || f.instagram_handle) return false; }
     else if (cAba !== 'todos') { if (f.arquivado || f.status !== cAba) return false; }
     else if (f.arquivado) return false;
     if (cBusca) {
@@ -706,8 +733,12 @@ function pintaCad(){
       : '<span style="color:var(--'+(f.engajamento_pct>=2?'ok':f.engajamento_pct<1?'cr':'ink')+')">'+pc(f.engajamento_pct)+'</span>';
     return '<tr>'
       + '<td class="h"><button class="lnk" data-ficha="'+f.parceiro_id+'"><b>'+esc(f.nome||'—')+'</b></button>'
-        + (f.instagram_handle ? '<span class="sub2">@'+esc(f.instagram_handle)+'</span>'
-                             : '<span class="sub2 dim">'+(f.cupom?'cupom '+esc(f.cupom):'sem instagram')+'</span>')+'</td>'
+        + (f.instagram_handle
+             ? '<span class="sub2">@'+esc(f.instagram_handle)+'</span>'
+             : '<span class="sub2">'+(f.cupom?'<span class="dim">cupom '+esc(f.cupom)+'</span> ':'')
+               + '<button class="lnk" data-casar="'+f.parceiro_id+'" style="color:var(--ac)">quem é?</button>'
+               + (melhorPalpite(f) ? ' <span class="dim">→ @'+esc(melhorPalpite(f).handle)+'</span>' : '')
+               + '</span>')+'</td>'
       + '<td class="dim">'+dt(f.cadastro)+'</td>'
       + '<td>'+n(f.seguidores)+'</td>'
       + '<td>'+eng+'</td>'
@@ -774,8 +805,99 @@ document.getElementById('tbCad').addEventListener('click', async e => {
     pintaCad();
     return;
   }
+  const cb = e.target.closest('[data-casar]');
+  if (cb) { abreCasar(+cb.dataset.casar); return; }
   const fb = e.target.closest('[data-ficha]');
   if (fb) abreFicha(+fb.dataset.ficha);
+});
+
+/* ---- casar cupom com creator ----------------------------------------------
+   O cupom legado chegou só com o código. O ranking abaixo é SUGESTÃO: casar errado prega a
+   venda de uma pessoa na conta de outra, então quem confirma é você, um por um. */
+const CANDS = D.candidatos || [];
+const norml = s => (s||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+  .toLowerCase().replace(/[^a-z0-9]/g,'');
+const semNum = s => norml(s).replace(/\d+$/,'');
+
+// bigramas — separa "jessica" de "jess" melhor que distância de edição
+function dice(a,b){
+  if(!a.length||!b.length) return 0;
+  if(a===b) return 1;
+  const bg = t => { const m=new Map();
+    for(let i=0;i<t.length-1;i++){const g=t.slice(i,i+2); m.set(g,(m.get(g)||0)+1);} return m; };
+  const A=bg(a), B=bg(b); let inter=0;
+  for(const [g,n] of A) inter += Math.min(n, B.get(g)||0);
+  return 2*inter/((a.length-1)+(b.length-1));
+}
+
+function pontua(cupom, cand){
+  const c = semNum(cupom), h = norml(cand.handle);
+  const nome = norml(cand.nome), primeiro = norml((cand.nome||'').trim().split(/\s+/)[0]||'');
+  let s=0, por='';
+  const bate=(v,txt)=>{ if(v>s){ s=v; por=txt; } };
+  if(h && h===c) bate(100,'handle idêntico');
+  if(h && c.length>=3 && h.startsWith(c)) bate(Math.max(60, 92-(h.length-c.length)),'handle começa com o cupom');
+  if(h && h.length>=4 && c.startsWith(h)) bate(88,'cupom começa com o handle');
+  if(primeiro && primeiro===c) bate(90,'primeiro nome igual');
+  if(primeiro && c.length>=3 && primeiro.startsWith(c)) bate(84,'primeiro nome começa com o cupom');
+  // "dentro de" com pedaço curto é onde nasce falso positivo — AURA10 casava com lAURAmadeira
+  if(h && c.length>=5 && h.includes(c)) bate(78,'cupom dentro do handle');
+  if(nome && c.length>=5 && nome.includes(c)) bate(74,'cupom dentro do nome');
+  const d = Math.max(dice(c,h), nome?dice(c,nome):0);
+  if(d>0.6) bate(Math.round(d*80),'parecido');
+  return {s,por};
+}
+
+function ranking(f, filtro){
+  const chave = f.cupom || f.nome || '';
+  let L = CANDS.map(x => ({...x, ...pontua(chave, x)}));
+  if(filtro) L = L.filter(x => ((x.handle||'')+' '+(x.nome||'')).toLowerCase().includes(filtro));
+  else L = L.filter(x => x.s >= 55);
+  return L.sort((a,b) => b.s-a.s || b.marcacoes-a.marcacoes).slice(0, filtro?40:6);
+}
+const melhorPalpite = f => f.instagram_handle ? null : (ranking(f)[0] || null);
+
+let casarId = null;
+const dlgCs = document.getElementById('dlgCasar');
+function abreCasar(id){
+  const f = CAD.find(x => x.parceiro_id === id); if(!f) return;
+  casarId = id;
+  document.getElementById('csTitulo').textContent = f.cupom ? ('Cupom ' + f.cupom) : (f.nome || '—');
+  document.getElementById('csSub').innerHTML = (f.pedidos||0)+' pedido'+(f.pedidos===1?'':'s')
+    + (f.receita ? ' · ' + rs(f.receita) : '') + ' esperando dono';
+  document.getElementById('csErro').textContent = '';
+  document.getElementById('csBusca').value = '';
+  pintaCasar('');
+  dlgCs.showModal();
+}
+function pintaCasar(filtro){
+  const f = CAD.find(x => x.parceiro_id === casarId); if(!f) return;
+  const L = ranking(f, filtro);
+  document.getElementById('csLista').innerHTML = L.length ? L.map(x =>
+    '<div class="pub">'
+    + '<span class="l"><b>@'+esc(x.handle)+'</b>'
+      + (x.nome ? ' <span class="dim">'+esc(x.nome)+'</span>' : '')
+      + '<span class="sub2">'+(x.marcacoes ? x.marcacoes+' marcação'+(x.marcacoes===1?'':'ões')
+          +' · última '+dt(x.ultima) : 'nunca marcou a Cells')
+      + (x.ja_cadastrado ? ' · <b>já cadastrado — vai fundir</b>' : '')+'</span></span>'
+    + (filtro ? '' : '<span class="m dim">'+x.s+' · '+esc(x.por)+'</span>')
+    + '<button class="acbt ok" data-esse="'+esc(x.handle)+'">é esse</button></div>').join('')
+    : '<p class="obs">Nenhum candidato'+(filtro?' com esse filtro':' parecido — use a busca acima')+'.</p>';
+}
+document.getElementById('csBusca').addEventListener('input', e =>
+  pintaCasar(e.target.value.trim().toLowerCase()));
+document.getElementById('csFechar').addEventListener('click', () => dlgCs.close());
+document.getElementById('csLista').addEventListener('click', async e => {
+  const b = e.target.closest('[data-esse]'); if(!b) return;
+  b.disabled = true;
+  const j = await (await fetch('/api/parceiro?id='+casarId+'&acao=casar&handle='
+    + encodeURIComponent(b.dataset.esse), {method:'POST'})).json();
+  b.disabled = false;
+  if(!j.ok){ document.getElementById('csErro').textContent = 'Não gravou: '+(j.erro||'erro'); return; }
+  dlgCs.close();
+  alert((j.fundido ? 'Fundido com o cadastro que já existia. ' : 'Casado. ')
+    + j.publicacoes_ligadas + ' publicação(ões) ligada(s) a essa pessoa.');
+  location.reload();
 });
 
 /* ---- ficha ---- */

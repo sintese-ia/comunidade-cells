@@ -171,6 +171,33 @@ const painel = {
     ORDER BY 4 DESC, 5 DESC, 1
   `,
 
+  // ---- candidatos para casar um cupom com uma pessoa ----
+  // Todo handle que a Cells conhece: quem marcou e quem se cadastrou. A tela ranqueia por
+  // parecença com o código do cupom — o ranking é sugestão, quem decide é o humano.
+  candidatos: `
+    WITH hs AS (
+      SELECT DISTINCT lower(instagram_handle) AS h FROM creator.publicacao
+       WHERE instagram_handle IS NOT NULL
+      UNION
+      SELECT DISTINCT lower(instagram_handle) FROM creator.parceiro
+       WHERE instagram_handle IS NOT NULL
+    )
+    SELECT hs.h AS handle,
+           coalesce(
+             (SELECT p.nome FROM creator.parceiro p
+               WHERE lower(p.instagram_handle)=hs.h ORDER BY p.parceiro_id LIMIT 1),
+             (SELECT s.nome FROM creator.perfil_snapshot s
+               WHERE lower(s.instagram_handle)=hs.h AND s.nome IS NOT NULL
+               ORDER BY s.coletado_em DESC LIMIT 1)) AS nome,
+           (SELECT count(*) FROM creator.publicacao u
+             WHERE lower(u.instagram_handle)=hs.h)::int AS marcacoes,
+           (SELECT max(u.publicado_em)::date FROM creator.publicacao u
+             WHERE lower(u.instagram_handle)=hs.h) AS ultima,
+           EXISTS (SELECT 1 FROM creator.parceiro p
+                    WHERE lower(p.instagram_handle)=hs.h) AS ja_cadastrado
+    FROM hs ORDER BY 3 DESC, 1
+  `,
+
   // ---- saúde dos jobs de coleta (vai para o rodapé do menu) ----
   jobs: `
     SELECT DISTINCT ON (job) job, sucesso, itens, rodou_em
