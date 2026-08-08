@@ -62,6 +62,9 @@ const painel = {
                     WHERE m.publicacao_id=u.publicacao_id) x ON true
       WHERE lower(u.instagram_handle)=lower(p.instagram_handle)
     ) v ON true
+    -- origem 'fundido' = linha de cupom que virou uma só com um cadastro que já existia.
+    -- Cupom e vendas foram movidos; a casca fica como trilha e não aparece em tela nenhuma.
+    WHERE p.origem IS DISTINCT FROM 'fundido'
     ORDER BY p.criado_em DESC
   `,
 

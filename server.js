@@ -770,21 +770,27 @@ http.createServer(async (req, res) => {
 
         let alvo = id, fundido = false;
         if (dono) {
-          await cli.query(`
-            CREATE TABLE IF NOT EXISTS creator._fusao_parceiro (
-              parceiro_id bigint, nome text, origem text, para_parceiro_id bigint,
-              handle text, fundido_em timestamptz DEFAULT now())`);
+          // `creator._fusao_parceiro` é criada na migração, não aqui: o app roda como
+          // `creator_app`, que não tem CREATE no schema. Tentar criar aqui derrubava a fusão
+          // inteira com "permission denied" — e passou no meu teste local porque eu tinha
+          // subido o servidor com o usuário admin. Teste local tem que usar o mesmo usuário.
+          //
+          // A linha fundida NÃO é apagada: vira `origem='fundido'` + arquivada, e some das
+          // telas pela query. Apagar exigiria DELETE em `parceiro`, que é o grant mais
+          // perigoso deste schema — um bug ali varre cadastro. Marcar resolve igual, é
+          // reversível, e a própria linha é a trilha de auditoria.
           await cli.query(
             `INSERT INTO creator._fusao_parceiro (parceiro_id,nome,origem,para_parceiro_id,handle)
              VALUES ($1,$2,$3,$4,$5)`, [id, eu.nome, eu.origem, dono.parceiro_id, h]);
-          await cli.query(`UPDATE creator.cupom SET parceiro_id=$1 WHERE parceiro_id=$2`, [dono.parceiro_id, id]);
-          await cli.query(`UPDATE creator.venda SET parceiro_id=$1 WHERE parceiro_id=$2`, [dono.parceiro_id, id]);
-          await cli.query(`UPDATE creator.envio SET parceiro_id=$1 WHERE parceiro_id=$2`, [dono.parceiro_id, id]);
-          await cli.query(`UPDATE creator.custo SET parceiro_id=$1 WHERE parceiro_id=$2`, [dono.parceiro_id, id]);
-          await cli.query(`DELETE FROM creator.campanha_parceiro WHERE parceiro_id=$1`, [id]);
-          await cli.query(`DELETE FROM creator.acesso WHERE parceiro_id=$1`, [id]);
-          await cli.query(`DELETE FROM creator.meta_mes WHERE parceiro_id=$1`, [id]);
-          await cli.query(`DELETE FROM creator.parceiro WHERE parceiro_id=$1`, [id]);
+          for (const t of ['cupom', 'venda', 'envio', 'custo'])
+            await cli.query(`UPDATE creator.${t} SET parceiro_id=$1 WHERE parceiro_id=$2`,
+                            [dono.parceiro_id, id]);
+          await cli.query(
+            `UPDATE creator.acesso SET revogado_em=now() WHERE parceiro_id=$1 AND revogado_em IS NULL`, [id]);
+          await cli.query(
+            `UPDATE creator.parceiro SET origem='fundido', arquivado=true, arquivado_em=now(),
+               status='reprovado', decidido_por=$2, atualizado_em=now()
+             WHERE parceiro_id=$1`, [id, por]);
           alvo = dono.parceiro_id; fundido = true;
         } else {
           await cli.query(

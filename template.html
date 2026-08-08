@@ -873,7 +873,17 @@ function abreCasar(id){
 function pintaCasar(filtro){
   const f = CAD.find(x => x.parceiro_id === casarId); if(!f) return;
   const L = ranking(f, filtro);
-  document.getElementById('csLista').innerHTML = L.length ? L.map(x =>
+  // Quem nunca marcou a Cells nem se cadastrou NÃO ESTÁ na lista — e é o caso comum de um
+  // cupom antigo. Sem esta saída, o cupom fica órfão para sempre porque a pessoa existe no
+  // Instagram e não existe aqui.
+  const digitado = (filtro||'').replace(/^@/,'').trim();
+  const solto = /^[a-z0-9._]{1,30}$/.test(digitado) && !L.some(x => x.handle === digitado)
+    ? '<div class="pub" style="background:var(--ac-s)">'
+      + '<span class="l"><b>@'+esc(digitado)+'</b>'
+      + '<span class="sub2">não está na base — vou conferir na Meta se o perfil existe</span></span>'
+      + '<button class="acbt ok" data-esse="'+esc(digitado)+'" data-novo="1">usar este @</button></div>'
+    : '';
+  document.getElementById('csLista').innerHTML = solto + (L.length ? L.map(x =>
     '<div class="pub">'
     + '<span class="l"><b>@'+esc(x.handle)+'</b>'
       + (x.nome ? ' <span class="dim">'+esc(x.nome)+'</span>' : '')
@@ -882,7 +892,8 @@ function pintaCasar(filtro){
       + (x.ja_cadastrado ? ' · <b>já cadastrado — vai fundir</b>' : '')+'</span></span>'
     + (filtro ? '' : '<span class="m dim">'+x.s+' · '+esc(x.por)+'</span>')
     + '<button class="acbt ok" data-esse="'+esc(x.handle)+'">é esse</button></div>').join('')
-    : '<p class="obs">Nenhum candidato'+(filtro?' com esse filtro':' parecido — use a busca acima')+'.</p>';
+    : (solto ? '' : '<p class="obs">Nenhum candidato'
+        + (filtro?' com esse filtro':' parecido — digite o @ da pessoa na busca acima')+'.</p>'));
 }
 document.getElementById('csBusca').addEventListener('input', e =>
   pintaCasar(e.target.value.trim().toLowerCase()));
@@ -890,6 +901,15 @@ document.getElementById('csFechar').addEventListener('click', () => dlgCs.close(
 document.getElementById('csLista').addEventListener('click', async e => {
   const b = e.target.closest('[data-esse]'); if(!b) return;
   b.disabled = true;
+  const err = document.getElementById('csErro');
+  // @ digitado à mão passa pela Meta primeiro: carimbar um handle que não existe cria um
+  // cadastro que nunca vai coletar nada e ninguém descobre depois
+  if (b.dataset.novo) {
+    err.textContent = 'conferindo @'+b.dataset.esse+' na Meta…';
+    const v = await (await fetch('/api/buscar?h='+encodeURIComponent(b.dataset.esse))).json();
+    if (!v.ok) { err.textContent = 'não deu para confirmar: ' + (v.erro||''); b.disabled = false; return; }
+    err.textContent = '';
+  }
   const j = await (await fetch('/api/parceiro?id='+casarId+'&acao=casar&handle='
     + encodeURIComponent(b.dataset.esse), {method:'POST'})).json();
   b.disabled = false;
