@@ -673,6 +673,14 @@
         <p class="obs" style="margin-top:9px">O ponto é contado sozinho a partir do que já é coletado: publicação com marcação à Cells e pedido com cupom, dentro do período da campanha.</p>
       </div>
     </div>
+    <div class="fsec"><h4>Link da campanha</h4>
+      <div class="frm">
+        <input id="dcContent" style="flex:1;min-width:220px" placeholder="2026-08_lancamento"
+               maxlength="60" aria-label="utm_content">
+      </div>
+      <p class="obs" style="margin-top:7px">Vai no <span style="font-family:var(--mono)">utm_content</span> do link de cada creator. É ele que separa o clique desta campanha do clique do link normal da pessoa. Padrão: <b>ano-mês_nome</b>.</p>
+      <p class="obs" style="margin-top:6px;font-family:var(--mono);font-size:11px;color:var(--ac)" id="dcExemplo"></p>
+    </div>
     <div class="fsec"><h4>Período <span style="text-transform:none;letter-spacing:0;font-family:var(--sans);color:var(--fnt)">— o fim é opcional</span></h4>
       <div class="frm">
         <input id="dcIni" type="date" aria-label="início">
@@ -685,6 +693,30 @@
     <span class="esq obs" id="dcErro"></span>
     <button class="acbt" id="dcFechar">cancelar</button>
     <button class="acbt ok" id="dcSalvar">criar campanha</button>
+  </div>
+</dialog>
+
+<!-- ---------------- avisar os creators da campanha ---------------- -->
+<dialog class="ficha" id="dlgAviso">
+  <div class="fhd">
+    <div><h3 id="avTitulo">Avisar os creators</h3>
+      <div class="hh" id="avSub"></div></div>
+  </div>
+  <div class="fbody">
+    <div class="fsec">
+      <p class="obs">Cada pessoa recebe <b>o link dela</b>, já com o <span style="font-family:var(--mono)">utm_content</span> desta campanha. Desmarque quem não deve receber agora.</p>
+      <div class="frm" style="margin-top:9px">
+        <button class="acbt" id="avTodos">marcar todos</button>
+        <button class="acbt" id="avNenhum">desmarcar todos</button>
+        <span class="cnt" id="avCnt"></span>
+      </div>
+      <div id="avLista" style="margin-top:10px"></div>
+    </div>
+  </div>
+  <div class="fft">
+    <span class="esq obs" id="avErro"></span>
+    <button class="acbt" id="avFechar">cancelar</button>
+    <button class="acbt ok" id="avEnviar">avisar</button>
   </div>
 </dialog>
 
@@ -1291,6 +1323,9 @@ function pintaCamp(){
     L.length + ' campanha' + (L.length===1?'':'s');
   document.getElementById('listaCamp').innerHTML = L.length ? L.map(c => {
     const pl = PLACAR.filter(p => p.campanha_id === c.campanha_id).slice(0,6);
+    const utm = c.utm_content
+      ? '<span class="r">link <b>'+esc(c.utm_content)+'</b></span>'
+      : '<span class="r dim">sem utm_content — o link não muda nesta campanha</span>';
     const regra = c.tipo === 'comissao'
       ? '<span class="r"><b>'+pc(c.comissao_pct)+'</b> sobre o vendido pelo cupom</span>'
       : ((c.acoes||[]).map(a => '<span class="r">'+esc(rotAcao(a.acao))+' <b>'+a.pontos+' pts</b></span>').join('')
@@ -1308,7 +1343,7 @@ function pintaCamp(){
       + '<span class="dim" style="font-family:var(--mono);font-size:11px;margin-left:auto">'
         + n(c.creators)+' creator'+(c.creators===1?'':'s')+'</span></div>'
       + (c.briefing ? '<p class="obs" style="margin-top:6px">'+esc(c.briefing)+'</p>' : '')
-      + '<div class="regra">'+regra+'</div>'
+      + '<div class="regra">'+regra+utm+'</div>'
       + '<div class="res">'+res.map(([k,v])=>'<div><div class="k">'+k+'</div><div class="v">'+v+'</div></div>').join('')+'</div>'
       + (pl.length ? '<p class="obs" style="margin-top:9px"><b>Placar:</b> '
           + pl.map(p => n(p.pontos)+' pts — '+esc(p.nome||'@'+p.instagram_handle)).join(' · ')+'</p>' : '')
@@ -1321,7 +1356,10 @@ function pintaCamp(){
         + CAD.filter(f => f.status==='ativo' && !f.arquivado
                      && !(c.participantes||[]).some(p => p.parceiro_id===f.parceiro_id))
              .map(f => '<option value="'+f.parceiro_id+'">'+esc(f.nome||('#'+f.parceiro_id))+'</option>').join('')
-      + '</select></div>'
+      + '</select>'
+      + (c.utm_content && (c.participantes||[]).length
+          ? '<button class="acbt ok" data-avisar="'+c.campanha_id+'">avisar os creators</button>' : '')
+      + '</div>'
       + ((c.participantes||[]).length
           ? '<p class="obs" style="margin-top:8px">'+(c.participantes||[]).map(p =>
               '<span class="chip vo" style="margin-right:4px">'+esc(p.nome||p.handle||('#'+p.parceiro_id))
@@ -1386,9 +1424,17 @@ function trocaTipo(){
 document.querySelectorAll('input[name="dctipo"]').forEach(r => r.addEventListener('change', trocaTipo));
 document.getElementById('dcAddAcao').addEventListener('click', () =>
   document.getElementById('dcAcoes').appendChild(linhaAcao()));
+document.getElementById('dcContent').addEventListener('input', e => {
+  const v = e.target.value.trim().toLowerCase().normalize('NFD')
+    .replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9_-]/g,'');
+  document.getElementById('dcExemplo').textContent = v
+    ? '?utm_source=creator&utm_campaign=pedrocorre&utm_content=' + v
+    : '';
+});
 
 document.getElementById('novaCamp').addEventListener('click', () => {
   dcNome.value = ''; dcBrief.value = ''; dcPct.value = '15';
+  dcContent.value = ''; document.getElementById('dcExemplo').textContent = '';
   dcIni.value = hoje; dcFim.value = ''; dcStatus.value = 'ativa';
   document.querySelector('input[name="dctipo"][value="comissao"]').checked = true;
   trocaTipo();
@@ -1408,6 +1454,7 @@ document.getElementById('dcSalvar').addEventListener('click', async () => {
     nome: dcNome.value.trim(), briefing: dcBrief.value.trim() || null,
     tipo: tipoEscolhido(), comissao_pct: dcPct.value,
     inicio: dcIni.value || hoje, fim: dcFim.value || null, status: dcStatus.value,
+    utm_content: dcContent.value.trim(),
     acoes: [...document.querySelectorAll('#dcAcoes .frm')].map(r => ({
       acao: r.querySelector('.ma').value, pontos: r.querySelector('.mp').value })),
   };
@@ -1420,6 +1467,74 @@ document.getElementById('dcSalvar').addEventListener('click', async () => {
   location.reload();
 });
 pintaCamp();
+
+/* ---- avisar os creators de uma campanha -------------------------------------
+   É a ação menos reversível do painel: manda e-mail para várias pessoas de uma vez. Por isso
+   a tela mostra QUEM vai receber, com o link de cada um, antes de qualquer disparo — e volta
+   pessoa a pessoa dizendo quem foi e quem não foi. */
+const dlgAv = document.getElementById('dlgAviso');
+let avCamp = null, avPessoas = [];
+
+document.getElementById('listaCamp').addEventListener('click', async e => {
+  const b = e.target.closest('[data-avisar]'); if (!b) return;
+  b.disabled = true;
+  const j = await (await fetch('/api/campanha/aviso?campanha=' + b.dataset.avisar)).json();
+  b.disabled = false;
+  if (!j.ok) return alert('Não deu: ' + (j.erro || 'erro'));
+  avCamp = { ...j.campanha, campanha_id: +b.dataset.avisar };
+  avPessoas = j.pessoas;
+  document.getElementById('avTitulo').textContent = 'Avisar sobre ' + avCamp.nome;
+  document.getElementById('avSub').innerHTML = 'utm_content <b>' + esc(avCamp.utm_content)
+    + '</b> · ' + avPessoas.length + ' creator' + (avPessoas.length === 1 ? '' : 's') + ' na campanha';
+  document.getElementById('avErro').textContent = '';
+  pintaAviso();
+  dlgAv.showModal();
+});
+
+function pintaAviso(){
+  document.getElementById('avLista').innerHTML = avPessoas.map((x,i) =>
+    '<div class="pub">'
+    + '<input type="checkbox" class="avck" data-i="'+i+'"'
+      + (x.email && !x.avisado_em ? ' checked' : '') + (x.email ? '' : ' disabled') + '>'
+    + '<span class="l"><b>'+esc(x.nome || '#'+x.parceiro_id)+'</b>'
+      + (x.avisado_em ? ' <span class="chip vo">já avisado em '+dt(x.avisado_em)+'</span>' : '')
+      + '<span class="sub2">' + (x.email
+          ? esc(x.email) + ' · <span style="font-family:var(--mono);font-size:10px">' + esc(x.link) + '</span>'
+          : '<span style="color:var(--cr)">sem e-mail no cadastro — não dá para avisar</span>')
+      + '</span></span></div>').join('')
+    || '<p class="obs">Nenhum creator vinculado a esta campanha.</p>';
+  contaAviso();
+}
+function contaAviso(){
+  const n = document.querySelectorAll('.avck:checked').length;
+  document.getElementById('avCnt').textContent = n + ' selecionado' + (n===1?'':'s');
+  document.getElementById('avEnviar').textContent = n ? 'avisar ' + n : 'avisar';
+  document.getElementById('avEnviar').disabled = !n;
+}
+document.getElementById('avLista').addEventListener('change', contaAviso);
+document.getElementById('avTodos').addEventListener('click', () => {
+  document.querySelectorAll('.avck:not(:disabled)').forEach(c => c.checked = true); contaAviso();
+});
+document.getElementById('avNenhum').addEventListener('click', () => {
+  document.querySelectorAll('.avck').forEach(c => c.checked = false); contaAviso();
+});
+document.getElementById('avFechar').addEventListener('click', () => dlgAv.close());
+document.getElementById('avEnviar').addEventListener('click', async () => {
+  const sel = [...document.querySelectorAll('.avck:checked')].map(c => avPessoas[+c.dataset.i].parceiro_id);
+  if (!sel.length) return;
+  const bt = document.getElementById('avEnviar'), err = document.getElementById('avErro');
+  bt.disabled = true; err.textContent = 'avisando ' + sel.length + '…';
+  const j = await (await fetch('/api/campanha/avisar', {method:'POST',
+    headers:{'content-type':'application/json'},
+    body: JSON.stringify({campanha_id: avCamp.campanha_id, parceiros: sel})})).json();
+  bt.disabled = false;
+  if (!j.ok) { err.textContent = j.erro || 'não deu'; return; }
+  dlgAv.close();
+  alert(j.avisados + ' de ' + j.total + ' foram para o Klaviyo.'
+    + (j.falharam.length ? '\n\nNão saíram:\n' + j.falharam.map(f => '· ' + f.nome + ' — ' + f.erro).join('\n') : '')
+    + '\n\nA entrega depende do flow "Creator Campanha" estar ligado no Klaviyo.');
+  location.reload();
+});
 
 /* =================================================== 04 ANÁLISES =============== */
 const OPC = D.opcoes || [];

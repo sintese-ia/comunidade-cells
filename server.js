@@ -85,9 +85,19 @@ function recarregar() {
   return emVoo;
 }
 
+// ⚠️ `cache.at = 0` depois de uma escrita NÃO bastava. Ele dispara a recarga mas a chamada
+// atual devolve o cache velho na mesma hora — então quem grava e recarrega a página vê o mundo
+// de ANTES. Foi assim que o botão "avisar os creators" não apareceu depois de vincular
+// alguém: o dado estava certo no banco e certo no /api/dados, e errado no HTML servido.
+// Agora `sujo` obriga a PRÓXIMA leitura a esperar a recarga. É meio segundo, uma vez, logo
+// após uma ação do usuário — barato perto de mostrar informação desatualizada.
+let sujo = false;
+function invalida() { cache.at = 0; sujo = true; }
+
 async function dados() {
-  if (cache.json) { if (Date.now() - cache.at >= TTL) recarregar(); return cache.json; }
-  return recarregar();
+  if (sujo || !cache.json) { sujo = false; return recarregar(); }
+  if (Date.now() - cache.at >= TTL) recarregar();   // vencido: devolve o atual e renova atrás
+  return cache.json;
 }
 
 // ---------------------------------------------------------------- Meta Graph
@@ -271,6 +281,25 @@ async function criarCupomShopify({ codigo, pct, combinavel }) {
 // e-mail. Se o flow não estiver ligado no Klaviyo, o evento entra e nada sai. Por isso o
 // email_log grava `evento_enviado`, nunca `enviado`.
 const METRICA_APROVACAO = 'Creator Aprovado';
+const METRICA_CAMPANHA  = 'Creator Campanha';
+
+// Mesmo caminho do aviso de aprovação, com a campanha junto. Separado em métrica própria
+// porque o flow é outro: aqui o assunto é "seu link mudou para esta campanha", não boas-vindas.
+async function eventoCampanha({ email, nome, campanha, briefing, cupom, link, inicio, fim }) {
+  if (!KLAVIYO) throw new Error('KLAVIYO_KEY não configurada');
+  if (!email) throw new Error('sem e-mail no cadastro');
+  const corpo = { data: { type: 'event', attributes: {
+    properties: { campanha, briefing: briefing || null, cupom: cupom || null, link,
+                  inicio: inicio || null, fim: fim || null, nome_creator: nome || null },
+    metric: { data: { type: 'metric', attributes: { name: METRICA_CAMPANHA } } },
+    profile: { data: { type: 'profile', attributes: { email,
+               ...(nome ? { first_name: String(nome).split(/\s+/)[0] } : {}) } } },
+  } } };
+  const r = await postJSON('https://a.klaviyo.com/api/events/',
+    { Authorization: 'Klaviyo-API-Key ' + KLAVIYO, revision: '2024-10-15' }, corpo);
+  if (r.status !== 202) throw new Error('Klaviyo HTTP ' + r.status + ' ' + String(r.txt).slice(0, 200));
+  return corpo.data.attributes.properties;
+}
 
 async function eventoAprovacao({ email, nome, cupom, link, desconto, comissao }) {
   if (!KLAVIYO) throw new Error('KLAVIYO_KEY não configurada');
@@ -293,10 +322,25 @@ async function eventoAprovacao({ email, nome, cupom, link, desconto, comissao })
   return corpo.data.attributes.properties;
 }
 
+// ---------------------------------------------------------------- o link do creator
+// Convenção fechada com o Gabriel em 08/08:
+//   utm_source=creator  ·  utm_campaign=<@ da pessoa>  ·  utm_content=<campanha>
+// `content` fora significa link base — a pessoa divulgando por conta própria, que é caso
+// legítimo e não dado faltando. Uma função só, porque link montado em três lugares diferentes
+// vira três convenções diferentes na primeira pressa.
+function linkCreator(slug, utmContent) {
+  const q = new URLSearchParams({ utm_source: 'creator', utm_campaign: slug });
+  if (utmContent) q.set('utm_content', utmContent);
+  return SITE + '/?' + q.toString();
+}
+
 // slug do link, único. `ux_parceiro_slug` é único de verdade, então tentar sem checar quebra.
 async function slugLivre(cli, base) {
-  const raiz = (base || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 24) || 'creator';
+  // o @ entra INTEIRO, com ponto e underscore: é o que o Gabriel pediu e é o que torna o
+  // link legível. Só nome de pessoa (quem não tem @) perde os separadores.
+  const cru = String(base || '').trim().toLowerCase();
+  const raiz = (/^[a-z0-9._]+$/.test(cru) ? cru
+    : cru.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '')).slice(0, 30) || 'creator';
   for (let i = 0; i < 40; i++) {
     const tentativa = i ? raiz + i : raiz;
     const r = await cli.query(`SELECT 1 FROM creator.parceiro WHERE utm_slug=$1`, [tentativa]);
@@ -687,7 +731,7 @@ http.createServer(async (req, res) => {
     if (!pub) return json(400, { erro: 'publicacao ausente' });
     try {
       await J.buscarVideoDe(pool, APIFY, pub);
-      cache.at = 0;
+      invalida();
       return json(200, { ok: true });
     } catch (e) { return json(200, { ok: false, erro: e.message }); }
   }
@@ -728,7 +772,7 @@ http.createServer(async (req, res) => {
       const r = await pool.query(
         `UPDATE creator.publicacao SET virou_anuncio=$2, virou_anuncio_em = CASE WHEN $2 THEN now() ELSE NULL END
          WHERE publicacao_id=$1 RETURNING publicacao_id, virou_anuncio`, [pub, v]);
-      cache.at = 0;
+      invalida();
       return json(200, { ok: true, publicacao: r.rows[0] });
     } catch (e) { return json(200, { ok: false, erro: e.message }); }
   }
@@ -768,7 +812,7 @@ http.createServer(async (req, res) => {
           const r = await cli.query(
             `UPDATE creator.campanha SET status=$2 WHERE campanha_id=$1 RETURNING *`,
             [d.campanha_id, d.status]);
-          cache.at = 0; return json(200, { ok: true, campanha: r.rows[0] });
+          invalida(); return json(200, { ok: true, campanha: r.rows[0] });
         }
 
         if (!d.nome || !String(d.nome).trim()) return json(400, { erro: 'nome é obrigatório' });
@@ -779,16 +823,23 @@ http.createServer(async (req, res) => {
         const acoes = (d.acoes || []).filter(a => a && a.acao && +a.pontos > 0);
         if (tipo === 'pontuacao' && !acoes.length)
           return json(400, { erro: 'campanha de pontuação precisa de pelo menos uma ação com pontos' });
+        // utm_content: é ele que separa o resultado desta campanha do de outra no clique
+        const conteudo = String(d.utm_content || '').trim().toLowerCase()
+          .normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9_-]/g,'') || null;
+        if (conteudo && conteudo.length < 3)
+          return json(400, { erro: 'utm_content muito curto — use algo como 2026-08_lancamento' });
+
         const inicio = /^\d{4}-\d{2}-\d{2}$/.test(d.inicio || '') ? d.inicio : hoje;
         const fim    = /^\d{4}-\d{2}-\d{2}$/.test(d.fim || '') ? d.fim : null;
         if (fim && fim < inicio) return json(400, { erro: 'a data final é antes da inicial' });
 
         await cli.query('BEGIN');
         const r = await cli.query(
-          `INSERT INTO creator.campanha (nome,briefing,tipo,comissao_pct,inicio,fim,status,criado_por)
-           VALUES ($1,$2,$3,$4,$5::date,$6::date,$7,$8) RETURNING *`,
+          `INSERT INTO creator.campanha (nome,briefing,tipo,comissao_pct,inicio,fim,status,
+                                         utm_content,criado_por)
+           VALUES ($1,$2,$3,$4,$5::date,$6::date,$7,$8,$9) RETURNING *`,
           [String(d.nome).trim().slice(0, 120), d.briefing || null, tipo, pct, inicio, fim,
-           d.status === 'ativa' ? 'ativa' : 'rascunho', (d.por || 'painel').slice(0, 60)]);
+           d.status === 'ativa' ? 'ativa' : 'rascunho', conteudo, (d.por || 'painel').slice(0, 60)]);
         const camp = r.rows[0];
 
         if (tipo === 'pontuacao') {
@@ -802,7 +853,7 @@ http.createServer(async (req, res) => {
                VALUES ($1,$2,$3,$4)`, [j.rows[0].jogo_id, a.acao, Math.round(+a.pontos), i]);
         }
         await cli.query('COMMIT');
-        cache.at = 0;
+        invalida();
         return json(200, { ok: true, campanha: camp });
       } catch (e) {
         await cli.query('ROLLBACK').catch(() => {});
@@ -822,7 +873,7 @@ http.createServer(async (req, res) => {
       else await pool.query(
         `INSERT INTO creator.campanha_parceiro (campanha_id,parceiro_id) VALUES ($1,$2)
          ON CONFLICT (campanha_id,parceiro_id) DO UPDATE SET saiu_em=NULL`, [c, p]);
-      cache.at = 0; return json(200, { ok: true });
+      invalida(); return json(200, { ok: true });
     } catch (e) { return json(200, { ok: false, erro: e.message }); }
   }
 
@@ -872,7 +923,7 @@ http.createServer(async (req, res) => {
         await cli.query('BEGIN');
         etapa = 'gravando o link';
         const slug = pa.utm_slug || await slugLivre(cli, pa.instagram_handle || pa.nome || codigo);
-        const link = `${SITE}/?utm_source=creator&utm_medium=organic&utm_campaign=${slug}`;
+        const link = linkCreator(slug);
 
         etapa = 'criando o cupom na Shopify';
         let shopifyId = null, shopifyErro = null;
@@ -903,7 +954,7 @@ http.createServer(async (req, res) => {
           [codigo, shopifyErro ? 'NAO_CRIADO' : 'ACTIVE', desconto, !!d.combinavel,
            id, novo.instagram_handle]);
         await cli.query('COMMIT');
-        cache.at = 0;
+        invalida();
 
         // ---- e-mail, por último e fora da transação ----
         // Fora de propósito: e-mail não tem rollback. Se ele falhar, a aprovação continua
@@ -951,7 +1002,7 @@ http.createServer(async (req, res) => {
       const p = r.rows[0];
       if (!p) return json(404, { erro: 'parceiro não encontrado' });
       if (!p.codigo) return json(400, { erro: 'esta pessoa ainda não tem cupom' });
-      const link = `${SITE}/?utm_source=creator&utm_medium=organic&utm_campaign=${p.utm_slug}`;
+      const link = linkCreator(p.utm_slug);
       const props = await eventoAprovacao({ email: p.email, nome: p.nome, cupom: p.codigo, link,
                                             desconto: p.desconto_pct, comissao: p.comissao_pct });
       await pool.query(`
@@ -966,6 +1017,89 @@ http.createServer(async (req, res) => {
         [id, METRICA_APROVACAO, e.message]).catch(() => {});
       return json(200, { ok: false, erro: e.message });
     }
+  }
+
+  // ---------------- quem seria avisado de uma campanha ----------------
+  // GET, sem efeito nenhum: a tela precisa mostrar a lista ANTES de disparar. Mandar e-mail
+  // para N pessoas de uma vez é a ação menos reversível deste painel.
+  if (u.pathname === '/api/campanha/aviso') {
+    const c = +u.searchParams.get('campanha');
+    if (!c) return json(400, { erro: 'campanha ausente' });
+    try {
+      const r = await pool.query(`
+        SELECT p.parceiro_id, p.nome, p.email, p.utm_slug, p.instagram_handle,
+               cu.codigo AS cupom,
+               (SELECT max(el.criado_em) FROM creator.email_log el
+                 WHERE el.parceiro_id=p.parceiro_id AND el.campanha_id=$1
+                   AND el.estado='evento_enviado')::date AS avisado_em
+        FROM creator.campanha_parceiro cp
+        JOIN creator.parceiro p ON p.parceiro_id = cp.parceiro_id
+        LEFT JOIN creator.cupom cu ON cu.parceiro_id = p.parceiro_id AND cu.ativo
+        WHERE cp.campanha_id = $1 AND cp.saiu_em IS NULL
+        ORDER BY p.nome`, [c]);
+      const cam = (await pool.query(
+        `SELECT nome, utm_content, briefing, inicio, fim FROM creator.campanha WHERE campanha_id=$1`,
+        [c])).rows[0];
+      if (!cam) return json(404, { erro: 'campanha não encontrada' });
+      return json(200, { ok: true, campanha: normaliza(cam),
+        pessoas: r.rows.map(x => normaliza({ ...x,
+          link: linkCreator(x.utm_slug, cam.utm_content) })) });
+    } catch (e) { return json(200, { ok: false, erro: e.message }); }
+  }
+
+  // ---------------- avisar os creators de uma campanha ----------------
+  // Manda um evento por pessoa. Falha de uma NÃO derruba as outras — e o resultado volta
+  // pessoa a pessoa, para a tela poder dizer quem foi e quem não foi em vez de "enviado".
+  if (u.pathname === '/api/campanha/avisar' && req.method === 'POST') {
+    let b = ''; req.on('data', c => { b += c; if (b.length > 20000) req.destroy(); });
+    return req.on('end', async () => {
+      try {
+        const d = JSON.parse(b || '{}');
+        const c = +d.campanha_id;
+        const ids = Array.isArray(d.parceiros) ? d.parceiros.map(Number).filter(Boolean) : [];
+        if (!c) return json(400, { erro: 'campanha ausente' });
+        if (!ids.length) return json(400, { erro: 'ninguém selecionado' });
+
+        const cam = (await pool.query(
+          `SELECT campanha_id, nome, utm_content, briefing, inicio, fim
+             FROM creator.campanha WHERE campanha_id=$1`, [c])).rows[0];
+        if (!cam) return json(404, { erro: 'campanha não encontrada' });
+        // sem utm_content o link da campanha é igual ao link base, e o e-mail estaria
+        // avisando de uma mudança que não existe
+        if (!cam.utm_content)
+          return json(400, { erro: 'esta campanha não tem utm_content — sem ele o link não muda' });
+
+        const pessoas = (await pool.query(`
+          SELECT p.parceiro_id, p.nome, p.email, p.utm_slug, cu.codigo AS cupom
+          FROM creator.parceiro p
+          LEFT JOIN creator.cupom cu ON cu.parceiro_id=p.parceiro_id AND cu.ativo
+          WHERE p.parceiro_id = ANY($1)`, [ids])).rows;
+
+        const res = [];
+        for (const p of pessoas) {
+          const link = linkCreator(p.utm_slug, cam.utm_content);
+          try {
+            const props = await eventoCampanha({ email: p.email, nome: p.nome, campanha: cam.nome,
+              briefing: cam.briefing, cupom: p.cupom, link,
+              inicio: cam.inicio, fim: cam.fim });
+            await pool.query(`
+              INSERT INTO creator.email_log (parceiro_id,campanha_id,para,assunto,tipo,estado,payload)
+              VALUES ($1,$2,$3,$4,'campanha','evento_enviado',$5)`,
+              [p.parceiro_id, c, p.email, METRICA_CAMPANHA, props]);
+            res.push({ parceiro_id: p.parceiro_id, nome: p.nome, ok: true });
+          } catch (e) {
+            await pool.query(`
+              INSERT INTO creator.email_log (parceiro_id,campanha_id,para,assunto,tipo,estado,detalhe)
+              VALUES ($1,$2,$3,$4,'campanha','falhou',$5)`,
+              [p.parceiro_id, c, p.email || '(sem e-mail)', METRICA_CAMPANHA, e.message]).catch(() => {});
+            res.push({ parceiro_id: p.parceiro_id, nome: p.nome, ok: false, erro: e.message });
+          }
+        }
+        invalida();
+        return json(200, { ok: true, avisados: res.filter(x => x.ok).length,
+                           falharam: res.filter(x => !x.ok), total: res.length });
+      } catch (e) { return json(200, { ok: false, erro: e.message }); }
+    });
   }
 
   // ---------------- cadastros: mudar status ----------------
@@ -995,7 +1129,7 @@ http.createServer(async (req, res) => {
             reprovado_motivo = CASE WHEN $2='reprovado' THEN coalesce($4, reprovado_motivo) ELSE NULL END
           WHERE parceiro_id=$1 RETURNING *`, [id, valor, por, motivo || null]);
         if (!r.rows[0]) return json(404, { erro: 'parceiro não encontrado' });
-        cache.at = 0;                     // a lista mudou: a próxima leitura tem que ser fresca
+        invalida();                     // a lista mudou: a próxima leitura tem que ser fresca
         return json(200, { ok: true, parceiro: normaliza(r.rows[0]) });
       } catch (e) { return json(200, { ok: false, erro: e.message }); }
     }
@@ -1042,9 +1176,11 @@ http.createServer(async (req, res) => {
                             [dono.parceiro_id, id]);
           await cli.query(
             `UPDATE creator.acesso SET revogado_em=now() WHERE parceiro_id=$1 AND revogado_em IS NULL`, [id]);
+          // solta o utm_slug: o índice é único e a casca não aparece em tela nenhuma, então
+          // segurando o slug ela bloqueia em silêncio o link de uma pessoa viva
           await cli.query(
             `UPDATE creator.parceiro SET origem='fundido', arquivado=true, arquivado_em=now(),
-               status='reprovado', decidido_por=$2, atualizado_em=now()
+               status='reprovado', decidido_por=$2, utm_slug=NULL, atualizado_em=now()
              WHERE parceiro_id=$1`, [id, por]);
           alvo = dono.parceiro_id; fundido = true;
         } else {
@@ -1072,7 +1208,7 @@ http.createServer(async (req, res) => {
                     (SELECT c.codigo FROM creator.cupom c WHERE c.parceiro_id=p.parceiro_id
                       ORDER BY c.cupom_id LIMIT 1), '@@'),'[^A-Za-z0-9]','','g'))`, [alvo, h]);
         await cli.query('COMMIT');
-        cache.at = 0;
+        invalida();
         const r = await pool.query(`SELECT * FROM creator.parceiro WHERE parceiro_id=$1`, [alvo]);
         return json(200, { ok: true, parceiro: normaliza(r.rows[0]), fundido,
                            publicacoes_ligadas: pubs.rowCount });
@@ -1095,7 +1231,7 @@ http.createServer(async (req, res) => {
       const [sql, params] = acoes[acao];
       const r = await pool.query(sql, params);
       if (!r.rows[0]) return json(404, { erro: 'parceiro não encontrado' });
-      cache.at = 0;
+      invalida();
       return json(200, { ok: true, parceiro: normaliza(r.rows[0]) });
     } catch (e) { return json(200, { ok: false, erro: e.message }); }
   }
@@ -1113,7 +1249,7 @@ http.createServer(async (req, res) => {
              enviado_em = CASE WHEN $2='postado'  THEN coalesce(enviado_em, now()) ELSE enviado_em END,
              entregue_em= CASE WHEN $2='entregue' THEN coalesce(entregue_em,now()) ELSE entregue_em END
            WHERE envio_id=$1 RETURNING *`, [envioId, st, g('rastreio')]);
-        cache.at = 0;
+        invalida();
         return json(200, { ok: true, envio: r.rows[0] });
       }
       if (!id) return json(400, { erro: 'id do parceiro ausente' });
@@ -1128,7 +1264,7 @@ http.createServer(async (req, res) => {
          VALUES ($1, date_trunc('month',current_date)::date, $2, $3, $4, $5)`,
         [id, g('tipo') === 'seeding' ? 'seeding' : g('tipo') === 'premio' ? 'premio' : 'kit_entrada',
          g('valor'), g('itens'), (g('por') || 'painel').slice(0, 60)]);
-      cache.at = 0;
+      invalida();
       return json(200, { ok: true, envio: r.rows[0] });
     } catch (e) { return json(200, { ok: false, erro: e.message }); }
   }
@@ -1143,7 +1279,7 @@ http.createServer(async (req, res) => {
     if (!fns[nome]) return json(400, { erro: 'job desconhecido: use cadastros, tags, perfis ou apify' });
     try {
       const r = await fns[nome]();
-      cache.at = 0;   // o job mexeu no banco — a próxima leitura tem que ser fresca
+      invalida();   // o job mexeu no banco — a próxima leitura tem que ser fresca
       await J.logJob(pool, nome, true, JSON.stringify(r), r.novas ?? r.atualizados ?? r.coletados ?? r.novos ?? 0);
       return json(200, { ok: true, job: nome, resultado: r });
     }
@@ -1185,7 +1321,7 @@ http.createServer(async (req, res) => {
     .catch(e => console.error('  [FALHA GRAVE] o app NÃO consegue gravar no Postgres:', e.message,
                               '\n  Nenhum job vai funcionar. Confira o usuário em DATABASE_URL.'));
 
-  J.agendar(pool, { META_TOKEN: META, APIFY_TOKEN: APIFY, onMudanca: () => { cache.at = 0; } });
+  J.agendar(pool, { META_TOKEN: META, APIFY_TOKEN: APIFY, onMudanca: () => { invalida(); } });
   if (!APP_SECRET) console.log('  [aviso] META_APP_SECRET vazio — webhook de story recusa POST');
   setInterval(() => recarregar().catch(() => {}), Math.max(60000, TTL / 2)).unref();
 });
