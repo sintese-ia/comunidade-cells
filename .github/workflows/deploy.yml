@@ -19,6 +19,10 @@ on:
         description: 'Pular a configuração de origem/build e só redeployar'
         type: boolean
         default: false
+      marcador:
+        description: 'Trecho que só existe no código novo, para provar que ele subiu'
+        type: string
+        default: ''
 
 jobs:
   deploy:
@@ -95,17 +99,31 @@ jobs:
             -d "{\"json\":{\"projectName\":\"$PROJ\",\"serviceName\":\"$SVC\"}}" \
             -w '\nHTTP %{http_code}\n'
 
-      - name: esperar subir
+      - name: esperar o CÓDIGO NOVO subir
+        env:
+          PANEL_SENHA: ${{ secrets.PANEL_SENHA }}
+          MARCA: ${{ inputs.marcador }}
         run: |
-          # 401 = app no ar pedindo senha. É o resultado que queremos: 200 seria página aberta.
+          # ⚠️ Esperar por HTTP 401 NÃO PROVA NADA: o container ANTIGO também devolve 401, e o
+          # Easypanel faz rollover sem derrubar o antigo. Em 08/08 este passo disse "no ar" em
+          # 0,5s lendo a versão velha. Então agora ele faz login e procura um marcador que só
+          # existe no código novo.
+          URL=https://comunidade-cells.sinteseia.com.br
+          M="${MARCA:-data-mod=\"analises\"}"
+          echo "procurando: $M"
           for i in $(seq 1 40); do
-            c=$(curl -k -s -o /dev/null -w '%{http_code}' -m 10 https://comunidade-cells.sinteseia.com.br || true)
-            if [ "$c" = "401" ]; then
-              echo "no ar → https://comunidade-cells.sinteseia.com.br"
-              exit 0
+            c=$(curl -k -s -o /dev/null -w '%{http_code}' -m 10 "$URL" || true)
+            if [ "$c" = "401" ] && [ -n "$PANEL_SENHA" ]; then
+              curl -k -s -m 20 -c /tmp/j -X POST -d "senha=$PANEL_SENHA" "$URL" -o /dev/null || true
+              if curl -k -s -m 30 -b /tmp/j "$URL" | grep -qF "$M"; then
+                echo "código novo no ar → $URL"
+                rm -f /tmp/j; exit 0
+              fi
+              echo "  $(printf %02d $i)) no ar, mas ainda é a versão anterior"
+            else
+              printf '  %02d) HTTP %s\n' "$i" "$c"
             fi
-            printf '  %02d) HTTP %s\n' "$i" "$c"
             sleep 15
           done
-          echo "::error::não subiu em ~10 min — ver logs do serviço no painel"
+          echo "::error::o código novo não apareceu em ~10 min — ver logs do serviço no painel"
           exit 1
