@@ -151,15 +151,30 @@ const tipoDe = t => t.media_product_type === 'REELS' ? 'reels'
   : t.media_type === 'CAROUSEL_ALBUM' ? 'carrossel'
   : t.media_type === 'VIDEO' ? 'feed_video' : 'feed_imagem';
 
+// ⚠️ MEDIDO EM 09/08: `limit=50` no /tags passou a devolver "Please reduce the amount of data
+// you're asking for". Não foi o token — o ANTIGO dá o mesmo erro, então é limite da Meta que
+// apertou. O corte fica entre 15 e 20 (15 passa, 20 não). Uso 12 para ter folga, porque o custo
+// da chamada varia com o tamanho da legenda de cada post e o limite pode apertar de novo.
+const LIMITE_TAGS = +process.env.LIMITE_TAGS || 12;
+
 async function syncTags(pool, token) {
   if (!token) throw new Error('META_TOKEN ausente');
   const campos = 'id,username,timestamp,media_type,media_product_type,permalink,caption,like_count,comments_count';
-  let url = `https://graph.facebook.com/${GRAPH}/${IG_ID}/tags?fields=${campos}&limit=50` +
+  let limite = LIMITE_TAGS;
+  let url = `https://graph.facebook.com/${GRAPH}/${IG_ID}/tags?fields=${campos}&limit=${limite}` +
             `&access_token=${encodeURIComponent(token)}`;
   let novas = 0, vistas = 0, paginas = 0, metricas = 0;
 
-  while (url && paginas < 40) {
-    const d = await req(url);
+  while (url && paginas < 60) {
+    let d = await req(url);
+    // se a Meta apertar mais, corta a página pela metade e tenta de novo em vez de morrer.
+    // Falhar aqui significa a coleta de marcações parar — que é o coração do painel.
+    for (let tent = 0; tent < 3 && d.error && /reduce the amount of data/i.test(d.error.message || ''); tent++) {
+      limite = Math.max(3, Math.floor(limite / 2));
+      url = url.replace(/([?&]limit=)\d+/, '$1' + limite);
+      console.error('[tags] Meta pediu menos dado — caindo para limit=' + limite);
+      d = await req(url);
+    }
     if (d.error) throw new Error(d.error.message);
     const itens = d.data || [];
     if (!itens.length) break;
