@@ -502,6 +502,18 @@ http.createServer(async (req, res) => {
       }
       // Responder 200 rápido: a Meta re-entrega se demorar, e o download da mídia é lento.
       res.writeHead(200, {'content-type':'text/plain'}); res.end('ok');
+      // O 200 já foi enviado acima, então a Meta NÃO re-entrega se o que vem abaixo falhar.
+      // Por isso o payload cru é gravado primeiro, numa transação própria: se a derivação
+      // estourar, a mensagem continua no banco e dá para reprocessar. Sem isso, uma falha
+      // silenciosa aqui vira cliente sem resposta que ninguém enxerga.
+      let bruto = null;
+      try {
+        const r = await pool.query(
+          `INSERT INTO jarvis.webhook_bruto (origem, payload) VALUES ('meta', $1::jsonb) RETURNING id`,
+          [raw.toString('utf8')]);
+        bruto = r.rows[0].id;
+      } catch (e) { console.error('[webhook] não consegui guardar o cru:', e.message); }
+
       try {
         const body = JSON.parse(raw.toString('utf8'));
         const stories = J.extrairStories(body);
@@ -510,7 +522,18 @@ http.createServer(async (req, res) => {
           console.log('[webhook] story mentions gravados:', stories.length);
           await J.logJob(pool, 'story', true, 'webhook', stories.length);
         }
-      } catch (e) { console.error('[webhook]', e.message); J.logJob(pool, 'story', false, e.message, 0); }
+        const msgs = J.extrairMensagens(body);
+        for (const m of msgs) await J.guardarMensagem(pool, m);
+        if (msgs.length) console.log('[webhook] DMs gravadas:', msgs.length);
+        if (bruto) await pool.query(
+          'UPDATE jarvis.webhook_bruto SET processado=true WHERE id=$1', [bruto]);
+      } catch (e) {
+        console.error('[webhook]', e.message);
+        J.logJob(pool, 'story', false, e.message, 0);
+        if (bruto) pool.query(
+          'UPDATE jarvis.webhook_bruto SET erro=$2, tentativas=tentativas+1 WHERE id=$1',
+          [bruto, String(e.message).slice(0, 400)]).catch(() => {});
+      }
     });
   }
 

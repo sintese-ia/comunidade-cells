@@ -550,6 +550,71 @@ function extrairStories(body) {
   return out;
 }
 
+// ---------------------------------------------------------------- DM do Instagram
+// O webhook `messages` já chega aqui desde sempre — o extrairStories só olha anexos de
+// story_mention, então toda DM de texto atravessava o laço e sumia. Estas duas funções
+// aproveitam o que já chega e alimentam a tela de follow-up do painel jarvis.
+//
+// O Gabriel autorizou persistir o conteúdo em 09/08. O texto fica em coluna própria
+// (`ultima_msg_texto`), separada dos metadados, para que revogar essa decisão seja
+// um UPDATE numa coluna e não uma migração.
+
+// @cellsoficial é o handle real da conta (verificado na Graph API em 09/08), não um
+// palpite de fallback. O sinal que decide é o is_echo da Meta; isto é só reforço.
+const EU_IG = (process.env.IG_HANDLE || 'cellsoficial').toLowerCase();
+
+function extrairMensagens(body) {
+  const out = [];
+  for (const e of (body.entry || [])) {
+    for (const m of (e.messaging || [])) {
+      if (!m.message || m.message.is_echo === undefined && !m.message.mid) continue;
+      const anexos = m.message.attachments || [];
+      // story_mention continua sendo assunto do extrairStories; aqui é conversa
+      if (anexos.length && anexos.every(a => a.type === 'story_mention')) continue;
+      out.push({
+        conversa: m.sender?.id && m.recipient?.id
+          ? [m.sender.id, m.recipient.id].sort().join(':') : (m.message.mid || null),
+        remetente: m.sender?.username || m.sender?.id || '',
+        texto: (m.message.text || '').slice(0, 2000),
+        tipo: anexos.length ? (anexos[0].type || 'anexo') : 'texto',
+        ts: m.timestamp ? new Date(+m.timestamp).toISOString() : null,
+        eco: !!m.message.is_echo,
+      });
+    }
+  }
+  return out;
+}
+
+// `respondido` = a última mensagem foi NOSSA. O sinal autoritativo é o `is_echo` da Meta;
+// a comparação com o handle é só um segundo par de olhos para payload sem is_echo.
+//
+// O WHERE do DO UPDATE é a parte que importa e não é decoração:
+// a Meta RE-ENTREGA e NÃO garante ordem. Sem ele, este cenário apaga gente da tela —
+//   09:50 echo nosso · 10:00 a pessoa escreve (vira pendente) · 10:07 a Meta re-entrega
+//   o echo das 09:50 → a linha volta no tempo e `respondido` vira true → a pessoa some.
+// Que é exatamente o modo de falha que a tela de follow-up existe para evitar.
+// Com o WHERE, entrega repetida vira no-op e entrega fora de ordem não anda para trás.
+async function guardarMensagem(pool, m) {
+  if (!m.conversa || !m.ts) return;
+  const meu = m.eco || String(m.remetente).toLowerCase() === EU_IG;
+  const resumo = m.tipo === 'texto' ? (m.texto || '').slice(0, 180) : `(${m.tipo})`;
+  await pool.query(
+    `INSERT INTO jarvis.contato
+       (chave, quem, handle, canal, ultima_msg_em, ultima_msg_resumo, ultima_msg_texto, respondido)
+     VALUES ($1,$2,$3,'instagram_dm',$4,$5,$6,$7)
+     ON CONFLICT (chave) DO UPDATE SET
+       quem              = CASE WHEN $7 THEN jarvis.contato.quem ELSE EXCLUDED.quem END,
+       handle            = COALESCE(EXCLUDED.handle, jarvis.contato.handle),
+       ultima_msg_em     = EXCLUDED.ultima_msg_em,
+       ultima_msg_resumo = EXCLUDED.ultima_msg_resumo,
+       ultima_msg_texto  = EXCLUDED.ultima_msg_texto,
+       respondido        = EXCLUDED.respondido
+     WHERE jarvis.contato.ultima_msg_em IS NULL
+        OR EXCLUDED.ultima_msg_em > jarvis.contato.ultima_msg_em`,
+    [m.conversa, meu ? 'Cells (última foi nossa)' : (m.remetente || 'desconhecido'),
+     meu ? null : m.remetente, m.ts, resumo, m.tipo === 'texto' ? m.texto : null, meu]);
+}
+
 // ---------------------------------------------------------------- agendador
 // Um replica só, então basta um lock em memória. Se um dia virar 2+, trocar por advisory lock
 // do Postgres (pg_try_advisory_lock) — senão os dois batem na Meta ao mesmo tempo.
@@ -587,4 +652,4 @@ function agendar(pool, env) {
 
 module.exports = { syncTags, syncPerfis, syncApify, syncCadastros, avisarRegistro, perfilDe, salvarPerfil,
                    guardarStory, guardarVideo, buscarVideoDe, limparMidia,
-                   extrairStories, agendar, logJob };
+                   extrairStories, agendar, logJob, extrairMensagens, guardarMensagem };
