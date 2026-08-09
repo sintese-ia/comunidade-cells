@@ -881,7 +881,7 @@ function pintaCad(){
       + '<td>'+(() => { const c = cupomDe(f.parceiro_id);
           if (!c) return '<span class="dim">—</span>';
           const cod = c.shopify_erro
-            ? '<span class="chip cr" title="'+esc(c.shopify_erro)+'">'+esc(c.codigo)+' não vale</span>'
+            ? '<span class="chip cr" title="'+esc(c.shopify_erro)+'">'+esc(c.codigo)+' inativo</span>'
             : '<span class="chip ok">'+esc(c.codigo)+'</span>'
               + (c.desconto_pct != null ? '' : ' <span class="chip wa" title="desconto desconhecido">sem %</span>');
           // "ativo" e "avisado" são coisas diferentes e a tela precisa separar
@@ -986,7 +986,7 @@ document.getElementById('tbCad').addEventListener('click', async e => {
       ? 'Aviso mandado ao Klaviyo para ' + j.para
       : (j.cupom_quebrado
           ? 'Não mandei.\n\n' + j.erro
-            + '\n\nMandar um cupom que não funciona é pior que não mandar: a pessoa divulga, o seguidor tenta usar e quem paga o vexame é ela. Recrie o cupom na Shopify antes.'
+            + '\n\nO código EXISTE na Shopify, como regra antiga (price rule), mas está inativo — por isso não aplica no checkout. Reative pelo admin em Descontos e depois mande.'
           : 'Não deu: ' + (j.erro||'erro')));
     if (j.ok) location.reload();
     return;
