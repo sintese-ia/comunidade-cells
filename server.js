@@ -1013,13 +1013,18 @@ http.createServer(async (req, res) => {
     try {
       const r = await pool.query(`
         SELECT p.parceiro_id, p.nome, p.email, p.utm_slug,
-               c.codigo, c.desconto_pct, c.comissao_pct
+               c.codigo, c.desconto_pct, c.comissao_pct, c.shopify_erro
         FROM creator.parceiro p
         LEFT JOIN creator.cupom c ON c.parceiro_id=p.parceiro_id AND c.ativo
         WHERE p.parceiro_id=$1 ORDER BY c.cupom_id LIMIT 1`, [id]);
       const p = r.rows[0];
       if (!p) return json(404, { erro: 'parceiro não encontrado' });
       if (!p.codigo) return json(400, { erro: 'esta pessoa ainda não tem cupom' });
+      // Mandar cupom que não funciona no checkout é pior do que não mandar nada: a pessoa
+      // divulga, o seguidor tenta usar, não vale, e quem paga o vexame é o creator.
+      if (p.shopify_erro && !u.searchParams.get('mesmo_assim'))
+        return json(409, { erro: 'o cupom ' + p.codigo + ' não funciona no checkout: '
+          + p.shopify_erro, cupom_quebrado: true });
       const link = linkCreator(p.utm_slug);
       const props = await eventoAprovacao({ email: p.email, nome: p.nome, cupom: p.codigo, link,
                                             desconto: p.desconto_pct, comissao: p.comissao_pct });

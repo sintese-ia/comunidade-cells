@@ -881,8 +881,9 @@ function pintaCad(){
       + '<td>'+(() => { const c = cupomDe(f.parceiro_id);
           if (!c) return '<span class="dim">—</span>';
           const cod = c.shopify_erro
-            ? '<span class="chip cr" title="'+esc(c.shopify_erro)+'">só no banco</span>'
-            : '<span class="chip ok">'+esc(c.codigo)+'</span>';
+            ? '<span class="chip cr" title="'+esc(c.shopify_erro)+'">'+esc(c.codigo)+' não vale</span>'
+            : '<span class="chip ok">'+esc(c.codigo)+'</span>'
+              + (c.desconto_pct != null ? '' : ' <span class="chip wa" title="desconto desconhecido">sem %</span>');
           // "ativo" e "avisado" são coisas diferentes e a tela precisa separar
           return cod + (f.avisado ? '' : '<span class="sub2 dim">nunca avisado</span>'); })()+'</td>'
       + '<td>'+selStatus(f)+'</td>'
@@ -893,7 +894,9 @@ function pintaCad(){
             if (f.status === 'pendente') return '<button class="acbt ok" data-aprovar="'+f.parceiro_id+'">aprovar</button>';
             // já ativo e com cupom, mas NUNCA avisado: é o caso dos 28 do cupom legado, que
             // nasceram ativos sem ninguém nunca ter mandado o link para eles
-            if (f.status === 'ativo' && cupomDe(f.parceiro_id) && !f.avisado && f.email)
+            const cp = cupomDe(f.parceiro_id);
+            // cupom que não existe na loja não vira e-mail: o botão some e a coluna explica
+            if (f.status === 'ativo' && cp && !cp.shopify_erro && !f.avisado && f.email)
               return '<button class="acbt ok" data-avisarum="'+f.parceiro_id+'">avisar</button>';
             return '';
           })()
@@ -981,8 +984,10 @@ document.getElementById('tbCad').addEventListener('click', async e => {
     av1.disabled = false;
     alert(j.ok
       ? 'Aviso mandado ao Klaviyo para ' + j.para
-        + '.\n\nA entrega depende do flow "Creator Aprovado" estar ligado lá.'
-      : 'Não deu: ' + (j.erro||'erro'));
+      : (j.cupom_quebrado
+          ? 'Não mandei.\n\n' + j.erro
+            + '\n\nMandar um cupom que não funciona é pior que não mandar: a pessoa divulga, o seguidor tenta usar e quem paga o vexame é ela. Recrie o cupom na Shopify antes.'
+          : 'Não deu: ' + (j.erro||'erro')));
     if (j.ok) location.reload();
     return;
   }
