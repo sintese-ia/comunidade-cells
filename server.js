@@ -13,6 +13,7 @@ const crypto = require('crypto');
 const { Pool } = require('pg');
 const Q = require('./queries');
 const J = require('./jobs');
+const G = require('./genero');
 
 const PORT    = process.env.PORT || 3000;
 const SENHA   = process.env.SENHA || 'cells';
@@ -286,11 +287,12 @@ const METRICA_REGISTRO  = 'Creator Cadastrado';
 
 // "obrigado pelo registro". Mesmo caminho dos outros: o app manda evento, o flow do Klaviyo
 // entrega. Quem chama é o job de cadastros, uma vez por pessoa.
-async function eventoRegistro({ email, nome, instagram }) {
+async function eventoRegistro({ email, nome, instagram, sexo }) {
   if (!KLAVIYO) throw new Error('KLAVIYO_KEY não configurada');
   if (!email) throw new Error('sem e-mail no cadastro');
   const corpo = { data: { type: 'event', attributes: {
-    properties: { nome_creator: nome || null, instagram: instagram || null },
+    properties: { nome_creator: G.primeiroNome(nome) || null, instagram: instagram || null,
+                  saudacao: G.saudacaoDe(nome, sexo) },
     metric: { data: { type: 'metric', attributes: { name: METRICA_REGISTRO } } },
     profile: { data: { type: 'profile', attributes: { email,
                ...(nome ? { first_name: String(nome).split(/\s+/)[0] } : {}) } } },
@@ -319,15 +321,18 @@ async function eventoCampanha({ email, nome, campanha, briefing, cupom, link, in
   return corpo.data.attributes.properties;
 }
 
-async function eventoAprovacao({ email, nome, cupom, link, desconto, comissao }) {
+async function eventoAprovacao({ email, nome, cupom, link, desconto, comissao, sexo }) {
   if (!KLAVIYO) throw new Error('KLAVIYO_KEY não configurada');
   if (!email) throw new Error('esta pessoa não tem e-mail no cadastro');
+  // A saudação é decidida AQUI, não no template: o Klaviyo não tem como consultar o `sexo`
+  // declarado na LP nem rodar a lista de nomes. O template só imprime.
   const corpo = {
     data: {
       type: 'event',
       attributes: {
         properties: { cupom, link, desconto_pct: desconto, comissao_pct: comissao,
-                      nome_creator: nome || null },
+                      nome_creator: G.primeiroNome(nome) || null,
+                      saudacao: G.saudacaoDe(nome, sexo) },
         metric: { data: { type: 'metric', attributes: { name: METRICA_APROVACAO } } },
         profile: { data: { type: 'profile',
                    attributes: { email, ...(nome ? { first_name: String(nome).split(/\s+/)[0] } : {}) } } },
@@ -946,7 +951,10 @@ http.createServer(async (req, res) => {
           return json(400, { erro: 'comissão fora de 0 a 100' });
 
         etapa = 'conferindo o cadastro';
-        const pa = (await cli.query(`SELECT * FROM creator.parceiro WHERE parceiro_id=$1`, [id])).rows[0];
+        const pa = (await cli.query(`
+          SELECT p.*, l.sexo FROM creator.parceiro p
+          LEFT JOIN creator.leads l ON l.lead_id = p.lead_id
+          WHERE p.parceiro_id=$1`, [id])).rows[0];
         if (!pa) return json(404, { erro: 'parceiro não encontrado' });
 
         // O código tem que ser único na LOJA, não só aqui. `creator.legado` tem o inventário
@@ -1005,7 +1013,7 @@ http.createServer(async (req, res) => {
         if (d.enviar_email !== false) {
           try {
             const props = await eventoAprovacao({ email, nome: novo.nome, cupom: codigo, link,
-                                                  desconto, comissao });
+                                                  desconto, comissao, sexo: pa.sexo });
             envio = { estado: 'evento_enviado', detalhe: null };
             await pool.query(`
               INSERT INTO creator.email_log (parceiro_id,para,assunto,tipo,estado,payload)
@@ -1036,9 +1044,11 @@ http.createServer(async (req, res) => {
     try {
       const r = await pool.query(`
         SELECT p.parceiro_id, p.nome, p.email, p.utm_slug,
-               c.codigo, c.desconto_pct, c.comissao_pct, c.shopify_erro
+               c.codigo, c.desconto_pct, c.comissao_pct, c.shopify_erro,
+               l.sexo
         FROM creator.parceiro p
         LEFT JOIN creator.cupom c ON c.parceiro_id=p.parceiro_id AND c.ativo
+        LEFT JOIN creator.leads l ON l.lead_id = p.lead_id
         WHERE p.parceiro_id=$1 ORDER BY c.cupom_id LIMIT 1`, [id]);
       const p = r.rows[0];
       if (!p) return json(404, { erro: 'parceiro não encontrado' });
@@ -1050,7 +1060,8 @@ http.createServer(async (req, res) => {
           + p.shopify_erro, cupom_quebrado: true });
       const link = linkCreator(p.utm_slug);
       const props = await eventoAprovacao({ email: p.email, nome: p.nome, cupom: p.codigo, link,
-                                            desconto: p.desconto_pct, comissao: p.comissao_pct });
+                                            desconto: p.desconto_pct, comissao: p.comissao_pct,
+                                            sexo: p.sexo });
       await pool.query(`
         INSERT INTO creator.email_log (parceiro_id,para,assunto,tipo,estado,payload)
         VALUES ($1,$2,$3,'aprovacao','evento_enviado',$4)`,

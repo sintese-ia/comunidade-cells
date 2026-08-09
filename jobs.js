@@ -243,8 +243,9 @@ async function avisarRegistro(pool, enviar) {
   if (typeof enviar !== 'function') return { avisados: 0, motivo: 'sem canal de e-mail' };
   if (!REGISTRO_DESDE) return { avisados: 0, motivo: 'REGISTRO_DESDE não definido — desligado' };
   const { rows } = await pool.query(`
-    SELECT p.parceiro_id, p.nome, p.email, p.instagram_handle
+    SELECT p.parceiro_id, p.nome, p.email, p.instagram_handle, l.sexo
     FROM creator.parceiro p
+    LEFT JOIN creator.leads l ON l.lead_id = p.lead_id
     WHERE p.email IS NOT NULL AND p.email <> ''
       AND p.criado_em > greatest($1::timestamptz, now() - interval '${JANELA_REGISTRO_H} hours')
       AND NOT p.arquivado
@@ -258,7 +259,8 @@ async function avisarRegistro(pool, enviar) {
   let n = 0;
   for (const p of rows) {
     try {
-      const props = await enviar({ email: p.email, nome: p.nome, instagram: p.instagram_handle });
+      const props = await enviar({ email: p.email, nome: p.nome, instagram: p.instagram_handle,
+                                   sexo: p.sexo });
       await pool.query(`
         INSERT INTO creator.email_log (parceiro_id,para,assunto,tipo,estado,payload)
         VALUES ($1,$2,'Creator Cadastrado','cadastro','evento_enviado',$3)`,
