@@ -428,30 +428,54 @@ async function syncPerfis(pool, token) {
 // ---------------------------------------------------------------- 3. Apify (views de reels)
 // Assíncrono com polling. NUNCA run-sync: estoura em 300s.
 //
-// O teto de 40 estava abaixo do acervo (101 reels), e como TODO reel entra na fila a cada
-// rodada, a semana atualizava 40 e deixava 61 parados — uma volta completa levava ~3 semanas.
-// Por isso métrica de 08/08 aparecia como se fosse de hoje. 120 cobre o acervo com folga; o
-// custo do actor é por item e hoje a conta inteira gasta menos de US$ 1/mês.
+// ── CADÊNCIA POR IDADE (10/08/2026) ───────────────────────────────────────────
+// O actor cobra POR RESULTADO (US$ 0,0023 no plano atual), então o que custa é quantos reels
+// entram na rodada — não quantas rodadas. A regra antiga jogava TODO reel em TODA rodada, o
+// que era caro e impreciso ao mesmo tempo: reel de um ano atrás, cujo número não muda mais,
+// pagava o mesmo que o reel de ontem, que é justamente o que anda.
+//
+// Agora o job roda DIÁRIO e só pega quem está vencido:
+//   nunca coletado          → pega já. É a única janela em que a URL do vídeo ainda vive.
+//   até FRESCO dias de vida → a cada PASSO_FRESCO dias (é onde a view sobe)
+//   depois disso            → a cada PASSO_MADURO dias (só para não congelar o histórico)
+//
+// ⚠️ E um vazamento que morreu junto: a regra antiga também puxava todo reel SEM VÍDEO
+// guardado. Só que 63 dos 103 são velhos demais para baixar (JANELA_AUTO), então eles eram
+// re-scrapeados para sempre e o download nunca era nem tentado — 61% de cada rodada, no lixo.
+// Reel marcado como anúncio continua vindo, porque aí o download vale: um scrape novo devolve
+// uma URL de vídeo nova, e é assim que se recupera a mídia de um post antigo.
+const FRESCO       = +process.env.APIFY_FRESCO  || 10;   // dias de "post novo"
+const PASSO_FRESCO = +process.env.APIFY_PASSO   || 2;    // recoleta enquanto é novo
+const PASSO_MADURO = +process.env.APIFY_MADURO  || 30;   // recoleta depois disso
+
 async function syncApify(pool, apifyToken, limite = +process.env.APIFY_LIMITE || 120) {
   if (!apifyToken) throw new Error('APIFY_TOKEN ausente');
   // Quem ainda não tem o vídeo guardado vem PRIMEIRO: a métrica desse reel pode até estar
   // fresca, mas sem o arquivo o player não toca, e a URL de hoje é a única chance de baixar.
   const { rows } = await pool.query(`
+    WITH ult AS (
+      SELECT publicacao_id, max(coletado_em) AS em
+      FROM creator.publicacao_metrica WHERE fonte='apify' GROUP BY 1)
     SELECT u.publicacao_id, u.permalink,
            EXISTS (SELECT 1 FROM creator.publicacao_midia md
                    WHERE md.publicacao_id=u.publicacao_id AND md.bytes IS NOT NULL) AS tem_bytes,
            (u.publicado_em::date >= current_date - ${JANELA_AUTO}
             OR coalesce(u.virou_anuncio,false)) AS vale_guardar
     FROM creator.publicacao u
+    LEFT JOIN ult ON ult.publicacao_id = u.publicacao_id
     WHERE u.tipo='reels' AND u.permalink IS NOT NULL
-      AND (NOT EXISTS (
-             SELECT 1 FROM creator.publicacao_metrica m
-             WHERE m.publicacao_id=u.publicacao_id AND m.fonte='apify' AND m.coletado_em=current_date)
-           OR NOT EXISTS (
-             SELECT 1 FROM creator.publicacao_midia md
-             WHERE md.publicacao_id=u.publicacao_id AND md.bytes IS NOT NULL))
+      AND (
+        ult.em IS NULL
+        OR (u.publicado_em::date >= current_date - ${FRESCO}
+            AND ult.em <= current_date - ${PASSO_FRESCO})
+        OR (u.publicado_em::date <  current_date - ${FRESCO}
+            AND ult.em <= current_date - ${PASSO_MADURO})
+        OR (coalesce(u.virou_anuncio,false)
+            AND NOT EXISTS (SELECT 1 FROM creator.publicacao_midia md
+                            WHERE md.publicacao_id=u.publicacao_id AND md.bytes IS NOT NULL))
+      )
     ORDER BY tem_bytes, u.publicado_em DESC LIMIT $1`, [limite]);
-  if (!rows.length) return { pendentes: 0, coletados: 0 };
+  if (!rows.length) return { pendentes: 0, coletados: 0, nada_vencido: true };
 
   const run = await req(`https://api.apify.com/v2/acts/apify~instagram-scraper/runs?token=${apifyToken}`,
     { method: 'POST', headers: { 'content-type': 'application/json' },
@@ -477,11 +501,23 @@ async function syncApify(pool, apifyToken, limite = +process.env.APIFY_LIMITE ||
   const porCodigo = new Map();
   for (const it of (itens || [])) if (it.shortCode) porCodigo.set(it.shortCode, it);
 
-  let n = 0, videos = 0;
+  let n = 0, videos = 0, sumiram = 0;
   for (const r of rows) {
     const cod = (r.permalink.match(/\/(?:reel|p|tv)\/([^/?]+)/) || [])[1];
     const it = cod && porCodigo.get(cod);
-    if (!it) continue;
+    if (!it) {
+      // O post não voltou — apagado, fechado, ou o actor engasgou. Sem marcar a tentativa, a
+      // cadência lê "nunca coletado" e re-tenta TODO DIA para sempre: o mesmo vazamento que a
+      // regra por idade acabou de matar. A linha vai com métrica NULL, que já é como o banco
+      // escreve "não sei" — não entra em soma nem em reels_medidos — e com payload NULL, para
+      // não competir com a linha boa na busca de capa/vídeo das Menções.
+      await pool.query(`
+        INSERT INTO creator.publicacao_metrica (publicacao_id,coletado_em,fonte)
+        VALUES ($1,current_date,'apify')
+        ON CONFLICT (publicacao_id,coletado_em,fonte) DO NOTHING`, [r.publicacao_id]);
+      sumiram++;
+      continue;
+    }
     await pool.query(`
       INSERT INTO creator.publicacao_metrica
         (publicacao_id,coletado_em,curtidas,comentarios,visualizacoes,reproducoes,fonte,payload)
@@ -497,7 +533,9 @@ async function syncApify(pool, apifyToken, limite = +process.env.APIFY_LIMITE ||
         && await guardarVideo(pool, r.publicacao_id, it.videoUrl)) videos++;
   }
   const apagados = await limparMidia(pool).catch(() => 0);
-  return { pendentes: rows.length, coletados: n, videos_baixados: videos, midia_expirada: apagados };
+  return { pendentes: rows.length, coletados: n, nao_voltaram: sumiram,
+           videos_baixados: videos, midia_expirada: apagados,
+           custo_usd: +(rows.length * 0.0023).toFixed(4) };
 }
 
 // ---------------------------------------------------------------- 4. story mention (webhook)
@@ -651,7 +689,10 @@ function agendar(pool, env) {
   // /tags roda diário: marcação nova aparecendo com 1 dia de atraso já é aceitável, e é barato.
   setInterval(() => roda('tags',   () => syncTags(pool, env.META_TOKEN)),   DIA).unref();
   setInterval(() => roda('perfis', () => syncPerfis(pool, env.META_TOKEN)), 7 * DIA).unref();
-  setInterval(() => roda('apify',  () => syncApify(pool, env.APIFY_TOKEN)), 7 * DIA).unref();
+  // O apify passou a rodar DIÁRIO, mas quem decide o custo é a cadência por idade lá dentro:
+  // na maioria dos dias a fila volta vazia e nem chega a abrir um run. Semanal aqui quebraria
+  // o passo de 2 dias do post novo, que é exatamente onde a view se move.
+  setInterval(() => roda('apify',  () => syncApify(pool, env.APIFY_TOKEN)), DIA).unref();
 
   // primeira rodada 2 min depois do boot, para não competir com o pré-aquecimento do cache
   setTimeout(() => roda('tags', () => syncTags(pool, env.META_TOKEN)), 120000).unref();
