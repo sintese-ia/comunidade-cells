@@ -427,7 +427,12 @@ async function syncPerfis(pool, token) {
 
 // ---------------------------------------------------------------- 3. Apify (views de reels)
 // Assíncrono com polling. NUNCA run-sync: estoura em 300s.
-async function syncApify(pool, apifyToken, limite = 40) {
+//
+// O teto de 40 estava abaixo do acervo (101 reels), e como TODO reel entra na fila a cada
+// rodada, a semana atualizava 40 e deixava 61 parados — uma volta completa levava ~3 semanas.
+// Por isso métrica de 08/08 aparecia como se fosse de hoje. 120 cobre o acervo com folga; o
+// custo do actor é por item e hoje a conta inteira gasta menos de US$ 1/mês.
+async function syncApify(pool, apifyToken, limite = +process.env.APIFY_LIMITE || 120) {
   if (!apifyToken) throw new Error('APIFY_TOKEN ausente');
   // Quem ainda não tem o vídeo guardado vem PRIMEIRO: a métrica desse reel pode até estar
   // fresca, mas sem o arquivo o player não toca, e a URL de hoje é a única chance de baixar.
@@ -455,8 +460,10 @@ async function syncApify(pool, apifyToken, limite = 40) {
   if (!run.data) throw new Error('Apify não devolveu run');
   const { id, defaultDatasetId } = run.data;
 
+  // 80 × 15s = 20 min de teto. Com 120 URLs o run demora mais que com 40; se o polling estourar
+  // antes, o job joga fora um resultado que o Apify já cobrou.
   let status = 'RUNNING';
-  for (let i = 0; i < 40 && !['SUCCEEDED','FAILED','ABORTED','TIMED-OUT'].includes(status); i++) {
+  for (let i = 0; i < 80 && !['SUCCEEDED','FAILED','ABORTED','TIMED-OUT'].includes(status); i++) {
     await sleep(15000);
     status = (await req(`https://api.apify.com/v2/actor-runs/${id}?token=${apifyToken}`)).data?.status || status;
   }

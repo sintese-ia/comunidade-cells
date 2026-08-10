@@ -401,7 +401,8 @@ async function dadosDoCreator(parceiroId) {
     SELECT u.tipo, u.publicado_em, u.permalink, left(coalesce(u.legenda,''),90) AS legenda,
            m.curtidas, m.visualizacoes
     FROM creator.publicacao u
-    LEFT JOIN LATERAL (SELECT max(curtidas) curtidas, max(visualizacoes) visualizacoes
+    LEFT JOIN LATERAL (SELECT max(curtidas) curtidas,
+                              coalesce(max(reproducoes), max(visualizacoes)) visualizacoes
                        FROM creator.publicacao_metrica pm WHERE pm.publicacao_id=u.publicacao_id) m ON true
     WHERE u.parceiro_id=$1 ORDER BY u.publicado_em DESC LIMIT 40`, [parceiroId]);
 

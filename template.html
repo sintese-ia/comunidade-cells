@@ -1633,7 +1633,7 @@ function pintaAnalise(){
       ['Reels', n(g.reels), (g.reels_medidos||0)+' com views medidas'],
       ['Carrossel', n(g.carrossel), 'sem contador de views'],
       ['Stories', g.stories ? n(g.stories) : 'sem dado', g.stories ? 'capturados' : 'webhook não ligado'],
-      ['Views', g.views?n(g.views):'—', 'só em reels'],
+      ['Views', g.views?n(g.views):'—', 'só em reels · plays, com replay'],
       ['Curtidas', n(g.curtidas), n(g.comentarios)+' comentários'],
       ['Cliques no link', g.cliques ? n(g.cliques) : 'sem dado', g.cliques ? n(g.sessoes)+' sessões' : 'nenhum link usado ainda'],
     ].map(([k,v,nn]) => '<div class="cel"><div class="k">'+k+'</div><div class="v'

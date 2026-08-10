@@ -7,6 +7,18 @@
 //
 // REGRA: se um número não existe ainda (venda, clique, view), a query devolve NULL/0 e a tela
 // mostra estado vazio. Nunca preencher com estimativa — foi decisão explícita.
+//
+// ⚠️ O QUE É "VIEWS" AQUI (corrigido em 10/08/2026)
+// A tabela guarda DOIS contadores de vídeo, e eles não são a mesma coisa:
+//   visualizacoes = videoViewCount do Apify = video_view_count do Instagram. É a métrica ANTIGA
+//                   (view de 3s do player de vídeo de feed). Para reels o Instagram praticamente
+//                   parou de alimentá-la — sobra um resíduo minúsculo.
+//   reproducoes   = videoPlayCount = plays, com replay. É o que o Instagram chama de "views"
+//                   hoje, e é o número que o creator vê no app.
+// O painel mostrava a coluna errada. No reel do @drjrcalhau isso era 125 contra 2.349 — 19x.
+// Nos 101 reels medidos, plays > views em 101 de 101, com fator de 2,5x a 64x: não é escala,
+// é outra métrica. Por isso a leitura correta é coalesce(reproducoes, visualizacoes) em TODO
+// lugar que a palavra "views" chega na tela.
 
 // ------------------------------------------------------------------ PAINEL
 const painel = {
@@ -65,7 +77,8 @@ const painel = {
     LEFT JOIN LATERAL (
       SELECT sum(x.v) AS views_marc, count(*) FILTER (WHERE x.v IS NOT NULL)::int AS reels_medidos
       FROM creator.publicacao u
-      JOIN LATERAL (SELECT max(visualizacoes) v FROM creator.publicacao_metrica m
+      JOIN LATERAL (SELECT coalesce(max(reproducoes), max(visualizacoes)) v
+                    FROM creator.publicacao_metrica m
                     WHERE m.publicacao_id=u.publicacao_id) x ON true
       WHERE lower(u.instagram_handle)=lower(p.instagram_handle)
     ) v ON true
@@ -89,7 +102,8 @@ const painel = {
            m.curtidas, m.comentarios, m.visualizacoes
     FROM creator.publicacao u
     LEFT JOIN LATERAL (
-      SELECT max(curtidas) curtidas, max(comentarios) comentarios, max(visualizacoes) visualizacoes
+      SELECT max(curtidas) curtidas, max(comentarios) comentarios,
+             coalesce(max(reproducoes), max(visualizacoes)) visualizacoes
       FROM creator.publicacao_metrica pm WHERE pm.publicacao_id=u.publicacao_id
     ) m ON true
     WHERE u.parceiro_id IS NOT NULL
@@ -133,7 +147,10 @@ const painel = {
     SELECT u.publicacao_id, u.instagram_handle, u.tipo, u.publicado_em::date AS data,
            u.permalink, left(coalesce(u.legenda,''),240) AS legenda,
            u.parceiro_id, p.nome AS parceiro, u.parceria_paga, u.virou_anuncio,
-           m.curtidas, m.comentarios, m.visualizacoes, m.reproducoes,
+           m.curtidas, m.comentarios,
+           -- "views" na tela = plays. Ver a nota no topo do arquivo.
+           coalesce(m.reproducoes, m.visualizacoes) AS visualizacoes,
+           m.reproducoes, m.visualizacoes AS views_legado,
            -- a URL do CDN não vai para o browser: ele não consegue carregá-la (CORP) e ela
            -- ainda inflaria o HTML em ~100 URLs longas. A capa vem por /api/midia?tipo=capa.
            (m.payload->>'displayUrl' IS NOT NULL OR md.thumb_bytes IS NOT NULL) AS tem_capa,
@@ -253,7 +270,7 @@ const PUB = `
          x.curtidas, x.comentarios, x.visualizacoes
   FROM creator.publicacao u
   JOIN LATERAL (SELECT max(curtidas) AS curtidas, max(comentarios) AS comentarios,
-                       max(visualizacoes) AS visualizacoes
+                       coalesce(max(reproducoes), max(visualizacoes)) AS visualizacoes
                 FROM creator.publicacao_metrica m WHERE m.publicacao_id=u.publicacao_id) x ON true
   WHERE u.publicado_em::date BETWEEN $1 AND $2
     AND ($3 = '' OR lower(u.instagram_handle) = $3)`;
