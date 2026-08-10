@@ -434,19 +434,35 @@ async function syncPerfis(pool, token) {
 // que era caro e impreciso ao mesmo tempo: reel de um ano atrás, cujo número não muda mais,
 // pagava o mesmo que o reel de ontem, que é justamente o que anda.
 //
-// Agora o job roda DIÁRIO e só pega quem está vencido:
-//   nunca coletado          → pega já. É a única janela em que a URL do vídeo ainda vive.
-//   até FRESCO dias de vida → a cada PASSO_FRESCO dias (é onde a view sobe)
-//   depois disso            → a cada PASSO_MADURO dias (só para não congelar o histórico)
+// Agora o job roda DIÁRIO e só pega quem está vencido, em três degraus (desenho do Gabriel):
+//   nunca coletado      → pega já. É a única janela em que a URL do vídeo ainda vive.
+//   menos de 7 dias     → todo dia. É a semana em que a view praticamente toda acontece.
+//   de 7 a 30 dias      → a cada 7 dias. Ainda anda, mas devagar.
+//   mais de 30 dias     → a cada 30 dias. Só para o histórico não congelar.
 //
 // ⚠️ E um vazamento que morreu junto: a regra antiga também puxava todo reel SEM VÍDEO
 // guardado. Só que 63 dos 103 são velhos demais para baixar (JANELA_AUTO), então eles eram
 // re-scrapeados para sempre e o download nunca era nem tentado — 61% de cada rodada, no lixo.
 // Reel marcado como anúncio continua vindo, porque aí o download vale: um scrape novo devolve
 // uma URL de vídeo nova, e é assim que se recupera a mídia de um post antigo.
-const FRESCO       = +process.env.APIFY_FRESCO  || 10;   // dias de "post novo"
-const PASSO_FRESCO = +process.env.APIFY_PASSO   || 2;    // recoleta enquanto é novo
-const PASSO_MADURO = +process.env.APIFY_MADURO  || 30;   // recoleta depois disso
+// Os degraus. Cada par é (até que idade, de quantos em quantos dias recoleta).
+const FAIXAS = [
+  [+process.env.APIFY_D1 ||  7, +process.env.APIFY_P1 ||  1],   // < 7 dias  → diário
+  [+process.env.APIFY_D2 || 30, +process.env.APIFY_P2 ||  7],   // 7 a 30    → semanal
+  [Infinity,                    +process.env.APIFY_P3 || 30],   // > 30      → mensal
+];
+
+// Vira o OR do WHERE. A faixa é fechada à esquerda pela anterior, então cada reel cai em
+// exatamente uma — sem sobreposição, sem buraco.
+function condicaoFaixas() {
+  let piso = 0;
+  return FAIXAS.map(([teto, passo]) => {
+    const idadeMin = `u.publicado_em::date <= current_date - ${piso}`;
+    const idadeMax = teto === Infinity ? '' : ` AND u.publicado_em::date > current_date - ${teto}`;
+    piso = teto === Infinity ? piso : teto;
+    return `(${idadeMin}${idadeMax} AND ult.em <= current_date - ${passo})`;
+  }).join('\n        OR ');
+}
 
 async function syncApify(pool, apifyToken, limite = +process.env.APIFY_LIMITE || 120) {
   if (!apifyToken) throw new Error('APIFY_TOKEN ausente');
@@ -466,10 +482,7 @@ async function syncApify(pool, apifyToken, limite = +process.env.APIFY_LIMITE ||
     WHERE u.tipo='reels' AND u.permalink IS NOT NULL
       AND (
         ult.em IS NULL
-        OR (u.publicado_em::date >= current_date - ${FRESCO}
-            AND ult.em <= current_date - ${PASSO_FRESCO})
-        OR (u.publicado_em::date <  current_date - ${FRESCO}
-            AND ult.em <= current_date - ${PASSO_MADURO})
+        OR ${condicaoFaixas()}
         OR (coalesce(u.virou_anuncio,false)
             AND NOT EXISTS (SELECT 1 FROM creator.publicacao_midia md
                             WHERE md.publicacao_id=u.publicacao_id AND md.bytes IS NOT NULL))
