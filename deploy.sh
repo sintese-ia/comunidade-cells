@@ -45,12 +45,29 @@ ep "services.app.deployService" "{\"json\":{\"projectName\":\"$PROJ\",\"serviceN
 
 echo
 echo "==> aguardando subir (build leva ~1-2 min)"
+
+# ⚠️ Este laço já checou "HTTP 401 = no ar". Era MENTIRA: o container VELHO também devolve 401,
+# então o script dava sucesso servindo o código antigo — aconteceu em 10/08 e só apareceu porque
+# alguém foi conferir um número na tela. Agora ele compara o COMMIT que o Easypanel diz estar
+# rodando com o HEAD local. Ou bate, ou o script falha.
+ESPERADO=$(git rev-parse HEAD)
+INPUT=$(printf '{"json":{"projectName":"%s","serviceName":"%s"}}' "$PROJ" "$SVC" \
+        | python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.stdin.read().strip()))')
+
 for i in $(seq 1 40); do
-  c=$(curl -k -s -o /dev/null -w '%{http_code}' -m 10 https://comunidade-cells.sinteseia.com.br || true)
-  # 401 = app no ar pedindo senha. É o resultado que queremos.
-  if [ "$c" = "401" ]; then echo "no ar → https://comunidade-cells.sinteseia.com.br"; exit 0; fi
-  printf '  %02d) HTTP %s\n' "$i" "$c"
   sleep 15
+  vivo=$(curl -k -s -o /dev/null -w '%{http_code}' -m 10 https://comunidade-cells.sinteseia.com.br || true)
+  rodando=$(curl -s -m 15 "$BASE/services.app.inspectService?input=$INPUT" \
+              -H "Authorization: Bearer $EASYPANEL_API_TOKEN" 2>/dev/null \
+            | python3 -c 'import sys,json
+try: print(json.load(sys.stdin)["result"]["data"]["json"]["commit"]["hash"])
+except Exception: print("")' 2>/dev/null)
+
+  if [ "$rodando" = "$ESPERADO" ] && [ "$vivo" = "401" ]; then
+    echo "no ar em ${ESPERADO:0:7} → https://comunidade-cells.sinteseia.com.br"
+    exit 0
+  fi
+  printf '  %02d) HTTP %s | rodando %s | esperado %s\n' "$i" "$vivo" "${rodando:0:7}" "${ESPERADO:0:7}"
 done
 echo "não subiu no tempo esperado — veja os logs do serviço no painel."
 exit 1
