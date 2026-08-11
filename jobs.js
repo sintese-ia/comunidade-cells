@@ -604,12 +604,27 @@ async function guardarStory(pool, { handle, mediaUrl, ts, storyId, payload }, to
 
   if (mediaUrl) {
     try {
-      // ⚠️ O CDN do story (lookaside.fbsbx.com) responde 302 para a URL assinada real. O req()
-      // não segue redirect, então o primeiro story real morreu com "HTTP 302" e ZERO bytes —
-      // e story não tem segunda chance: a URL vale 24h. Segue até 5 saltos.
-      let m = await req(mediaUrl, { raw: true, timeout: 30000 });
+      // ⚠️ TRÊS coisas, todas descobertas no primeiro story real (11/08), e todas silenciosas:
+      //
+      // 1. O 302 NÃO era redirect para o arquivo. O lookaside manda para
+      //    facebook.com/unsupportedbrowser porque o Node não envia User-Agent. Com UA de
+      //    browser o CDN responde direto. Era ISSO o "HTTP 302" — não expiração, não token.
+      // 2. Seguir redirect sem olhar o content-type grava a PÁGINA DO FACEBOOK como se fosse o
+      //    story: 48 KB de HTML com bytes salvos e erro NULL, ou seja, defeito disfarçado de
+      //    sucesso. Só grava image/* ou video/*.
+      // 3. A URL assinada morre em MINUTOS, não em 24h: capturada 03:07, às 03:14 já dava
+      //    "Resource not available". Por isso o download é aqui, síncrono, na chegada do
+      //    webhook — não existe reprocessar depois.
+      const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 '
+               + '(KHTML, like Gecko) Chrome/126.0 Safari/537.36';
+      const puxa = u => req(u, { raw: true, timeout: 30000, headers: { 'user-agent': UA } });
+      let m = await puxa(mediaUrl);
       for (let salto = 0; salto < 5 && m.status >= 300 && m.status < 400 && m.headers.location; salto++) {
-        m = await req(new URL(m.headers.location, mediaUrl).href, { raw: true, timeout: 30000 });
+        m = await puxa(new URL(m.headers.location, mediaUrl).href);
+      }
+      const tipo = m.headers['content-type'] || '';
+      if (m.status === 200 && m.buf.length && !/^(image|video)\//.test(tipo)) {
+        throw new Error('veio ' + tipo.split(';')[0] + ' (' + m.buf.length + 'B), nao midia');
       }
       if (m.status === 200 && m.buf.length) {
         await pool.query(`
