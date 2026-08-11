@@ -539,7 +539,7 @@ http.createServer(async (req, res) => {
       try {
         const body = JSON.parse(raw.toString('utf8'));
         const stories = J.extrairStories(body);
-        for (const s of stories) await J.guardarStory(pool, s);
+        for (const s of stories) await J.guardarStory(pool, s, META);
         if (stories.length) {
           console.log('[webhook] story mentions gravados:', stories.length);
           await J.logJob(pool, 'story', true, 'webhook', stories.length);

@@ -553,7 +553,41 @@ async function syncApify(pool, apifyToken, limite = +process.env.APIFY_LIMITE ||
 
 // ---------------------------------------------------------------- 4. story mention (webhook)
 // A mídia do story morre em 24h no CDN da Meta. Baixar AGORA ou perder para sempre.
-async function guardarStory(pool, { handle, mediaUrl, ts, storyId, payload }) {
+//
+// O webhook NÃO manda o @: manda o IGSID, um número por conta (753601600755217). Gravado cru,
+// ele não casa com nenhum `parceiro.instagram_handle` e o story fica órfão — foi o que
+// aconteceu no primeiro story real, em 11/08. A Graph resolve isso num GET.
+// Se falhar, guarda o número mesmo: perder o story inteiro por causa do nome seria pior.
+// ⚠️ O META_TOKEN (system user) NÃO resolve IGSID — devolve "(#100) The page is not linked to
+// an Instagram account". Só o token da PÁGINA resolve. Ele é derivado do system user uma vez
+// e fica em memória; se o processo reinicia, deriva de novo.
+let _pageTok = null;
+async function tokenDaPagina(token) {
+  if (_pageTok) return _pageTok;
+  if (!token) return null;
+  try {
+    const d = await req(`https://graph.facebook.com/v21.0/me/accounts?fields=access_token&access_token=${token}`);
+    _pageTok = d?.data?.[0]?.access_token || null;
+  } catch { _pageTok = null; }
+  return _pageTok;
+}
+
+async function handleDoIGSID(id, token) {
+  if (!id || !/^\d+$/.test(String(id))) return null;
+  const pt = await tokenDaPagina(token);
+  if (!pt) return null;
+  try {
+    const d = await req(`https://graph.facebook.com/v21.0/${id}?fields=username&access_token=${pt}`);
+    return d && d.username ? String(d.username).toLowerCase() : null;
+  } catch { return null; }
+}
+
+async function guardarStory(pool, { handle, mediaUrl, ts, storyId, payload }, token) {
+  // Se veio número, tenta virar @. Não conseguindo, segue com o número — story órfão ainda é
+  // story, e dá para casar depois; story perdido não volta.
+  if (/^\d+$/.test(String(handle || ''))) {
+    handle = (await handleDoIGSID(handle, token)) || handle;
+  }
   const r = await pool.query(`
     INSERT INTO creator.publicacao
       (ig_media_id,instagram_handle,tipo,publicado_em,permalink,fonte,payload)
@@ -570,7 +604,13 @@ async function guardarStory(pool, { handle, mediaUrl, ts, storyId, payload }) {
 
   if (mediaUrl) {
     try {
-      const m = await req(mediaUrl, { raw: true, timeout: 30000 });
+      // ⚠️ O CDN do story (lookaside.fbsbx.com) responde 302 para a URL assinada real. O req()
+      // não segue redirect, então o primeiro story real morreu com "HTTP 302" e ZERO bytes —
+      // e story não tem segunda chance: a URL vale 24h. Segue até 5 saltos.
+      let m = await req(mediaUrl, { raw: true, timeout: 30000 });
+      for (let salto = 0; salto < 5 && m.status >= 300 && m.status < 400 && m.headers.location; salto++) {
+        m = await req(new URL(m.headers.location, mediaUrl).href, { raw: true, timeout: 30000 });
+      }
       if (m.status === 200 && m.buf.length) {
         await pool.query(`
           INSERT INTO creator.publicacao_midia (publicacao_id,mime,bytes,tamanho,origem_url)
