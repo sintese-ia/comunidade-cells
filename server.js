@@ -503,7 +503,23 @@ http.createServer(async (req, res) => {
       const bateu = veio.length === esperado.length &&
         crypto.timingSafeEqual(Buffer.from(veio), Buffer.from(esperado));
       if (!bateu) {
+        // ⚠️ Recusar em silêncio é como ficar cego. Em 10/08 passamos horas sem saber se a Meta
+        // não entregava ou se a gente estava rejeitando: o 401 só ia para o log do container,
+        // que o Easypanel não expõe por API. Agora a recusa deixa rastro NO BANCO.
+        // O corpo NÃO é guardado como veio — ele não foi verificado, e gravar jsonb não
+        // confiável é justamente o que a assinatura existe para impedir. Guarda-se só o
+        // suficiente para diagnosticar: que chegou, de onde, e como a assinatura veio.
         console.error('[webhook] assinatura inválida');
+        pool.query(
+          `INSERT INTO jarvis.webhook_bruto (origem, payload, erro)
+           VALUES ('meta:recusado', $1::jsonb, 'assinatura invalida')`,
+          [JSON.stringify({
+            ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress || null,
+            ua: String(req.headers['user-agent'] || '').slice(0, 120),
+            assinatura_recebida: String(veio).slice(0, 80),
+            tinha_assinatura: !!veio,
+            bytes: raw.length,
+          })]).catch(e => console.error('[webhook] nem o rastro da recusa gravou:', e.message));
         res.writeHead(401, {'content-type':'text/plain'}); return res.end('assinatura inválida');
       }
       // Responder 200 rápido: a Meta re-entrega se demorar, e o download da mídia é lento.
