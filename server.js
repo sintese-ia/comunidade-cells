@@ -232,10 +232,13 @@ function postJSON(url, headers, corpo) {
 }
 
 // ---------------------------------------------------------------- cupom na Shopify
-// ⚠️ O token do app custom que existe hoje tem SEIS escopos e NENHUM de desconto —
-// `read_discounts` já dá ACCESS_DENIED (testado 08/08). Enquanto não houver um token com
-// `write_discounts`, esta função devolve erro e o cupom fica gravado só no nosso banco,
-// marcado com `shopify_erro`. A tela mostra isso em vermelho: cupom que não existe na loja
+// O token JÁ tem read/write_discounts (confirmado 12/08 criando e alterando os 33 ativos).
+// O que ele NÃO tem é `read_products`: qualquer query que peça a lista de produtos dentro
+// de `customerGets.items` falha inteira com "Access denied for products field". Pedir só
+// `items { __typename }` passa. Vale lembrar na hora de ler desconto de escopo restrito.
+//
+// Se um dia o token perder o escopo, esta função lança e o cupom fica só no nosso banco com
+// `shopify_erro` preenchido. A tela mostra isso em vermelho: cupom que não existe na loja
 // não funciona no checkout, e fingir que funciona é o pior resultado possível.
 async function criarCupomShopify({ codigo, pct, combinavel }) {
   if (!SHOP_TOKEN) throw new Error('SHOPIFY_TOKEN não configurado — cupom NÃO existe na loja');
@@ -254,7 +257,14 @@ async function criarCupomShopify({ codigo, pct, combinavel }) {
     customerGets: {
       value: { percentage: pct / 100 },
       items: { all: true },
+      // O cupom precisa valer TAMBÉM na assinatura, senão quem entra no CellsClub pelo link
+      // da creator não recebe desconto nenhum e o cupom parece quebrado. Nascia `false`.
+      appliesOnOneTimePurchase: true,
+      appliesOnSubscription: true,
     },
+    // ...mas só na PRIMEIRA cobrança (decisão do Gabriel, 12/08). Sem isto o desconto se
+    // repetiria em toda renovação e a margem da assinatura ia junto.
+    recurringCycleLimit: 1,
     // combinar com outro desconto de PEDIDO é como o cupom de creator vira 8% + 20% de
     // campanha no mesmo carrinho. Todos os ~180 cupons da loja hoje estão com isso LIGADO;
     // os novos nascem desligados, salvo escolha explícita na tela.
