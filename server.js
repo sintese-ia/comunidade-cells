@@ -367,6 +367,44 @@ function linkCreator(slug, utmContent) {
   return SITE + '/?' + q.toString();
 }
 
+// O link CURTO — cells.com.br/r/<cupom> — é o que a creator divulga.
+// Um redirect 301 na própria loja traduz para o link acima, então a atribuição é a mesma:
+// o que muda é ela conseguir falar o link em vídeo sem soletrar UTM. Testado 12/08: a Shopify
+// preserva a query string no destino e casa o path sem diferenciar maiúscula de minúscula.
+//
+// ⚠️ Link de CAMPANHA continua longo: o redirect é um por cupom e não tem como variar o
+// utm_content por campanha sem criar um redirect por combinação.
+function linkCurto(codigo) {
+  return SITE + '/r/' + String(codigo).toLowerCase();
+}
+
+// Cria o redirect da loja. Exige `write_online_store_navigation` no app custom — o escopo foi
+// adicionado em 12/08; antes disso devolvia "Access denied for urlRedirectCreate".
+async function criarLinkCurtoShopify({ codigo, slug }) {
+  if (!SHOP_TOKEN) throw new Error('SHOPIFY_TOKEN não configurado');
+  const mut = `
+    mutation criar($r: UrlRedirectInput!) {
+      urlRedirectCreate(urlRedirect: $r) {
+        urlRedirect { id path }
+        userErrors { field message }
+      }
+    }`;
+  const r = await postJSON(`https://${SHOP}/admin/api/2025-01/graphql.json`,
+    { 'X-Shopify-Access-Token': SHOP_TOKEN },
+    { query: mut, variables: { r: {
+      path: '/r/' + String(codigo).toLowerCase(),
+      target: '/?' + new URLSearchParams({ utm_source: 'creator', utm_campaign: slug }).toString(),
+    } } });
+  if (r.status !== 200) throw new Error('Shopify HTTP ' + r.status + ' ' + String(r.txt).slice(0, 160));
+  const erroApi = r.json?.errors?.[0]?.message;
+  if (erroApi) throw new Error(erroApi);
+  const res = r.json?.data?.urlRedirectCreate;
+  if (res?.userErrors?.length) throw new Error(res.userErrors.map(e => e.message).join('; '));
+  const id = res?.urlRedirect?.id;
+  if (!id) throw new Error('a Shopify não devolveu o id do redirect');
+  return id;
+}
+
 // slug do link, único. `ux_parceiro_slug` é único de verdade, então tentar sem checar quebra.
 async function slugLivre(cli, base) {
   // o @ entra INTEIRO, com ponto e underscore: é o que o Gabriel pediu e é o que torna o
@@ -999,19 +1037,28 @@ http.createServer(async (req, res) => {
         await cli.query('BEGIN');
         etapa = 'gravando o link';
         const slug = pa.utm_slug || await slugLivre(cli, pa.instagram_handle || pa.nome || codigo);
-        const link = linkCreator(slug);
 
         etapa = 'criando o cupom na Shopify';
         let shopifyId = null, shopifyErro = null;
         try { shopifyId = await criarCupomShopify({ codigo, pct: desconto, combinavel: !!d.combinavel }); }
         catch (e) { shopifyErro = e.message; }
 
+        // O link curto é um extra: se falhar, a pessoa recebe o link longo, que funciona
+        // igual. Por isso não aborta a aprovação nem entra em `shopify_erro` — aquilo é
+        // reservado para cupom quebrado, que é o defeito que a tela precisa gritar.
+        etapa = 'criando o link curto';
+        let redirectId = null;
+        try { redirectId = await criarLinkCurtoShopify({ codigo, slug }); }
+        catch (e) { console.error('link curto falhou para ' + codigo + ':', e.message); }
+        const link = redirectId ? linkCurto(codigo) : linkCreator(slug);
+
         etapa = 'gravando o cupom';
         const cup = (await cli.query(`
           INSERT INTO creator.cupom (parceiro_id, codigo, desconto_pct, comissao_pct,
-                                     combinavel, shopify_discount_id, shopify_erro, ativo)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,true) RETURNING *`,
-          [id, codigo, desconto, comissao, !!d.combinavel, shopifyId, shopifyErro])).rows[0];
+                                     combinavel, shopify_discount_id, shopify_erro,
+                                     link_redirect_id, ativo)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,true) RETURNING *`,
+          [id, codigo, desconto, comissao, !!d.combinavel, shopifyId, shopifyErro, redirectId])).rows[0];
 
         etapa = 'atualizando o cadastro';
         const novo = (await cli.query(`
@@ -1071,7 +1118,7 @@ http.createServer(async (req, res) => {
     try {
       const r = await pool.query(`
         SELECT p.parceiro_id, p.nome, p.email, p.utm_slug,
-               c.codigo, c.desconto_pct, c.comissao_pct, c.shopify_erro,
+               c.codigo, c.desconto_pct, c.comissao_pct, c.shopify_erro, c.link_redirect_id,
                l.sexo
         FROM creator.parceiro p
         LEFT JOIN creator.cupom c ON c.parceiro_id=p.parceiro_id AND c.ativo
@@ -1085,7 +1132,8 @@ http.createServer(async (req, res) => {
       if (p.shopify_erro && !u.searchParams.get('mesmo_assim'))
         return json(409, { erro: 'o cupom ' + p.codigo + ' não funciona no checkout: '
           + p.shopify_erro, cupom_quebrado: true });
-      const link = linkCreator(p.utm_slug);
+      // mesmo critério da aprovação: link curto quando existe, longo como rede de segurança
+      const link = p.link_redirect_id ? linkCurto(p.codigo) : linkCreator(p.utm_slug);
       const props = await eventoAprovacao({ email: p.email, nome: p.nome, cupom: p.codigo, link,
                                             desconto: p.desconto_pct, comissao: p.comissao_pct,
                                             sexo: p.sexo });

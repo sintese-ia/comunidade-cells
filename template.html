@@ -1240,13 +1240,19 @@ function abreFicha(id){
       + (nn?'<div class="n">'+esc(nn)+'</div>':'')+'</div>').join('');
 
   document.getElementById('fcupom').value = f.cupom || '(sem cupom)';
-  document.getElementById('flink').value = f.utm_slug
-    ? 'https://cells.com.br/?utm_source=creator&utm_medium=organic&utm_campaign=' + f.utm_slug
-    : '(sem slug)';
+  // O link CURTO é o que a pessoa divulga. Só cai no longo se o redirect não existir —
+  // e o longo aqui tem que ser IDÊNTICO ao que linkCreator() monta no servidor, senão a
+  // tela copia um link e o e-mail manda outro (era o caso: a tela punha utm_medium=organic
+  // que o servidor nunca usou).
+  const cp = cupomDe(id);
+  document.getElementById('flink').value = cp?.link_redirect_id
+    ? 'https://cells.com.br/r/' + String(cp.codigo).toLowerCase()
+    : (f.utm_slug
+        ? 'https://cells.com.br/?utm_source=creator&utm_campaign=' + f.utm_slug
+        : '(sem slug)');
   document.getElementById('flinkcr').value = '';
 
   // estado REAL do cupom: existir aqui não é existir na loja
-  const cp = cupomDe(id);
   document.getElementById('fCupomEstado').innerHTML = !cp
     ? '<p class="obs">Ainda sem cupom. Ele nasce quando você aprova.</p>'
     : (cp.shopify_erro

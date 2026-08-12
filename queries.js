@@ -239,7 +239,8 @@ const painel = {
   // ---- cupom por parceiro, com o estado na Shopify ----
   cupons: `
     SELECT c.parceiro_id, c.codigo, c.desconto_pct, c.comissao_pct, c.combinavel,
-           c.shopify_discount_id, c.shopify_erro, c.ativo, c.criado_em::date AS criado
+           c.shopify_discount_id, c.shopify_erro, c.link_redirect_id, c.ativo,
+           c.criado_em::date AS criado
     FROM creator.cupom c WHERE c.ativo ORDER BY c.cupom_id
   `,
 
