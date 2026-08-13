@@ -750,19 +750,47 @@ function agendar(pool, env) {
     } finally { rodando.delete(nome); }
   };
 
-  const DIA = 864e5, HORA = 36e5;
-  // cadastro novo tem que aparecer na fila rápido — é o que o Gabriel abre de manhã
+  const HORA = 36e5;
+
+  // ⚠️ O CONTAINER RODA EM UTC. 06:00 de Brasília = 09:00 UTC.
+  // Antes tudo era setInterval a partir do boot: o job diário caía na hora em que o container
+  // subiu pela última vez, então "diário" era um horário aleatório que mudava a cada deploy.
+  // Agora é hora de parede — o painel está pronto quando o Gabriel abre de manhã.
+  // O offset é fixo de propósito: o Brasil não tem horário de verão desde 2019. Se voltar,
+  // isto erra em uma hora e o sintoma é job rodando às 7h.
+  const HORA_UTC = 9;
+
+  function diarioAs(hUTC, nome, fn, aCadaDias = 1) {
+    const faltaAte = () => {
+      const agora = new Date();
+      const alvo = new Date(agora);
+      alvo.setUTCHours(hUTC, 0, 0, 0);
+      // já passou hoje? então é a próxima janela
+      if (alvo <= agora) alvo.setUTCDate(alvo.getUTCDate() + aCadaDias);
+      return alvo - agora;
+    };
+    const armar = () => {
+      const ms = faltaAte();
+      console.log(`[agenda] ${nome} em ${(ms / 36e5).toFixed(1)}h (${hUTC}:00 UTC = ${hUTC - 3}h BRT)`);
+      setTimeout(async () => { await roda(nome, fn); armar(); }, ms).unref();
+    };
+    armar();
+  }
+
+  // cadastro novo tem que aparecer na fila rápido — este continua de hora em hora, não faz
+  // sentido esperar a janela das 6h para ver quem se cadastrou às 7h.
   setInterval(() => roda('cadastros', () => syncCadastros(pool, env.META_TOKEN, env.aoRegistrar)), HORA).unref();
   setTimeout(() => roda('cadastros', () => syncCadastros(pool, env.META_TOKEN, env.aoRegistrar)), 15000).unref();
-  // /tags roda diário: marcação nova aparecendo com 1 dia de atraso já é aceitável, e é barato.
-  setInterval(() => roda('tags',   () => syncTags(pool, env.META_TOKEN)),   DIA).unref();
-  setInterval(() => roda('perfis', () => syncPerfis(pool, env.META_TOKEN)), 7 * DIA).unref();
-  // O apify passou a rodar DIÁRIO, mas quem decide o custo é a cadência por idade lá dentro:
-  // na maioria dos dias a fila volta vazia e nem chega a abrir um run. Semanal aqui quebraria
-  // o passo de 2 dias do post novo, que é exatamente onde a view se move.
-  setInterval(() => roda('apify',  () => syncApify(pool, env.APIFY_TOKEN)), DIA).unref();
 
-  // primeira rodada 2 min depois do boot, para não competir com o pré-aquecimento do cache
+  // os três diários entram na mesma janela das 6h, espaçados para não competirem entre si
+  // pela mesma API nem pelo mesmo pool de conexão.
+  diarioAs(HORA_UTC,     'tags',   () => syncTags(pool, env.META_TOKEN));
+  diarioAs(HORA_UTC,     'apify',  () => syncApify(pool, env.APIFY_TOKEN));
+  diarioAs(HORA_UTC + 1, 'perfis', () => syncPerfis(pool, env.META_TOKEN), 7);
+
+  // primeira rodada 2 min depois do boot, para não competir com o pré-aquecimento do cache.
+  // Continua existindo: sem ela, subir o container às 10h deixaria a tela velha até o dia
+  // seguinte — a janela fixa resolve a previsibilidade, não o boot.
   setTimeout(() => roda('tags', () => syncTags(pool, env.META_TOKEN)), 120000).unref();
 
   return { roda, syncTags, syncPerfis, syncApify };

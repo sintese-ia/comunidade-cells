@@ -331,7 +331,8 @@ async function eventoCampanha({ email, nome, campanha, briefing, cupom, link, in
   return corpo.data.attributes.properties;
 }
 
-async function eventoAprovacao({ email, nome, cupom, link, desconto, comissao, sexo }) {
+async function eventoAprovacao({ email, nome, cupom, link, desconto, comissao,
+                                comissao_assinatura, nivel, sexo }) {
   if (!KLAVIYO) throw new Error('KLAVIYO_KEY não configurada');
   if (!email) throw new Error('esta pessoa não tem e-mail no cadastro');
   // A saudação é decidida AQUI, não no template: o Klaviyo não tem como consultar o `sexo`
@@ -341,6 +342,10 @@ async function eventoAprovacao({ email, nome, cupom, link, desconto, comissao, s
       type: 'event',
       attributes: {
         properties: { cupom, link, desconto_pct: desconto, comissao_pct: comissao,
+                      // a assinatura paga mais que a compra única e o e-mail precisa dizer
+                      // os dois números, senão a creator descobre a diferença sozinha depois
+                      comissao_assinatura_pct: comissao_assinatura ?? null,
+                      nivel: nivel || null,
                       nome_creator: G.primeiroNome(nome) || null,
                       saudacao: G.saudacaoDe(nome, sexo) },
         metric: { data: { type: 'metric', attributes: { name: METRICA_APROVACAO } } },
@@ -1037,6 +1042,24 @@ http.createServer(async (req, res) => {
           WHERE p.parceiro_id=$1`, [id])).rows[0];
         if (!pa) return json(404, { erro: 'parceiro não encontrado' });
 
+        // ---- comissão do NÍVEL (item 9) ----
+        // A comissão vem da faixa; `cupom.comissao_pct` é exceção. Antes, aprovar sem digitar
+        // nada gravava NULL e o e-mail prometia uma comissão em branco — é a origem dos 32
+        // cupons sem percentual. Agora o nulo tem significado: "usa a régua".
+        etapa = 'lendo a comissão do nível';
+        const niv = (await cli.query(`
+          SELECT coalesce(v.nivel, 'bronze') AS nivel,
+                 v.comissao_unica_pct, v.comissao_assinatura_pct
+            FROM creator.vw_nivel v WHERE v.parceiro_id=$1`, [id])).rows[0] || {};
+        const regra = niv.comissao_unica_pct != null ? niv : (await cli.query(`
+          SELECT 'bronze' AS nivel,
+                 max(comissao_pct) FILTER (WHERE tipo_pedido='unica')      AS comissao_unica_pct,
+                 max(comissao_pct) FILTER (WHERE tipo_pedido='assinatura') AS comissao_assinatura_pct
+            FROM creator.nivel_regra WHERE nivel='bronze'`)).rows[0];
+        // o que o e-mail promete: o que foi digitado, ou a régua do nível
+        const comissaoEfetiva  = comissao ?? Number(regra.comissao_unica_pct);
+        const comissaoAssinat  = comissao ?? Number(regra.comissao_assinatura_pct);
+
         // O código tem que ser único na LOJA, não só aqui. `creator.legado` tem o inventário
         // inteiro da Shopify — inclusive cupons que nunca venderam e por isso não estão em
         // creator.cupom. Sem esta checagem, dá para reaproveitar sem querer o código de outra
@@ -1102,7 +1125,10 @@ http.createServer(async (req, res) => {
         if (d.enviar_email !== false) {
           try {
             const props = await eventoAprovacao({ email, nome: novo.nome, cupom: codigo, link,
-                                                  desconto, comissao, sexo: pa.sexo });
+                                                  desconto,
+                                                  comissao: comissaoEfetiva,
+                                                  comissao_assinatura: comissaoAssinat,
+                                                  nivel: regra.nivel, sexo: pa.sexo });
             envio = { estado: 'evento_enviado', detalhe: null };
             await pool.query(`
               INSERT INTO creator.email_log (parceiro_id,para,assunto,tipo,estado,payload)
@@ -1133,11 +1159,17 @@ http.createServer(async (req, res) => {
     try {
       const r = await pool.query(`
         SELECT p.parceiro_id, p.nome, p.email, p.utm_slug,
-               c.codigo, c.desconto_pct, c.comissao_pct, c.shopify_erro, c.link_redirect_id,
-               l.sexo
+               c.codigo, c.desconto_pct, c.shopify_erro, c.link_redirect_id,
+               l.sexo,
+               -- mesma regra da aprovação: o cupom só manda no percentual quando ele existe;
+               -- nulo significa "usa a régua do nível", não "sem comissão"
+               coalesce(c.comissao_pct, nv.comissao_unica_pct)      AS comissao_pct,
+               coalesce(c.comissao_pct, nv.comissao_assinatura_pct) AS comissao_assinatura_pct,
+               nv.nivel
         FROM creator.parceiro p
         LEFT JOIN creator.cupom c ON c.parceiro_id=p.parceiro_id AND c.ativo
         LEFT JOIN creator.leads l ON l.lead_id = p.lead_id
+        LEFT JOIN creator.vw_nivel nv ON nv.parceiro_id = p.parceiro_id
         WHERE p.parceiro_id=$1 ORDER BY c.cupom_id LIMIT 1`, [id]);
       const p = r.rows[0];
       if (!p) return json(404, { erro: 'parceiro não encontrado' });
@@ -1151,7 +1183,8 @@ http.createServer(async (req, res) => {
       const link = p.link_redirect_id ? linkCurto(p.codigo) : linkCreator(p.utm_slug);
       const props = await eventoAprovacao({ email: p.email, nome: p.nome, cupom: p.codigo, link,
                                             desconto: p.desconto_pct, comissao: p.comissao_pct,
-                                            sexo: p.sexo });
+                                            comissao_assinatura: p.comissao_assinatura_pct,
+                                            nivel: p.nivel, sexo: p.sexo });
       await pool.query(`
         INSERT INTO creator.email_log (parceiro_id,para,assunto,tipo,estado,payload)
         VALUES ($1,$2,$3,'aprovacao','evento_enviado',$4)`,

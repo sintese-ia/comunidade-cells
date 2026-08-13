@@ -66,8 +66,30 @@ const painel = {
            -- (sem crase neste comentário: o SQL mora em template literal e crase encerra a string)
            EXISTS (SELECT 1 FROM creator.email_log el
                     WHERE el.parceiro_id=p.parceiro_id AND el.tipo='aprovacao'
-                      AND el.estado='evento_enviado') AS avisado
+                      AND el.estado='evento_enviado') AS avisado,
+           -- ⚠️ APROVAÇÃO E STATUS SÃO COISAS DIFERENTES (13/08). Os 27 que vieram do cupom
+           -- legado nasceram 'ativo' com aprovado_em NULL: nunca passaram por curadoria.
+           -- Decisão do Gabriel: todos precisam ser aprovados, MENOS os 5 que venderam em 2026,
+           -- carimbados com aprovado_por='mantido_2026'. O cupom continua vivo no meio disso.
+           (p.status='ativo' AND p.aprovado_em IS NULL) AS reaprovar,
+           (p.aprovado_por = 'mantido_2026')            AS mantido,
+           -- ---- o que a PESSOA declarou no formulário (item 1: pesquisa por nicho/idade) ----
+           -- Nunca inferido: se ela não respondeu, fica null e a tela mostra vazio.
+           ld.nichos, ld.idade, ld.sexo, ld.cidade, ld.cor_etnia,
+           ld.seguidores_instagram AS seg_declarado, ld.modelo_trabalho, ld.vendas_mes,
+           left(coalesce(ld.motivacao,''), 400) AS motivacao,
+           -- item 3: o @ vira link. A URL vem do formulário; quando não veio (cupom legado),
+           -- monta a partir do handle — que é o mesmo caminho que o Instagram usa.
+           coalesce(ld.instagram_url,
+                    CASE WHEN p.instagram_handle IS NOT NULL
+                         THEN 'https://instagram.com/' || p.instagram_handle END) AS instagram_url,
+           -- ---- nível e comissão (item 9) ----
+           nv.nivel, nv.nivel_forcado, nv.receita_3m, nv.pedidos_3m,
+           nv.comissao_unica_pct, nv.comissao_assinatura_pct,
+           nv.proximo_nivel, nv.falta_para_proximo
     FROM creator.parceiro p
+    LEFT JOIN creator.leads    ld ON ld.lead_id     = p.lead_id
+    LEFT JOIN creator.vw_nivel nv ON nv.parceiro_id = p.parceiro_id
     LEFT JOIN LATERAL (
       SELECT seguidores, engajamento_pct, posts_30d, ultimo_post, bio, fonte
       FROM creator.perfil_snapshot ps
@@ -242,6 +264,20 @@ const painel = {
            c.shopify_discount_id, c.shopify_erro, c.link_redirect_id, c.ativo,
            c.criado_em::date AS criado
     FROM creator.cupom c WHERE c.ativo ORDER BY c.cupom_id
+  `,
+
+  // ---- faixas e comissão, para a tela mostrar a régua ----
+  // Vem do banco e não do código: mudar corte ou percentual é UPDATE em
+  // creator.nivel_faixa / creator.nivel_regra, sem deploy.
+  niveis: `
+    SELECT f.nivel, f.ordem, f.piso, f.rotulo,
+           max(r.comissao_pct) FILTER (WHERE r.tipo_pedido='unica')      AS unica_pct,
+           max(r.comissao_pct) FILTER (WHERE r.tipo_pedido='assinatura') AS assinatura_pct,
+           (SELECT count(*) FROM creator.vw_nivel v
+             WHERE v.nivel = f.nivel AND v.status='ativo')::int          AS creators
+    FROM creator.nivel_faixa f
+    LEFT JOIN creator.nivel_regra r ON r.nivel = f.nivel
+    GROUP BY 1,2,3,4 ORDER BY f.ordem
   `,
 
   // ---- saúde dos jobs de coleta (vai para o rodapé do menu) ----

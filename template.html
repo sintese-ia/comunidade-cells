@@ -332,8 +332,35 @@
         <button class="aba" data-fl="arquivado" aria-pressed="false">arquivados <b id="c-arquivado">0</b></button>
         <button class="aba" data-fl="semig" aria-pressed="false">sem instagram <b id="c-semig">0</b></button>
         <button class="aba" data-fl="naoavisado" aria-pressed="false">nunca avisados <b id="c-naoavisado">0</b></button>
+        <button class="aba" data-fl="reaprovar" aria-pressed="false">re-aprovar <b id="c-reaprovar">0</b></button>
         <input id="cq" class="busca" placeholder="nome, @ ou cupom" aria-label="Filtrar cadastros">
         <span class="cnt" id="cntCad"></span>
+      </div>
+      <!-- Filtros de curadoria. Tudo aqui é o que a PESSOA declarou no formulário —
+           nada é inferido de foto ou de nome. Quem não respondeu não aparece no filtro
+           e some da lista quando o filtro está ligado; por isso cada select diz quantos. -->
+      <div class="barra sub">
+        <select id="cNicho" class="busca" style="max-width:180px" aria-label="Filtrar por nicho">
+          <option value="">todos os nichos</option>
+        </select>
+        <select id="cIdade" class="busca" style="max-width:150px" aria-label="Filtrar por faixa de idade">
+          <option value="">qualquer idade</option>
+          <option value="18-24">18 a 24</option>
+          <option value="25-34">25 a 34</option>
+          <option value="35-44">35 a 44</option>
+          <option value="45-99">45+</option>
+        </select>
+        <select id="cCidade" class="busca" style="max-width:190px" aria-label="Filtrar por cidade">
+          <option value="">qualquer cidade</option>
+        </select>
+        <select id="cNivel" class="busca" style="max-width:150px" aria-label="Filtrar por nível">
+          <option value="">qualquer nível</option>
+          <option value="ouro">🥇 ouro</option>
+          <option value="prata">🥈 prata</option>
+          <option value="bronze">🥉 bronze</option>
+        </select>
+        <button class="acbt" id="cLimpa" style="display:none">limpar filtros</button>
+        <span class="cnt dim" id="cFiltroInfo"></span>
       </div>
       <div class="scroll"><table>
         <thead><tr>
@@ -345,6 +372,7 @@
           <th data-t="marcacoes">Marcações</th>
           <th data-t="pedidos">Pedidos</th>
           <th data-t="receita">Receita</th>
+          <th data-t="receita_3m">Nível</th>
           <th>Cupom</th>
           <th>Status</th>
           <th>Ações</th>
@@ -461,6 +489,16 @@
         <button class="aba" data-g="carrossel" aria-pressed="false">carrossel</button>
         <button class="aba" data-g="anuncio" aria-pressed="false">virou anúncio</button>
         <input id="gq" class="busca" placeholder="filtrar por @ ou legenda" aria-label="Filtrar menções">
+        <!-- item 6. "views" aqui é PLAY (videoPlayCount), que é o número que o creator vê no
+             app dele — não o videoViewCount legado. Ver a nota no topo de queries.js. -->
+        <select id="gOrd" class="busca" style="max-width:190px" aria-label="Ordenar menções">
+          <option value="data">mais recentes</option>
+          <option value="data_asc">mais antigas</option>
+          <option value="visualizacoes">mais views</option>
+          <option value="curtidas">mais curtidas</option>
+          <option value="comentarios">mais comentários</option>
+          <option value="handle">por perfil (A-Z)</option>
+        </select>
         <span class="cnt" id="cntGal"></span>
       </div>
       <div class="gal" id="gal"></div>
@@ -811,16 +849,37 @@ document.getElementById('frm').addEventListener('submit', async e => {
 
 /* =================================================== 02 CADASTROS =============== */
 const CAD = D.cadastros || [], ENVIOS = D.envios || [], PUBS = D.fichaPubs || [];
+const NIVEIS = D.niveis || [];
 let cAba = 'todos', cBusca = '', cOrd = {c:'cadastro', d:-1};
+let cNicho = '', cIdade = '', cCidade = '', cNivel = '';
+
+/* Popula os selects a partir do que EXISTE na base — não de uma lista fixa. Se amanhã
+   entrar um nicho novo no formulário, ele aparece aqui sozinho. */
+(function montaFiltros(){
+  const nichos = new Map(), cidades = new Map();
+  CAD.forEach(f => {
+    if (f.arquivado) return;
+    (f.nichos || []).forEach(x => nichos.set(x, (nichos.get(x)||0)+1));
+    if (f.cidade) cidades.set(f.cidade, (cidades.get(f.cidade)||0)+1);
+  });
+  const opt = (m, el) => {
+    document.getElementById(el).insertAdjacentHTML('beforeend',
+      [...m.entries()].sort((a,b) => b[1]-a[1] || a[0].localeCompare(b[0]))
+        .map(([k,v]) => '<option value="'+esc(k)+'">'+esc(k)+' ('+v+')</option>').join(''));
+  };
+  opt(nichos, 'cNicho'); opt(cidades, 'cCidade');
+})();
 
 function contaCad(){
-  const c = {todos:0, pendente:0, ativo:0, pausado:0, reprovado:0, arquivado:0, semig:0, naoavisado:0};
+  const c = {todos:0, pendente:0, ativo:0, pausado:0, reprovado:0, arquivado:0,
+             semig:0, naoavisado:0, reaprovar:0};
   CAD.forEach(f => {
     if (f.arquivado) { c.arquivado++; return; }
     c.todos++;
     if (c[f.status] != null) c[f.status]++;
     if (!f.instagram_handle) c.semig++;
     if (f.status === 'ativo' && !f.avisado) c.naoavisado++;
+    if (f.reaprovar) c.reaprovar++;
   });
   for (const k in c) { const e = document.getElementById('c-'+k); if (e) e.textContent = c[k]; }
 }
@@ -830,11 +889,21 @@ function filtraCad(){
     if (cAba === 'arquivado') { if (!f.arquivado) return false; }
     else if (cAba === 'semig') { if (f.arquivado || f.instagram_handle) return false; }
     else if (cAba === 'naoavisado') { if (f.arquivado || f.status !== 'ativo' || f.avisado) return false; }
+    else if (cAba === 'reaprovar') { if (f.arquivado || !f.reaprovar) return false; }
     else if (cAba !== 'todos') { if (f.arquivado || f.status !== cAba) return false; }
     else if (f.arquivado) return false;
     if (cBusca) {
       const alvo = ((f.nome||'')+' '+(f.instagram_handle||'')+' '+(f.cupom||'')+' '+(f.tags||[]).join(' ')).toLowerCase();
       if (!alvo.includes(cBusca)) return false;
+    }
+    /* Curadoria. Quem não declarou o campo NÃO passa no filtro — é ausência de dado,
+       não um "não". Nunca chutar para preencher: ver a regra de dado pessoal. */
+    if (cNicho  && !(f.nichos || []).includes(cNicho)) return false;
+    if (cCidade && f.cidade !== cCidade) return false;
+    if (cNivel  && f.nivel !== cNivel) return false;
+    if (cIdade) {
+      const [lo, hi] = cIdade.split('-').map(Number);
+      if (f.idade == null || f.idade < lo || f.idade > hi) return false;
     }
     return true;
   });
@@ -848,6 +917,42 @@ function filtraCad(){
   return L;
 }
 
+/* item 3 — o @ vira link para o Instagram. A URL vem do formulário quando a pessoa se
+   cadastrou; para os cupons legados é montada a partir do handle no SQL. */
+function ig(f){
+  if (!f.instagram_handle) return '';
+  const at = '@' + esc(f.instagram_handle);
+  return f.instagram_url
+    ? '<a href="'+esc(f.instagram_url)+'" target="_blank" rel="noopener noreferrer" '
+      + 'class="lnk" title="abrir @'+esc(f.instagram_handle)+' no Instagram">'+at+' ↗</a>'
+    : at;
+}
+
+/* o que a pessoa declarou, curto, ao lado do @ — é o que decide a curadoria sem
+   precisar abrir a ficha de cada uma das 62 pendentes */
+function perfilResumo(f){
+  const p = [];
+  if (f.idade)  p.push(f.idade + ' anos');
+  if (f.cidade) p.push(f.cidade);
+  if (f.nichos && f.nichos.length) p.push(f.nichos.slice(0,2).join(', '));
+  return p.length ? ' <span class="dim">· '+esc(p.join(' · '))+'</span>' : '';
+}
+
+const MEDALHA = {ouro:'🥇', prata:'🥈', bronze:'🥉'};
+
+/* Nível é sempre dos ÚLTIMOS 3 MESES, com rebaixamento. A receita de vida fica na coluna
+   ao lado como histórico e nunca decide faixa — decisão do Gabriel em 12/08. */
+function celNivel(f){
+  if (!f.nivel) return '<td class="dim">—</td>';
+  const t = MEDALHA[f.nivel] + ' ' + f.nivel
+    + (f.nivel_forcado ? ' <span class="chip wa" title="nível fixado na mão, ignora o cálculo">fixo</span>' : '');
+  const sub = (f.receita_3m > 0)
+    ? nm(f.receita_3m) + ' em 3m'
+    : '<span title="sem venda na janela de 3 meses">sem venda em 3m</span>';
+  return '<td><span class="chip'+(f.nivel==='bronze'?'':' ok')+'">'+t+'</span>'
+    + '<span class="sub2 dim">'+sub+'</span></td>';
+}
+
 function selStatus(f){
   return '<select class="st" data-st="'+f.parceiro_id+'" data-v="'+esc(f.status)+'" aria-label="status de '+esc(f.nome||'')+'">'
     + STATUS.map(s => '<option value="'+s+'"'+(s===f.status?' selected':'')+'>'+s+'</option>').join('')
@@ -858,6 +963,7 @@ function pintaCad(){
   contaCad();
   const L = filtraCad();
   document.getElementById('cntCad').textContent = L.length + ' de ' + CAD.length;
+  infoFiltro(L.length);
   document.getElementById('tbCad').innerHTML = L.map(f => {
     const eng = f.perfil_indisponivel
       ? '<span class="chip vo" title="perfil pessoal ou privado — a Meta não expõe">pessoal</span>'
@@ -866,7 +972,9 @@ function pintaCad(){
     return '<tr>'
       + '<td class="h"><button class="lnk" data-ficha="'+f.parceiro_id+'"><b>'+esc(f.nome||'—')+'</b></button>'
         + (f.instagram_handle
-             ? '<span class="sub2">@'+esc(f.instagram_handle)+'</span>'
+             // item 3: o @ abre o perfil. target=_blank porque o painel não pode perder o
+             // estado dos filtros só porque alguém foi conferir um perfil.
+             ? '<span class="sub2">'+ig(f) + perfilResumo(f) +'</span>'
              : '<span class="sub2">'+(f.cupom?'<span class="dim">cupom '+esc(f.cupom)+'</span> ':'')
                + '<button class="lnk" data-casar="'+f.parceiro_id+'" style="color:var(--ac)">quem é?</button>'
                + (melhorPalpite(f) ? ' <span class="dim">→ @'+esc(melhorPalpite(f).handle)+'</span>' : '')
@@ -878,14 +986,22 @@ function pintaCad(){
       + '<td'+(f.marcacoes?'':' class="dim"')+'>'+(f.marcacoes||'—')+'</td>'
       + '<td'+(f.pedidos?'':' class="dim"')+'>'+(f.pedidos||'—')+'</td>'
       + '<td'+(f.receita?' style="font-weight:600"':' class="dim"')+'>'+(f.receita?nm(f.receita):'—')+'</td>'
+      + celNivel(f)
       + '<td>'+(() => { const c = cupomDe(f.parceiro_id);
           if (!c) return '<span class="dim">—</span>';
           const cod = c.shopify_erro
             ? '<span class="chip cr" title="'+esc(c.shopify_erro)+'">'+esc(c.codigo)+' inativo</span>'
             : '<span class="chip ok">'+esc(c.codigo)+'</span>'
               + (c.desconto_pct != null ? '' : ' <span class="chip wa" title="desconto desconhecido">sem %</span>');
-          // "ativo" e "avisado" são coisas diferentes e a tela precisa separar
-          return cod + (f.avisado ? '' : '<span class="sub2 dim">nunca avisado</span>'); })()+'</td>'
+          // "ativo", "avisado" e "aprovado" são TRÊS coisas diferentes e a tela separa as três.
+          // Os 27 do cupom legado nasceram ativos, com cupom vivo, sem nunca terem sido
+          // aprovados nem avisados.
+          return cod
+            + (f.avisado ? '' : '<span class="sub2 dim">nunca avisado</span>')
+            + (f.reaprovar ? '<span class="sub2"><span class="chip wa" '
+                + 'title="ativo e vendendo, mas nunca passou pela aprovação">falta aprovar</span></span>' : '')
+            + (f.mantido ? '<span class="sub2"><span class="chip ok" '
+                + 'title="vendeu em 2026: mantido sem re-aprovação, decisão de 13/08">mantido</span></span>' : ''); })()+'</td>'
       + '<td>'+selStatus(f)+'</td>'
       + '<td><div class="acs">'
         + (() => {
@@ -928,6 +1044,34 @@ document.querySelectorAll('[data-fl]').forEach(b => b.addEventListener('click', 
 document.getElementById('cq').addEventListener('input', e => {
   cBusca = e.target.value.trim().toLowerCase(); pintaCad();
 });
+
+/* filtros de curadoria (item 1) */
+[['cNicho', v => cNicho = v], ['cIdade', v => cIdade = v],
+ ['cCidade', v => cCidade = v], ['cNivel', v => cNivel = v]]
+  .forEach(([id, set]) => document.getElementById(id)
+    .addEventListener('change', e => { set(e.target.value); pintaCad(); }));
+
+document.getElementById('cLimpa').addEventListener('click', () => {
+  cNicho = cIdade = cCidade = cNivel = '';
+  ['cNicho','cIdade','cCidade','cNivel'].forEach(id => document.getElementById(id).value = '');
+  pintaCad();
+});
+
+/* Quantos a curadoria não alcança. Filtrar por idade some com quem não declarou idade —
+   isso é correto, mas silencioso, e a tela precisa dizer em voz alta quantos sumiram. */
+function infoFiltro(mostrados){
+  const ligado = cNicho || cIdade || cCidade || cNivel;
+  document.getElementById('cLimpa').style.display = ligado ? '' : 'none';
+  const el = document.getElementById('cFiltroInfo');
+  if (!ligado) { el.textContent = ''; return; }
+  const vivos = CAD.filter(f => !f.arquivado);
+  const mudos = vivos.filter(f =>
+    (cNicho  && !(f.nichos||[]).length) ||
+    (cIdade  && f.idade == null) ||
+    (cCidade && !f.cidade)).length;
+  el.textContent = mostrados + ' encontrados'
+    + (mudos ? ' · ' + mudos + ' fora por não terem declarado o campo' : '');
+}
 document.querySelectorAll('th[data-t]').forEach(t => t.addEventListener('click', () => {
   const c = t.dataset.t;
   cOrd = cOrd.c === c ? {c, d:-cOrd.d} : {c, d:(c==='nome'?1:-1)};
@@ -1715,10 +1859,10 @@ document.querySelectorAll('[data-per]').forEach(b => b.addEventListener('click',
 
 /* =================================================== 05 MENÇÕES ================ */
 const GAL = D.mencoes || [];
-let gAba = 'todos', gQ = '';
+let gAba = 'todos', gQ = '', gOrd = 'data';
 
 function filtraGal(){
-  return GAL.filter(g => {
+  const L = GAL.filter(g => {
     if (gAba === 'video' && !g.tem_video) return false;
     if (gAba === 'reels' && g.tipo !== 'reels') return false;
     if (gAba === 'carrossel' && g.tipo !== 'carrossel') return false;
@@ -1726,6 +1870,25 @@ function filtraGal(){
     if (gQ && !((g.instagram_handle+' '+(g.legenda||'')).toLowerCase().includes(gQ))) return false;
     return true;
   });
+  /* Ordenação (item 6). Métrica ausente vai SEMPRE para o fim, nos dois sentidos — senão
+     "mais views" começa com uma parede de conteúdo que ninguém mediu ainda. */
+  const num = c => (a, b) => {
+    const x = a[c], y = b[c];
+    if (x == null && y == null) return 0;
+    if (x == null) return 1;
+    if (y == null) return -1;
+    return y - x;
+  };
+  const cmp = {
+    data:          (a,b) => (a.data < b.data ? 1 : a.data > b.data ? -1 : 0),
+    data_asc:      (a,b) => (a.data > b.data ? 1 : a.data < b.data ? -1 : 0),
+    visualizacoes: num('visualizacoes'),
+    curtidas:      num('curtidas'),
+    comentarios:   num('comentarios'),
+    handle:        (a,b) => a.instagram_handle.localeCompare(b.instagram_handle)
+                            || (a.data < b.data ? 1 : -1),
+  }[gOrd];
+  return L.sort(cmp);
 }
 function pintaGal(){
   const L = filtraGal();
@@ -1753,6 +1916,7 @@ document.querySelectorAll('[data-g]').forEach(b => b.addEventListener('click', (
   b.setAttribute('aria-pressed','true'); gAba = b.dataset.g; pintaGal();
 }));
 document.getElementById('gq').addEventListener('input', e => { gQ = e.target.value.trim().toLowerCase(); pintaGal(); });
+document.getElementById('gOrd').addEventListener('change', e => { gOrd = e.target.value; pintaGal(); });
 
 /* ---- player ---- */
 const dM = document.getElementById('dlgMidia');
