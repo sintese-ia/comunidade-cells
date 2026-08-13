@@ -361,8 +361,19 @@ async function eventoAprovacao({ email, nome, cupom, link, desconto, comissao, s
 // `content` fora significa link base — a pessoa divulgando por conta própria, que é caso
 // legítimo e não dado faltando. Uma função só, porque link montado em três lugares diferentes
 // vira três convenções diferentes na primeira pressa.
+// A UTM segue `core.taxonomia_utm` (tipo 'creator') — o padrão da casa, que o dash.sintese lê:
+//   source=creator · medium=influencer · campaign=<slug> · content=<iniciativa>
+// O `medium` faltava, e é por isso que as sessões antigas do Victor entraram como `organic`.
+// As views `creator.vw_clique*` validam contra `core.taxonomia_alias`, então mudar o padrão
+// aqui exige mexer LÁ também — não em literal espalhado.
+//
+// A taxonomia sugere `utm_source=<plataforma>` para link novo. Aqui fica `creator` de propósito:
+// o link é agnóstico de plataforma — a mesma URL vai para bio, story, WhatsApp e YouTube.
+// Cravar `instagram` seria mentira em parte do tráfego, e a plataforma real vem do referrer.
 function linkCreator(slug, utmContent) {
-  const q = new URLSearchParams({ utm_source: 'creator', utm_campaign: slug });
+  const q = new URLSearchParams({
+    utm_source: 'creator', utm_medium: 'influencer', utm_campaign: slug,
+  });
   if (utmContent) q.set('utm_content', utmContent);
   return SITE + '/?' + q.toString();
 }
@@ -393,7 +404,11 @@ async function criarLinkCurtoShopify({ codigo, slug }) {
     { 'X-Shopify-Access-Token': SHOP_TOKEN },
     { query: mut, variables: { r: {
       path: '/r/' + String(codigo).toLowerCase(),
-      target: '/?' + new URLSearchParams({ utm_source: 'creator', utm_campaign: slug }).toString(),
+      // mesma convenção do linkCreator() — se divergir, o link curto e o longo passam a
+      // classificar em lugares diferentes no dash
+      target: '/?' + new URLSearchParams({
+        utm_source: 'creator', utm_medium: 'influencer', utm_campaign: slug,
+      }).toString(),
     } } });
   if (r.status !== 200) throw new Error('Shopify HTTP ' + r.status + ' ' + String(r.txt).slice(0, 160));
   const erroApi = r.json?.errors?.[0]?.message;

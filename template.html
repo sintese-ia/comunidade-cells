@@ -441,7 +441,7 @@
       </table></div>
       <div class="empty">
         <span class="tg">o que ainda é zero, e por quê</span>
-        <p><b>Story</b> fica em zero até o webhook da Meta ser ligado — falta a variável <code>META_APP_SECRET</code> no serviço, e sem ela o endpoint recusa POST de propósito. Não há histórico de story para buscar depois: ou captura na hora, ou não existe.<br><b>Cliques</b> ficam em zero até alguém usar um link com <code>utm_source=creator</code>. Os links já existem na ficha de cada cadastro.<br><b>Views</b> só existem em reels — carrossel e foto não têm contador público.</p>
+        <p><b>Story</b> chega pelo webhook da Meta, que está ligado e provado. Mas o app está em <b>acesso padrão</b>: a Meta só entrega mensagem de quem tem função no app, então <b>story de creator não chega</b> até sair o App Review de <code>instagram_manage_messages</code>. Não há histórico para buscar depois: ou captura na hora, ou não existe.<br><b>Cliques</b> vêm do link do creator (<code>utm_medium=influencer</code>, conforme <code>core.taxonomia_utm</code>). Cada cadastro aprovado tem o seu em <code>cells.com.br/r/&lt;cupom&gt;</code>.<br><b>Views</b> só existem em reels — carrossel e foto não têm contador público.</p>
       </div>
     </div>
   </section>
@@ -1057,8 +1057,10 @@ function abreAprovar(id){
   document.getElementById('apComb').checked = false;
   document.getElementById('apEmail').value = f.email || '';
   document.getElementById('apEnviar').checked = true;
+  // prévia da aprovação: o link definitivo vira o curto (cells.com.br/r/<cupom>) assim que o
+  // cupom existe. Aqui ainda não existe, então mostra o longo — na UTM canônica da taxonomia.
   document.getElementById('apLink').value =
-    'https://cells.com.br/?utm_source=creator&utm_medium=organic&utm_campaign=' + slugDe(f);
+    'https://cells.com.br/?utm_source=creator&utm_medium=influencer&utm_campaign=' + slugDe(f);
   document.getElementById('apErro').textContent = '';
   pintaPreviewAp();
   dlgAp.showModal();
@@ -1248,7 +1250,7 @@ function abreFicha(id){
   document.getElementById('flink').value = cp?.link_redirect_id
     ? 'https://cells.com.br/r/' + String(cp.codigo).toLowerCase()
     : (f.utm_slug
-        ? 'https://cells.com.br/?utm_source=creator&utm_campaign=' + f.utm_slug
+        ? 'https://cells.com.br/?utm_source=creator&utm_medium=influencer&utm_campaign=' + f.utm_slug
         : '(sem slug)');
   document.getElementById('flinkcr').value = '';
 
@@ -1486,7 +1488,7 @@ document.getElementById('dcContent').addEventListener('input', e => {
   const v = e.target.value.trim().toLowerCase().normalize('NFD')
     .replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9_-]/g,'');
   document.getElementById('dcExemplo').textContent = v
-    ? '?utm_source=creator&utm_campaign=pedrocorre&utm_content=' + v
+    ? '?utm_source=creator&utm_medium=influencer&utm_campaign=pedrocorre&utm_content=' + v
     : '';
 });
 
