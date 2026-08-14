@@ -368,10 +368,15 @@ async function eventoAprovacao({ email, nome, cupom, link, desconto, comissao,
 
 // ---------------------------------------------------------------- o link do creator
 // Convenção fechada com o Gabriel em 08/08:
-//   utm_source=creator  ·  utm_campaign=<@ da pessoa>  ·  utm_content=<campanha>
-// `content` fora significa link base — a pessoa divulgando por conta própria, que é caso
-// legítimo e não dado faltando. Uma função só, porque link montado em três lugares diferentes
-// vira três convenções diferentes na primeira pressa.
+//   utm_source=creator  ·  utm_campaign=<@ da pessoa>
+//
+// ⚠️ CAMPANHA NÃO TEM LINK PRÓPRIO (decisão do Gabriel, 14/08). O creator divulga UM link
+// só — o dele — em toda campanha. O `utmContent` continua existindo no parâmetro para uso
+// pontual, mas nenhum fluxo do painel passa mais isso. Resultado de campanha é atribuído
+// por creator vinculado + janela de datas, em `creator.vw_campanha_resultado`.
+//
+// Uma função só, porque link montado em três lugares diferentes vira três convenções
+// diferentes na primeira pressa.
 // A UTM segue `core.taxonomia_utm` (tipo 'creator') — o padrão da casa, que o dash.sintese lê:
 //   source=creator · medium=influencer · campaign=<slug> · content=<iniciativa>
 // O `medium` faltava, e é por isso que as sessões antigas do Victor entraram como `organic`.
@@ -394,10 +399,24 @@ function linkCreator(slug, utmContent) {
 // o que muda é ela conseguir falar o link em vídeo sem soletrar UTM. Testado 12/08: a Shopify
 // preserva a query string no destino e casa o path sem diferenciar maiúscula de minúscula.
 //
-// ⚠️ Link de CAMPANHA continua longo: o redirect é um por cupom e não tem como variar o
-// utm_content por campanha sem criar um redirect por combinação.
+// Desde 14/08 vale para CAMPANHA também: como não existe mais link por campanha, o aviso de
+// campanha manda exatamente o mesmo link curto que a pessoa já divulga. Antes ele mandava um
+// link longo diferente, e a creator recebia duas URLs para a mesma coisa.
 function linkCurto(codigo) {
   return SITE + '/r/' + String(codigo).toLowerCase();
+}
+
+// A REGRA ÚNICA de qual link mandar para uma pessoa: curto quando o redirect existe, longo
+// como rede de segurança. Aprovação, reenvio e aviso de campanha usam esta mesma função —
+// antes cada um decidia por conta e o aviso de campanha mandava uma URL diferente das outras
+// duas, então a mesma creator recebia dois links para o mesmo destino.
+// Espera { link_redirect_id, utm_slug } e o código do cupom — que vem como `codigo` numa
+// query e aliasado como `cupom` na outra; aceita os dois em vez de exigir que as queries
+// concordem, que é o tipo de detalhe que quebra calado meses depois.
+function linkDoCreator(p) {
+  if (!p) return linkCreator(undefined);
+  const cod = p.codigo || p.cupom;
+  return p.link_redirect_id && cod ? linkCurto(cod) : linkCreator(p.utm_slug);
 }
 
 // Cria o redirect da loja. Exige `write_online_store_navigation` no app custom — o escopo foi
@@ -960,8 +979,6 @@ http.createServer(async (req, res) => {
             + `-${String(v.getDate()).padStart(2,'0')}`;
           return String(v).slice(0, 10);
         };
-        const slugContent = v => String(v || '').trim().toLowerCase()
-          .normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9_-]/g,'') || null;
 
         // mudar só o status (ativar, encerrar, cancelar, arquivar) — não mexe no resto
         if (d.campanha_id && d.status && !d.nome) {
@@ -991,26 +1008,13 @@ http.createServer(async (req, res) => {
           if (atual.tipo === 'comissao' && !(pctE > 0 && pctE <= 100))
             return json(400, { erro: 'campanha de comissão precisa de um percentual entre 0 e 100' });
 
-          const conteudoE = d.utm_content === undefined ? atual.utm_content : slugContent(d.utm_content);
-          // ⚠️ O utm_content já saiu no link de quem foi avisado. Trocar depois disso quebra a
-          // atribuição do que já está circulando, e quebra CALADO — o clique some da campanha.
-          if (conteudoE !== atual.utm_content && atual.utm_content) {
-            const [ja] = (await cli.query(
-              `SELECT count(*)::int AS n FROM creator.email_log
-                WHERE campanha_id=$1 AND estado='evento_enviado'`, [d.campanha_id])).rows;
-            if (ja.n > 0) return json(409, { erro: 'o utm_content não pode mudar: ' + ja.n
-              + ' creator(s) já receberam o link com "' + atual.utm_content
-              + '". O clique que já está circulando ia parar de contar. Crie outra campanha.' });
-          }
-
           await cli.query('BEGIN');
           const r = await cli.query(
             `UPDATE creator.campanha
-                SET nome=$2, briefing=$3, inicio=$4::date, fim=$5::date,
-                    utm_content=$6, comissao_pct=$7
+                SET nome=$2, briefing=$3, inicio=$4::date, fim=$5::date, comissao_pct=$6
               WHERE campanha_id=$1 RETURNING *`,
             [d.campanha_id, String(d.nome).trim().slice(0, 120), d.briefing || null,
-             inicio, fim, conteudoE, pctE]);
+             inicio, fim, pctE]);
           // a janela do jogo TEM que acompanhar a da campanha, senão a pontuação passa a
           // contar post de fora do período e o placar mente
           await cli.query(
@@ -1029,11 +1033,6 @@ http.createServer(async (req, res) => {
         const acoes = (d.acoes || []).filter(a => a && a.acao && +a.pontos > 0);
         if (tipo === 'pontuacao' && !acoes.length)
           return json(400, { erro: 'campanha de pontuação precisa de pelo menos uma ação com pontos' });
-        // utm_content: é ele que separa o resultado desta campanha do de outra no clique
-        const conteudo = slugContent(d.utm_content);
-        if (conteudo && conteudo.length < 3)
-          return json(400, { erro: 'utm_content muito curto — use algo como 2026-08_lancamento' });
-
         const inicio = data(d.inicio, hoje);
         const fim    = data(d.fim, null);
         if (fim && fim < inicio) return json(400, { erro: 'a data final é antes da inicial' });
@@ -1041,10 +1040,10 @@ http.createServer(async (req, res) => {
         await cli.query('BEGIN');
         const r = await cli.query(
           `INSERT INTO creator.campanha (nome,briefing,tipo,comissao_pct,inicio,fim,status,
-                                         utm_content,criado_por)
-           VALUES ($1,$2,$3,$4,$5::date,$6::date,$7,$8,$9) RETURNING *`,
+                                         criado_por)
+           VALUES ($1,$2,$3,$4,$5::date,$6::date,$7,$8) RETURNING *`,
           [String(d.nome).trim().slice(0, 120), d.briefing || null, tipo, pct, inicio, fim,
-           d.status === 'ativa' ? 'ativa' : 'rascunho', conteudo, (d.por || 'painel').slice(0, 60)]);
+           d.status === 'ativa' ? 'ativa' : 'rascunho', (d.por || 'painel').slice(0, 60)]);
         const camp = r.rows[0];
 
         if (tipo === 'pontuacao') {
@@ -1296,7 +1295,7 @@ http.createServer(async (req, res) => {
         return json(409, { erro: 'o cupom ' + p.codigo + ' não funciona no checkout: '
           + p.shopify_erro, cupom_quebrado: true });
       // mesmo critério da aprovação: link curto quando existe, longo como rede de segurança
-      const link = p.link_redirect_id ? linkCurto(p.codigo) : linkCreator(p.utm_slug);
+      const link = linkDoCreator(p);
       const props = await eventoAprovacao({ email: p.email, nome: p.nome, cupom: p.codigo, link,
                                             desconto: p.desconto_pct, comissao: p.comissao_pct,
                                             comissao_assinatura: p.comissao_assinatura_pct,
@@ -1324,7 +1323,7 @@ http.createServer(async (req, res) => {
     try {
       const r = await pool.query(`
         SELECT p.parceiro_id, p.nome, p.email, p.utm_slug, p.instagram_handle,
-               cu.codigo AS cupom,
+               cu.codigo AS cupom, cu.link_redirect_id,
                (SELECT max(el.criado_em) FROM creator.email_log el
                  WHERE el.parceiro_id=p.parceiro_id AND el.campanha_id=$1
                    AND el.estado='evento_enviado')::date AS avisado_em
@@ -1334,12 +1333,11 @@ http.createServer(async (req, res) => {
         WHERE cp.campanha_id = $1 AND cp.saiu_em IS NULL
         ORDER BY p.nome`, [c]);
       const cam = (await pool.query(
-        `SELECT nome, utm_content, briefing, inicio, fim FROM creator.campanha WHERE campanha_id=$1`,
+        `SELECT nome, briefing, inicio, fim FROM creator.campanha WHERE campanha_id=$1`,
         [c])).rows[0];
       if (!cam) return json(404, { erro: 'campanha não encontrada' });
       return json(200, { ok: true, campanha: normaliza(cam),
-        pessoas: r.rows.map(x => normaliza({ ...x,
-          link: linkCreator(x.utm_slug, cam.utm_content) })) });
+        pessoas: r.rows.map(x => normaliza({ ...x, link: linkDoCreator(x) })) });
     } catch (e) { return json(200, { ok: false, erro: e.message }); }
   }
 
@@ -1357,23 +1355,20 @@ http.createServer(async (req, res) => {
         if (!ids.length) return json(400, { erro: 'ninguém selecionado' });
 
         const cam = (await pool.query(
-          `SELECT campanha_id, nome, utm_content, briefing, inicio, fim
+          `SELECT campanha_id, nome, briefing, inicio, fim
              FROM creator.campanha WHERE campanha_id=$1`, [c])).rows[0];
         if (!cam) return json(404, { erro: 'campanha não encontrada' });
-        // sem utm_content o link da campanha é igual ao link base, e o e-mail estaria
-        // avisando de uma mudança que não existe
-        if (!cam.utm_content)
-          return json(400, { erro: 'esta campanha não tem utm_content — sem ele o link não muda' });
 
         const pessoas = (await pool.query(`
-          SELECT p.parceiro_id, p.nome, p.email, p.utm_slug, cu.codigo AS cupom
+          SELECT p.parceiro_id, p.nome, p.email, p.utm_slug,
+                 cu.codigo AS cupom, cu.link_redirect_id
           FROM creator.parceiro p
           LEFT JOIN creator.cupom cu ON cu.parceiro_id=p.parceiro_id AND cu.ativo
           WHERE p.parceiro_id = ANY($1)`, [ids])).rows;
 
         const res = [];
         for (const p of pessoas) {
-          const link = linkCreator(p.utm_slug, cam.utm_content);
+          const link = linkDoCreator(p);
           try {
             const props = await eventoCampanha({ email: p.email, nome: p.nome, campanha: cam.nome,
               briefing: cam.briefing, cupom: p.cupom, link,

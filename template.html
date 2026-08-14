@@ -716,14 +716,6 @@
         <p class="obs" style="margin-top:9px">O ponto é contado sozinho a partir do que já é coletado: publicação com marcação à Cells e pedido com cupom, dentro do período da campanha.</p>
       </div>
     </div>
-    <div class="fsec"><h4>Link da campanha</h4>
-      <div class="frm">
-        <input id="dcContent" style="flex:1;min-width:220px" placeholder="2026-08_lancamento"
-               maxlength="60" aria-label="utm_content">
-      </div>
-      <p class="obs" style="margin-top:7px">Vai no <span style="font-family:var(--mono)">utm_content</span> do link de cada creator. É ele que separa o clique desta campanha do clique do link normal da pessoa. Padrão: <b>ano-mês_nome</b>.</p>
-      <p class="obs" style="margin-top:6px;font-family:var(--mono);font-size:11px;color:var(--ac)" id="dcExemplo"></p>
-    </div>
     <div class="fsec"><h4>Período <span style="text-transform:none;letter-spacing:0;font-family:var(--sans);color:var(--fnt)">— o fim é opcional</span></h4>
       <div class="frm">
         <input id="dcIni" type="date" aria-label="início">
@@ -747,7 +739,7 @@
   </div>
   <div class="fbody">
     <div class="fsec">
-      <p class="obs">Cada pessoa recebe <b>o link dela</b>, já com o <span style="font-family:var(--mono)">utm_content</span> desta campanha. Desmarque quem não deve receber agora.</p>
+      <p class="obs">Cada pessoa recebe <b>o link dela</b> — o mesmo de sempre, campanha não tem link próprio. Desmarque quem não deve receber agora.</p>
       <div class="frm" style="margin-top:9px">
         <button class="acbt" id="avTodos">marcar todos</button>
         <button class="acbt" id="avNenhum">desmarcar todos</button>
@@ -1552,9 +1544,8 @@ function pintaCamp(){
     L.length + ' campanha' + (L.length===1?'':'s');
   document.getElementById('listaCamp').innerHTML = L.length ? L.map(c => {
     const pl = PLACAR.filter(p => p.campanha_id === c.campanha_id).slice(0,6);
-    const utm = c.utm_content
-      ? '<span class="r">link <b>'+esc(c.utm_content)+'</b></span>'
-      : '<span class="r dim">sem utm_content — o link não muda nesta campanha</span>';
+    // campanha não tem link próprio desde 14/08 — o creator divulga só o link dele
+    const utm = '';
     const regra = c.tipo === 'comissao'
       ? '<span class="r"><b>'+pc(c.comissao_pct)+'</b> sobre o vendido pelo cupom</span>'
       : ((c.acoes||[]).map(a => '<span class="r">'+esc(rotAcao(a.acao))+' <b>'+a.pontos+' pts</b></span>').join('')
@@ -1585,7 +1576,7 @@ function pintaCamp(){
       + '</select>'
       + '<button class="acbt" data-cedit="'+c.campanha_id+'">editar</button>'
       + '<button class="acbt" data-cadd="'+c.campanha_id+'">+ creators</button>'
-      + (c.utm_content && (c.participantes||[]).length
+      + ((c.participantes||[]).length
           ? '<button class="acbt ok" data-avisar="'+c.campanha_id+'">avisar os creators</button>' : '')
       + '</div>'
       + ((c.participantes||[]).length
@@ -1719,14 +1710,6 @@ function trocaTipo(){
 document.querySelectorAll('input[name="dctipo"]').forEach(r => r.addEventListener('change', trocaTipo));
 document.getElementById('dcAddAcao').addEventListener('click', () =>
   document.getElementById('dcAcoes').appendChild(linhaAcao()));
-document.getElementById('dcContent').addEventListener('input', e => {
-  const v = e.target.value.trim().toLowerCase().normalize('NFD')
-    .replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9_-]/g,'');
-  document.getElementById('dcExemplo').textContent = v
-    ? '?utm_source=creator&utm_medium=influencer&utm_campaign=pedrocorre&utm_content=' + v
-    : '';
-});
-
 /* null = criando; id = editando. É o que decide o texto do botão e se o POST manda
    campanha_id — o mesmo formulário serve para os dois. */
 let editandoCamp = null;
@@ -1742,9 +1725,6 @@ function abreEdicao(c){
   editandoCamp = c.campanha_id;
   dcNome.value = c.nome || ''; dcBrief.value = c.briefing || '';
   dcPct.value = c.comissao_pct != null ? String(c.comissao_pct) : '15';
-  dcContent.value = c.utm_content || '';
-  document.getElementById('dcExemplo').textContent = c.utm_content
-    ? '?utm_source=creator&utm_medium=influencer&utm_campaign=pedrocorre&utm_content=' + c.utm_content : '';
   dcIni.value = (c.inicio || '').slice(0, 10);
   dcFim.value = (c.fim || '').slice(0, 10);
   dcStatus.value = c.status === 'ativa' ? 'ativa' : 'rascunho';
@@ -1767,7 +1747,6 @@ document.getElementById('novaCamp').addEventListener('click', () => {
   document.getElementById('dcAddAcao').style.display = '';
   document.getElementById('dcSalvar').textContent = 'criar campanha';
   dcNome.value = ''; dcBrief.value = ''; dcPct.value = '15';
-  dcContent.value = ''; document.getElementById('dcExemplo').textContent = '';
   dcIni.value = hoje; dcFim.value = ''; dcStatus.value = 'ativa';
   document.querySelector('input[name="dctipo"][value="comissao"]').checked = true;
   trocaTipo();
@@ -1790,7 +1769,6 @@ document.getElementById('dcSalvar').addEventListener('click', async () => {
     // "tirar a data de fim" de "não mexi nesse campo"
     inicio: dcIni.value || hoje, fim: editandoCamp ? dcFim.value : (dcFim.value || null),
     status: dcStatus.value,
-    utm_content: dcContent.value.trim(),
     acoes: [...document.querySelectorAll('#dcAcoes .frm')].map(r => ({
       acao: r.querySelector('.ma').value, pontos: r.querySelector('.mp').value })),
   };
@@ -1821,8 +1799,7 @@ document.getElementById('listaCamp').addEventListener('click', async e => {
   avCamp = { ...j.campanha, campanha_id: +b.dataset.avisar };
   avPessoas = j.pessoas;
   document.getElementById('avTitulo').textContent = 'Avisar sobre ' + avCamp.nome;
-  document.getElementById('avSub').innerHTML = 'utm_content <b>' + esc(avCamp.utm_content)
-    + '</b> · ' + avPessoas.length + ' creator' + (avPessoas.length === 1 ? '' : 's') + ' na campanha';
+  document.getElementById('avSub').innerHTML = avPessoas.length + ' creator' + (avPessoas.length === 1 ? '' : 's') + ' na campanha';
   document.getElementById('avErro').textContent = '';
   pintaAviso();
   dlgAv.showModal();
