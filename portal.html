@@ -66,6 +66,25 @@
   .bar span{display:block;height:100%;background:var(--ac);border-radius:99px}
   .bar.full span{background:var(--ok)}
 
+  /* ---- barras de clique por dia ---- */
+  .spark{display:flex;align-items:flex-end;gap:2px;height:56px;margin-top:2px}
+  .spark i{flex:1;background:var(--ac-s);border-radius:1px 1px 0 0;min-height:2px;display:block}
+  .spark i.tem{background:var(--ac)}
+  .sparkl{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;
+          color:var(--fnt);margin-top:6px}
+
+  /* ---- nível ---- */
+  .niv{display:flex;align-items:center;gap:11px;flex-wrap:wrap}
+  .medalha{font-size:26px;line-height:1}
+  .niv .nm{font-size:17px;font-weight:660;letter-spacing:-.015em;text-transform:capitalize}
+  .taxas{display:flex;gap:1px;background:var(--line);border:1px solid var(--line);
+         border-radius:3px;overflow:hidden;margin-top:13px}
+  .taxas div{background:var(--bg);padding:11px 13px;flex:1}
+  .taxas .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--mut)}
+  .taxas .v{font-family:var(--mono);font-size:19px;font-weight:560;margin-top:6px;letter-spacing:-.02em}
+  .escada{margin-top:14px}
+  .escada .et{display:flex;justify-content:space-between;font-size:12px;color:var(--mut);margin-bottom:5px}
+
   .vazio{font-size:13px;color:var(--fnt);padding:4px 0}
   footer{margin-top:22px;font-size:11.5px;color:var(--fnt);line-height:1.7;text-align:center}
   .erro{background:var(--bg);border:1px solid var(--line);border-left:3px solid var(--wa);
@@ -85,7 +104,11 @@ const dt = s => s ? String(s).slice(8,10)+'/'+String(s).slice(5,7)+'/'+String(s)
 const esc = s => String(s==null?'':s).replace(/[<>&]/g,m=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[m]));
 
 const p = P.parceiro, v = P.vendas||{}, ex = P.extrato||[], pubs = P.publicacoes||[],
-      env = P.envios||[], jg = P.jogos||[];
+      env = P.envios||[], jg = P.jogos||[],
+      cl = P.cliques||{}, nv = P.nivel||null, faixas = P.faixas||[];
+
+const MEDALHA = {ouro:'🥇', prata:'🥈', bronze:'🥉'};
+const pc = x => Number(x||0).toLocaleString('pt-BR',{maximumFractionDigits:1}) + '%';
 
 // O link vem PRONTO do servidor (linkDoCreator), curto quando existe redirect. Não montar
 // aqui: esta tela montava com `utm_medium=organic`, valor aposentado em 12/08, e entregava
@@ -111,11 +134,68 @@ document.getElementById('app').innerHTML = `
     <div class="n">${n(v.pedidos_mes)} neste mês</div></div>
   <div class="cel"><div class="k">Ticket médio</div><div class="v">${v.ticket?rs(v.ticket):'—'}</div>
     <div class="n">por pedido</div></div>
+  <div class="cel"><div class="k">Cliques no link</div><div class="v">${n(cl.total)}</div>
+    <div class="n">${cl.d30 ? n(cl.d30)+' nos últimos 30 dias' : 'nenhum nos últimos 30 dias'}</div></div>
   <div class="cel"><div class="k">Conteúdos</div><div class="v">${n(pubs.length)}</div>
     <div class="n">marcando a Cells</div></div>
   <div class="cel"><div class="k">Pontos</div><div class="v">${jg.length?n(jg.reduce((a,j)=>a+(j.pontos||0),0)):'—'}</div>
     <div class="n">${jg.length?'nos jogos ativos':'sem jogo ativo'}</div></div>
 </div>
+
+${nv ? `<section>
+  <div class="sh"><h2>Seu nível e sua comissão</h2>
+    <p>O nível vem do que você vendeu nos <b>últimos 3 meses</b> — sobe e desce sozinho.</p></div>
+  <div class="sb">
+    <div class="niv">
+      <span class="medalha">${MEDALHA[nv.nivel]||'🥉'}</span>
+      <span class="nm">${esc(nv.nivel||'bronze')}</span>
+      <span style="margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--mut)">
+        ${rs(nv.receita_3m)} em 3 meses</span>
+    </div>
+
+    <div class="taxas">
+      <div><div class="k">Compra única</div><div class="v">${pc(nv.comissao_unica_pct)}</div></div>
+      <div><div class="k">Assinatura</div><div class="v">${pc(nv.comissao_assinatura_pct)}</div></div>
+      <div><div class="k">Sua comissão · 3 meses</div>
+        <div class="v">${rs(P.comissao_3m)}</div></div>
+    </div>
+
+    ${nv.proximo_nivel ? `<div class="escada">
+      <div class="et"><span>Para <b>${esc(nv.proximo_nivel)}</b> ${MEDALHA[nv.proximo_nivel]||''}</span>
+        <span>faltam <b>${rs(nv.falta_para_proximo)}</b></span></div>
+      <div class="bar"><span style="width:${
+        Math.max(2, Math.min(100, Math.round(Number(nv.receita_3m)/Number(nv.proximo_piso)*100)))}%"></span></div>
+    </div>` : `<p style="margin:14px 0 0;font-size:13px;color:var(--ok)">
+      Você está no nível mais alto. 👏</p>`}
+
+    <div style="margin-top:15px;border-top:1px solid var(--line2);padding-top:12px">
+      ${faixas.map(f => `<div class="lin" style="border:0;padding:5px 0">
+        <span class="d" style="width:auto">${MEDALHA[f.nivel]||''}</span>
+        <span class="t"${f.nivel===nv.nivel?' style="font-weight:640;color:var(--ink)"':''}>${esc(f.rotulo||f.nivel)}${
+          f.nivel===nv.nivel?' · você está aqui':''}</span>
+        <span class="v" style="font-size:12px;font-weight:500;color:var(--mut)">${
+          Number(f.piso)>0 ? 'a partir de '+rs(f.piso) : 'de entrada'}</span></div>`).join('')}
+    </div>
+
+    <p style="margin:13px 0 0;font-size:12px;color:var(--fnt);line-height:1.6">
+      A comissão acima é calculada sobre a <b>receita líquida</b> (já sem o desconto do cupom)
+      dos pedidos dos últimos 3 meses, na taxa do seu nível de hoje.</p>
+  </div>
+</section>` : ''}
+
+${cl.total ? `<section>
+  <div class="sh"><h2>Cliques no seu link</h2>
+    <p>Últimos 30 dias. ${cl.ultimo ? 'O mais recente foi em <b>'+dt(cl.ultimo)+'</b>.' : ''}</p></div>
+  <div class="sb">
+    <div class="spark">${(cl.serie||[]).map(d => {
+      const mx = Math.max(1, ...(cl.serie||[]).map(x => x.cliques));
+      return `<i class="${d.cliques?'tem':''}" style="height:${
+        d.cliques ? Math.max(6, Math.round(d.cliques/mx*100)) : 2}%"
+        title="${dt(d.dia)}: ${d.cliques} clique${d.cliques===1?'':'s'}"></i>`;
+    }).join('')}</div>
+    <div class="sparkl"><span>${dt((cl.serie||[])[0]?.dia)}</span><span>hoje</span></div>
+  </div>
+</section>` : ''}
 
 <section>
   <div class="sh"><h2>Seu cupom e seu link</h2>
@@ -150,10 +230,14 @@ ${jg.length ? `<section>
 </section>` : ''}
 
 <section>
-  <div class="sh"><h2>Seus pedidos</h2><p>Cada compra feita com o seu cupom.</p></div>
+  <div class="sh"><h2>Seus pedidos</h2>
+    <p>Cada compra feita com o seu cupom, com a comissão na taxa do seu nível de hoje.</p></div>
   <div class="sb">${ex.length ? ex.map(e => `
     <div class="lin"><span class="d">${dt(e.pedido_em)}</span>
-      <span class="t">Pedido ${esc(e.pedido_numero||e.pedido_id)}${e.cliente_novo?' · cliente novo':''}</span>
+      <span class="t">Pedido ${esc(e.pedido_numero||e.pedido_id)}${e.cliente_novo?' · cliente novo':''}${
+        e.virou_assinatura?' · <span class="tag">assinatura</span>':''}</span>
+      <span class="v" style="font-weight:500;color:var(--mut);font-size:12px;margin-right:10px">${
+        e.comissao ? rs(e.comissao) : ''}</span>
       <span class="v">${rs(e.receita_liquida)}</span></div>`).join('')
     : '<div class="vazio">Nenhum pedido ainda. Compartilhe seu cupom e ele aparece aqui.</div>'}</div>
 </section>

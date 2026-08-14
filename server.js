@@ -529,6 +529,11 @@ async function slugLivre(cli, base) {
 // Tudo aqui é escopado por parceiro_id vindo do TOKEN, nunca de parâmetro da URL.
 // Se viesse da URL, trocar o número mostraria os dados de outra pessoa.
 async function dadosDoCreator(parceiroId) {
+  // ⚠️ Esta função é a tela que a CREATOR abre — ela não tem cache, roda por requisição.
+  // Em 14/08 ela levava 15s, e 14,7s eram uma única query (`creator.vw_placar`). Se um dia
+  // voltar a arrastar, medir aqui antes de culpar a rede: envolver `q` num Date.now() e
+  // logar. Foi assim que apareceu.
+  const t0Total = Date.now();
   const q = (sql, p) => pool.query(sql, p).then(r => r.rows);
   const [pa] = await q(`
     SELECT p.parceiro_id, p.nome, p.instagram_handle, p.utm_slug, p.tags, p.status,
@@ -551,7 +556,8 @@ async function dadosDoCreator(parceiroId) {
     FROM creator.venda WHERE parceiro_id=$1 AND atribuicao='cupom'`, [parceiroId]);
 
   const extrato = await q(`
-    SELECT pedido_id, pedido_numero, pedido_em, receita_liquida, cliente_novo
+    SELECT pedido_id, pedido_numero, pedido_em, receita_liquida, cliente_novo,
+           coalesce(virou_assinatura, false) AS virou_assinatura
     FROM creator.venda WHERE parceiro_id=$1 AND atribuicao='cupom'
     ORDER BY pedido_em DESC LIMIT 60`, [parceiroId]);
 
@@ -572,7 +578,60 @@ async function dadosDoCreator(parceiroId) {
     SELECT jogo, pontos, entregas, detalhe FROM creator.vw_placar
     WHERE parceiro_id=$1 ORDER BY pontos DESC`, [parceiroId]);
 
-  return { parceiro: pa, vendas: v, extrato, publicacoes, envios, jogos };
+  // ---- cliques no link (pedido do Gabriel, 14/08) ----
+  // Série diária dos últimos 30 dias, com os dias VAZIOS incluídos: sem eles o gráfico
+  // encolhe os intervalos sem clique e um pico isolado vira uma linha cheia de atividade.
+  const [cl] = await q(`
+    SELECT coalesce(sum(cliques), 0)::int AS total,
+           coalesce(sum(cliques) FILTER (WHERE dia >= date_trunc('month', current_date)), 0)::int AS mes,
+           coalesce(sum(cliques) FILTER (WHERE dia >= current_date - 29), 0)::int AS d30,
+           max(dia) AS ultimo
+      FROM creator.vw_clique_dia WHERE parceiro_id = $1`, [parceiroId]);
+  const serie = await q(`
+    SELECT d::date AS dia, coalesce(c.cliques, 0)::int AS cliques
+      FROM generate_series(current_date - 29, current_date, '1 day') d
+      LEFT JOIN creator.vw_clique_dia c ON c.dia = d::date AND c.parceiro_id = $1
+     ORDER BY 1`, [parceiroId]);
+
+  // ---- nível e comissão ----
+  // ⚠️ A comissão é CALCULADA a partir da régua de hoje (creator.nivel_regra), não lida de
+  // `creator.venda.comissao_valor` — essa coluna nunca foi preenchida.
+  // Por isso a tela só mostra a comissão da JANELA DE 3 MESES, que é a mesma janela que
+  // define o nível. Somar a vida inteira aplicaria uma regra de 12/08/2026 a pedido de
+  // janeiro/2025 e daria a entender que a Cells deve isso — o que não é verdade.
+  const [nv] = await q(`
+    SELECT nivel, receita_3m, pedidos_3m, receita_vida, pedidos_vida,
+           comissao_unica_pct, comissao_assinatura_pct,
+           proximo_nivel, proximo_piso, falta_para_proximo
+      FROM creator.vw_nivel WHERE parceiro_id = $1`, [parceiroId]);
+
+  const faixas = await q(
+    'SELECT nivel, piso, rotulo, ordem FROM creator.nivel_faixa ORDER BY ordem');
+
+  const pctU = Number(nv?.comissao_unica_pct || 0);
+  const pctA = Number(nv?.comissao_assinatura_pct || 0);
+  const comissaoDe = vd =>
+    Math.round(Number(vd.receita_liquida || 0) * (vd.virou_assinatura ? pctA : pctU)) / 100;
+
+  const [c3] = await q(`
+    SELECT coalesce(sum(receita_liquida) FILTER (WHERE NOT coalesce(virou_assinatura,false)),0) AS unica,
+           coalesce(sum(receita_liquida) FILTER (WHERE coalesce(virou_assinatura,false)),0) AS assin
+      FROM creator.venda
+     WHERE parceiro_id=$1 AND atribuicao='cupom'
+       AND (pedido_em AT TIME ZONE 'America/Sao_Paulo')::date
+           >= ((now() AT TIME ZONE 'America/Sao_Paulo')::date - interval '3 months')::date`,
+    [parceiroId]);
+  const comissao3m = Math.round(Number(c3.unica) * pctU + Number(c3.assin) * pctA) / 100;
+
+  // comissão por pedido: o número solto no topo não convence, a linha do extrato convence
+  const extratoCom = extrato.map(e => ({ ...e, comissao: comissaoDe(e) }));
+
+  // avisa se voltar a arrastar — 15s passou meses sem ninguém notar porque ninguém mediu
+  const gasto = Date.now() - t0Total;
+  if (gasto > 2000) console.error(`[portal] ${gasto}ms para montar o painel do parceiro ${parceiroId}`);
+
+  return { parceiro: pa, vendas: v, extrato: extratoCom, publicacoes, envios, jogos,
+           cliques: { ...cl, serie }, nivel: nv || null, faixas, comissao_3m: comissao3m };
 }
 
 const portalErro = (titulo, msg) => `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
