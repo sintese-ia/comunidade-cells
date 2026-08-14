@@ -942,14 +942,83 @@ http.createServer(async (req, res) => {
         const d = JSON.parse(b || '{}');
         const hoje = new Date().toISOString().slice(0, 10);
 
-        // mudar só o status (ativar, encerrar, arquivar) — não mexe no resto
+        // `cancelada` NÃO é o mesmo que `encerrada`, e a diferença importa na hora de ler
+        // resultado: encerrada é a campanha que rodou até o fim, cancelada é a que foi
+        // interrompida. Juntar as duas faz uma campanha abortada parecer performance ruim.
+        const STATUS_OK = ['rascunho','ativa','encerrada','cancelada','arquivada'];
+
+        const data = (v, padrao) => /^\d{4}-\d{2}-\d{2}$/.test(v || '') ? v : padrao;
+
+        // ⚠️ Coluna `date` volta do node-pg como objeto Date, não string. `String(d).slice(0,10)`
+        // devolve "Sat Aug 08" e o Postgres recusa na volta com "invalid input syntax for type
+        // date". E toISOString() não serve: a Date nasce à MEIA-NOITE LOCAL, então em fuso
+        // negativo ela vira 03:00Z (ok) mas em fuso positivo cairia no dia anterior.
+        // Por isso a formatação é pelos componentes locais.
+        const ymd = v => {
+          if (!v) return null;
+          if (v instanceof Date) return `${v.getFullYear()}-${String(v.getMonth()+1).padStart(2,'0')}`
+            + `-${String(v.getDate()).padStart(2,'0')}`;
+          return String(v).slice(0, 10);
+        };
+        const slugContent = v => String(v || '').trim().toLowerCase()
+          .normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9_-]/g,'') || null;
+
+        // mudar só o status (ativar, encerrar, cancelar, arquivar) — não mexe no resto
         if (d.campanha_id && d.status && !d.nome) {
-          if (!['rascunho','ativa','encerrada','arquivada'].includes(d.status))
+          if (!STATUS_OK.includes(d.status))
             return json(400, { erro: 'status desconhecido' });
           const r = await cli.query(
             `UPDATE creator.campanha SET status=$2 WHERE campanha_id=$1 RETURNING *`,
             [d.campanha_id, d.status]);
           invalida(); return json(200, { ok: true, campanha: r.rows[0] });
+        }
+
+        // ---- EDITAR campanha que já existe ----
+        // Antes só dava para criar: definir prazo depois da criação exigia refazer tudo.
+        // `tipo` fica de fora de propósito — trocar comissão↔pontuação órfãna o jogo e as
+        // missões já criadas, e isso é campanha nova, não edição.
+        if (d.campanha_id && d.nome) {
+          const [atual] = (await cli.query(
+            'SELECT * FROM creator.campanha WHERE campanha_id=$1', [d.campanha_id])).rows;
+          if (!atual) return json(404, { erro: 'campanha não encontrada' });
+
+          const inicio = data(d.inicio, ymd(atual.inicio) || hoje);
+          const fim    = d.fim === '' ? null : data(d.fim, ymd(atual.fim));
+          if (fim && fim < inicio) return json(400, { erro: 'a data final é antes da inicial' });
+
+          const pctE = atual.tipo === 'comissao'
+            ? Number(String(d.comissao_pct ?? atual.comissao_pct ?? '').replace(',', '.')) : null;
+          if (atual.tipo === 'comissao' && !(pctE > 0 && pctE <= 100))
+            return json(400, { erro: 'campanha de comissão precisa de um percentual entre 0 e 100' });
+
+          const conteudoE = d.utm_content === undefined ? atual.utm_content : slugContent(d.utm_content);
+          // ⚠️ O utm_content já saiu no link de quem foi avisado. Trocar depois disso quebra a
+          // atribuição do que já está circulando, e quebra CALADO — o clique some da campanha.
+          if (conteudoE !== atual.utm_content && atual.utm_content) {
+            const [ja] = (await cli.query(
+              `SELECT count(*)::int AS n FROM creator.email_log
+                WHERE campanha_id=$1 AND estado='evento_enviado'`, [d.campanha_id])).rows;
+            if (ja.n > 0) return json(409, { erro: 'o utm_content não pode mudar: ' + ja.n
+              + ' creator(s) já receberam o link com "' + atual.utm_content
+              + '". O clique que já está circulando ia parar de contar. Crie outra campanha.' });
+          }
+
+          await cli.query('BEGIN');
+          const r = await cli.query(
+            `UPDATE creator.campanha
+                SET nome=$2, briefing=$3, inicio=$4::date, fim=$5::date,
+                    utm_content=$6, comissao_pct=$7
+              WHERE campanha_id=$1 RETURNING *`,
+            [d.campanha_id, String(d.nome).trim().slice(0, 120), d.briefing || null,
+             inicio, fim, conteudoE, pctE]);
+          // a janela do jogo TEM que acompanhar a da campanha, senão a pontuação passa a
+          // contar post de fora do período e o placar mente
+          await cli.query(
+            `UPDATE creator.jogo SET inicio=$2::date, fim=$3::date WHERE campanha_id=$1`,
+            [d.campanha_id, inicio, fim]);
+          await cli.query('COMMIT');
+          invalida();
+          return json(200, { ok: true, campanha: r.rows[0] });
         }
 
         if (!d.nome || !String(d.nome).trim()) return json(400, { erro: 'nome é obrigatório' });
@@ -961,13 +1030,12 @@ http.createServer(async (req, res) => {
         if (tipo === 'pontuacao' && !acoes.length)
           return json(400, { erro: 'campanha de pontuação precisa de pelo menos uma ação com pontos' });
         // utm_content: é ele que separa o resultado desta campanha do de outra no clique
-        const conteudo = String(d.utm_content || '').trim().toLowerCase()
-          .normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9_-]/g,'') || null;
+        const conteudo = slugContent(d.utm_content);
         if (conteudo && conteudo.length < 3)
           return json(400, { erro: 'utm_content muito curto — use algo como 2026-08_lancamento' });
 
-        const inicio = /^\d{4}-\d{2}-\d{2}$/.test(d.inicio || '') ? d.inicio : hoje;
-        const fim    = /^\d{4}-\d{2}-\d{2}$/.test(d.fim || '') ? d.fim : null;
+        const inicio = data(d.inicio, hoje);
+        const fim    = data(d.fim, null);
         if (fim && fim < inicio) return json(400, { erro: 'a data final é antes da inicial' });
 
         await cli.query('BEGIN');
@@ -1000,18 +1068,60 @@ http.createServer(async (req, res) => {
   }
 
   // vincular/desvincular creator da campanha
+  //
+  // Duas formas de chamar:
+  //   ?campanha=8&parceiro=73[&sair=1]  — uma pessoa (jeito antigo, ainda usado pelo "×")
+  //   corpo JSON { campanha_id, parceiros:[...] } ou { campanha_id, todos_ativos:true }
+  //
+  // O lote existe porque vincular no varejo era 1 chamada + 1 reload de página POR PESSOA:
+  // colocar 30 creators numa campanha custava 30 recarregamentos.
   if (u.pathname === '/api/campanha/parceiro' && req.method === 'POST') {
-    const c = +u.searchParams.get('campanha'), p = +u.searchParams.get('parceiro');
+    const cQS = +u.searchParams.get('campanha'), pQS = +u.searchParams.get('parceiro');
     const sai = u.searchParams.get('sair') === '1';
-    if (!c || !p) return json(400, { erro: 'campanha e parceiro são obrigatórios' });
-    try {
-      if (sai) await pool.query(
-        `UPDATE creator.campanha_parceiro SET saiu_em=now() WHERE campanha_id=$1 AND parceiro_id=$2`, [c, p]);
-      else await pool.query(
-        `INSERT INTO creator.campanha_parceiro (campanha_id,parceiro_id) VALUES ($1,$2)
-         ON CONFLICT (campanha_id,parceiro_id) DO UPDATE SET saiu_em=NULL`, [c, p]);
-      invalida(); return json(200, { ok: true });
-    } catch (e) { return json(200, { ok: false, erro: e.message }); }
+
+    if (cQS && pQS) {
+      try {
+        if (sai) await pool.query(
+          `UPDATE creator.campanha_parceiro SET saiu_em=now()
+            WHERE campanha_id=$1 AND parceiro_id=$2`, [cQS, pQS]);
+        else await pool.query(
+          `INSERT INTO creator.campanha_parceiro (campanha_id,parceiro_id) VALUES ($1,$2)
+           ON CONFLICT (campanha_id,parceiro_id) DO UPDATE SET saiu_em=NULL`, [cQS, pQS]);
+        invalida(); return json(200, { ok: true, vinculados: sai ? 0 : 1 });
+      } catch (e) { return json(200, { ok: false, erro: e.message }); }
+    }
+
+    let b = ''; req.on('data', ch => { b += ch; if (b.length > 200000) req.destroy(); });
+    return req.on('end', async () => {
+      try {
+        const d = JSON.parse(b || '{}');
+        const c = +d.campanha_id;
+        if (!c) return json(400, { erro: 'campanha é obrigatória' });
+
+        let ids;
+        if (d.todos_ativos) {
+          // "todos os ativos" resolve NO SERVIDOR, não na tela: a lista que o browser tem
+          // pode estar velha (cache de 5 min), e vincular a partir dela deixaria de fora
+          // quem foi aprovado nesse meio-tempo.
+          ids = (await pool.query(
+            `SELECT parceiro_id FROM creator.parceiro
+              WHERE status='ativo' AND NOT arquivado AND origem IS DISTINCT FROM 'fundido'`))
+            .rows.map(r => r.parceiro_id);
+        } else {
+          ids = [...new Set((d.parceiros || []).map(Number).filter(Boolean))];
+        }
+        if (!ids.length) return json(400, { erro: 'nenhum creator selecionado' });
+
+        // unnest: uma ida ao banco em vez de N, e o ON CONFLICT já cobre quem saiu e voltou
+        const r = await pool.query(
+          `INSERT INTO creator.campanha_parceiro (campanha_id, parceiro_id)
+           SELECT $1, x FROM unnest($2::bigint[]) AS x
+           ON CONFLICT (campanha_id,parceiro_id) DO UPDATE SET saiu_em=NULL
+           RETURNING parceiro_id`, [c, ids]);
+        invalida();
+        return json(200, { ok: true, vinculados: r.rowCount, pedidos: ids.length });
+      } catch (e) { return json(200, { ok: false, erro: e.message }); }
+    });
   }
 
   // ---------------- APROVAR: cupom + link + e-mail, num clique ----------------

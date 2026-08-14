@@ -763,6 +763,31 @@
   </div>
 </dialog>
 
+<!-- ---------------- vincular creators em lote ---------------- -->
+<dialog class="ficha" id="dlgCr">
+  <div class="fhd">
+    <div><h3 id="crTitulo">Vincular creators</h3><div class="hh" id="crSub"></div></div>
+  </div>
+  <div class="fbd">
+    <div class="fsec">
+      <p class="obs"><b>Todos os ativos</b> resolve no servidor, na hora de gravar — quem for aprovado entre agora e o clique também entra.</p>
+      <div class="frm" style="margin-top:9px">
+        <input id="crBusca" class="busca" style="flex:1;min-width:180px" placeholder="filtrar por nome ou @" aria-label="Filtrar creators">
+        <button class="acbt" id="crTodos">marcar todos</button>
+        <button class="acbt" id="crNenhum">desmarcar</button>
+        <span class="cnt" id="crCnt"></span>
+      </div>
+      <div id="crLista" style="margin-top:10px"></div>
+    </div>
+  </div>
+  <div class="fft">
+    <span class="esq obs" id="crErro"></span>
+    <button class="acbt" id="crFechar">cancelar</button>
+    <button class="acbt" id="crAtivos">+ todos os ativos</button>
+    <button class="acbt ok" id="crAdd">vincular</button>
+  </div>
+</dialog>
+
 <!-- ---------------- player de mídia ---------------- -->
 <dialog class="ficha" id="dlgMidia">
   <div class="fhd">
@@ -1542,7 +1567,9 @@ function pintaCamp(){
     return '<div class="campcard">'
       + '<div class="lin1"><span class="nm">'+esc(c.nome)+'</span>'
       + '<span class="chip '+(c.tipo==='comissao'?'ac':'wa')+'">'+(c.tipo==='comissao'?'comissão':'pontuação')+'</span>'
-      + '<span class="chip '+(c.status==='ativa'?'ok':c.status==='arquivada'?'vo':'vo')+'">'+esc(c.status)+'</span>'
+      // cancelada em vermelho: ela ainda mostra número, e número de campanha interrompida
+      // lido como se fosse resultado é o jeito mais fácil de tirar a conclusão errada
+      + '<span class="chip '+(c.status==='ativa'?'ok':c.status==='cancelada'?'cr':'vo')+'">'+esc(c.status)+'</span>'
       + '<span class="dim" style="font-family:var(--mono);font-size:11px">'+dt(c.inicio)+' → '+(c.fim?dt(c.fim):'sem fim')+'</span>'
       + '<span class="dim" style="font-family:var(--mono);font-size:11px;margin-left:auto">'
         + n(c.creators)+' creator'+(c.creators===1?'':'s')+'</span></div>'
@@ -1553,14 +1580,11 @@ function pintaCamp(){
           + pl.map(p => n(p.pontos)+' pts — '+esc(p.nome||'@'+p.instagram_handle)).join(' · ')+'</p>' : '')
       + '<div class="acs">'
       + '<select class="acbt" data-cst="'+c.campanha_id+'">'
-        + ['rascunho','ativa','encerrada','arquivada'].map(s =>
+        + ['rascunho','ativa','encerrada','cancelada','arquivada'].map(s =>
             '<option value="'+s+'"'+(s===c.status?' selected':'')+'>'+s+'</option>').join('')
       + '</select>'
-      + '<select class="acbt" data-cadd="'+c.campanha_id+'"><option value="">+ vincular creator…</option>'
-        + CAD.filter(f => f.status==='ativo' && !f.arquivado
-                     && !(c.participantes||[]).some(p => p.parceiro_id===f.parceiro_id))
-             .map(f => '<option value="'+f.parceiro_id+'">'+esc(f.nome||('#'+f.parceiro_id))+'</option>').join('')
-      + '</select>'
+      + '<button class="acbt" data-cedit="'+c.campanha_id+'">editar</button>'
+      + '<button class="acbt" data-cadd="'+c.campanha_id+'">+ creators</button>'
       + (c.utm_content && (c.participantes||[]).length
           ? '<button class="acbt ok" data-avisar="'+c.campanha_id+'">avisar os creators</button>' : '')
       + '</div>'
@@ -1587,13 +1611,80 @@ document.getElementById('listaCamp').addEventListener('change', async e => {
     if (!j.ok) return alert('Não gravou: '+(j.erro||'erro'));
     location.reload(); return;
   }
-  const ad = e.target.closest('[data-cadd]');
-  if (ad && ad.value) {
-    const j = await (await fetch('/api/campanha/parceiro?campanha='+ad.dataset.cadd+'&parceiro='+ad.value,
-      {method:'POST'})).json();
-    if (!j.ok) return alert('Não gravou: '+(j.erro||'erro'));
-    location.reload();
-  }
+});
+
+/* ---- vincular creators em lote (dialog) ---- */
+const dCr = document.getElementById('dlgCr');
+let crCamp = null, crElegiveis = [], crBusca = '';
+
+document.getElementById('listaCamp').addEventListener('click', e => {
+  const b = e.target.closest('[data-cadd]'); if (!b) return;
+  const c = (D.campanhas || []).find(x => x.campanha_id === +b.dataset.cadd);
+  crCamp = c;
+  const jaTem = new Set((c.participantes || []).map(p => p.parceiro_id));
+  crElegiveis = CAD.filter(f => f.status === 'ativo' && !f.arquivado && !jaTem.has(f.parceiro_id));
+  crBusca = '';
+  document.getElementById('crBusca').value = '';
+  document.getElementById('crTitulo').textContent = 'Vincular creators a ' + c.nome;
+  document.getElementById('crSub').innerHTML = jaTem.size + ' já na campanha · '
+    + crElegiveis.length + ' ativo' + (crElegiveis.length === 1 ? '' : 's') + ' de fora';
+  document.getElementById('crErro').textContent = '';
+  pintaCrLista();
+  dCr.showModal();
+});
+
+function pintaCrLista(){
+  const L = crElegiveis
+    .map((f, i) => ({ f, i }))
+    .filter(({f}) => !crBusca
+      || ((f.nome||'') + ' ' + (f.instagram_handle||'')).toLowerCase().includes(crBusca));
+  document.getElementById('crLista').innerHTML = L.map(({f, i}) =>
+    '<div class="pub"><input type="checkbox" class="crck" data-i="'+i+'">'
+    + '<span class="l"><b>'+esc(f.nome || ('#'+f.parceiro_id))+'</b>'
+      + '<span class="sub2">' + (f.instagram_handle ? '@'+esc(f.instagram_handle) : 'sem instagram')
+      + (f.cupom ? ' · cupom '+esc(f.cupom) : ' · <span style="color:var(--cr)">sem cupom</span>')
+      + '</span></span></div>').join('')
+    || '<p class="obs">Ninguém aqui. Ou todos os ativos já estão na campanha, ou o filtro não achou.</p>';
+  contaCr();
+}
+function contaCr(){
+  const n = document.querySelectorAll('.crck:checked').length;
+  document.getElementById('crCnt').textContent = n + ' selecionado' + (n===1?'':'s');
+  document.getElementById('crAdd').textContent = n ? 'vincular ' + n : 'vincular';
+  document.getElementById('crAdd').disabled = !n;
+}
+document.getElementById('crLista').addEventListener('change', contaCr);
+document.getElementById('crBusca').addEventListener('input', e => {
+  crBusca = e.target.value.trim().toLowerCase(); pintaCrLista();
+});
+/* marcar todos respeita o filtro — marcar o que não está na tela é armadilha */
+document.getElementById('crTodos').addEventListener('click', () => {
+  document.querySelectorAll('.crck').forEach(c => c.checked = true); contaCr();
+});
+document.getElementById('crNenhum').addEventListener('click', () => {
+  document.querySelectorAll('.crck').forEach(c => c.checked = false); contaCr();
+});
+document.getElementById('crFechar').addEventListener('click', () => dCr.close());
+
+async function vincula(corpo, botao){
+  const err = document.getElementById('crErro');
+  botao.disabled = true; err.textContent = 'gravando…';
+  const j = await (await fetch('/api/campanha/parceiro', {method:'POST',
+    headers:{'content-type':'application/json'},
+    body: JSON.stringify({campanha_id: crCamp.campanha_id, ...corpo})})).json();
+  botao.disabled = false;
+  if (!j.ok) { err.textContent = j.erro || 'não gravou'; return; }
+  dCr.close(); location.reload();
+}
+document.getElementById('crAdd').addEventListener('click', e => {
+  const sel = [...document.querySelectorAll('.crck:checked')]
+    .map(c => crElegiveis[+c.dataset.i].parceiro_id);
+  if (sel.length) vincula({ parceiros: sel }, e.target);
+});
+document.getElementById('crAtivos').addEventListener('click', e => {
+  if (!confirm('Vincular TODOS os creators ativos a "' + crCamp.nome + '"?\n\n'
+    + 'Inclui quem for aprovado até o momento em que isto gravar.')) return;
+  vincula({ todos_ativos: true }, e.target);
 });
 document.getElementById('listaCamp').addEventListener('click', async e => {
   const b = e.target.closest('[data-csai]'); if (!b) return;
@@ -1636,7 +1727,45 @@ document.getElementById('dcContent').addEventListener('input', e => {
     : '';
 });
 
+/* null = criando; id = editando. É o que decide o texto do botão e se o POST manda
+   campanha_id — o mesmo formulário serve para os dois. */
+let editandoCamp = null;
+
+/* ---- editar campanha que já existe ---- */
+document.getElementById('listaCamp').addEventListener('click', e => {
+  const b = e.target.closest('[data-cedit]'); if (!b) return;
+  const c = (D.campanhas || []).find(x => x.campanha_id === +b.dataset.cedit);
+  if (c) abreEdicao(c);
+});
+
+function abreEdicao(c){
+  editandoCamp = c.campanha_id;
+  dcNome.value = c.nome || ''; dcBrief.value = c.briefing || '';
+  dcPct.value = c.comissao_pct != null ? String(c.comissao_pct) : '15';
+  dcContent.value = c.utm_content || '';
+  document.getElementById('dcExemplo').textContent = c.utm_content
+    ? '?utm_source=creator&utm_medium=influencer&utm_campaign=pedrocorre&utm_content=' + c.utm_content : '';
+  dcIni.value = (c.inicio || '').slice(0, 10);
+  dcFim.value = (c.fim || '').slice(0, 10);
+  dcStatus.value = c.status === 'ativa' ? 'ativa' : 'rascunho';
+  document.querySelector('input[name="dctipo"][value="'+(c.tipo==='pontuacao'?'pontuacao':'comissao')+'"]').checked = true;
+  trocaTipo();
+  // tipo não se edita: trocar comissão↔pontuação órfãna o jogo e as missões já criadas
+  document.querySelectorAll('input[name="dctipo"]').forEach(r => r.disabled = true);
+  // as ações da pontuação também não: mexer nelas recalcularia placar já divulgado
+  document.getElementById('dcAcoes').innerHTML =
+    '<p class="obs">As ações da pontuação não mudam depois de criada — o placar já divulgado seria recalculado. Para outra régua, crie outra campanha.</p>';
+  document.getElementById('dcAddAcao').style.display = 'none';
+  document.getElementById('dcSalvar').textContent = 'salvar alterações';
+  document.getElementById('dcErro').textContent = '';
+  dC.showModal();
+}
+
 document.getElementById('novaCamp').addEventListener('click', () => {
+  editandoCamp = null;
+  document.querySelectorAll('input[name="dctipo"]').forEach(r => r.disabled = false);
+  document.getElementById('dcAddAcao').style.display = '';
+  document.getElementById('dcSalvar').textContent = 'criar campanha';
   dcNome.value = ''; dcBrief.value = ''; dcPct.value = '15';
   dcContent.value = ''; document.getElementById('dcExemplo').textContent = '';
   dcIni.value = hoje; dcFim.value = ''; dcStatus.value = 'ativa';
@@ -1657,11 +1786,15 @@ document.getElementById('dcSalvar').addEventListener('click', async () => {
   const corpo = {
     nome: dcNome.value.trim(), briefing: dcBrief.value.trim() || null,
     tipo: tipoEscolhido(), comissao_pct: dcPct.value,
-    inicio: dcIni.value || hoje, fim: dcFim.value || null, status: dcStatus.value,
+    // fim vazio manda string vazia na edição: é assim que o servidor distingue
+    // "tirar a data de fim" de "não mexi nesse campo"
+    inicio: dcIni.value || hoje, fim: editandoCamp ? dcFim.value : (dcFim.value || null),
+    status: dcStatus.value,
     utm_content: dcContent.value.trim(),
     acoes: [...document.querySelectorAll('#dcAcoes .frm')].map(r => ({
       acao: r.querySelector('.ma').value, pontos: r.querySelector('.mp').value })),
   };
+  if (editandoCamp) corpo.campanha_id = editandoCamp;
   if (!corpo.nome) { err.textContent = 'A campanha precisa de um nome.'; return; }
   b.disabled = true; err.textContent = '';
   const j = await (await fetch('/api/campanha', {method:'POST',
