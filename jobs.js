@@ -777,21 +777,33 @@ function agendar(pool, env) {
     armar();
   }
 
-  // cadastro novo tem que aparecer na fila rápido — este continua de hora em hora, não faz
-  // sentido esperar a janela das 6h para ver quem se cadastrou às 7h.
-  setInterval(() => roda('cadastros', () => syncCadastros(pool, env.META_TOKEN, env.aoRegistrar)), HORA).unref();
-  setTimeout(() => roda('cadastros', () => syncCadastros(pool, env.META_TOKEN, env.aoRegistrar)), 15000).unref();
+  // ⚠️ SEM TOKEN, NÃO AGENDA — e diz isso ALTO, uma vez.
+  // Antes os jobs da Meta rodavam mesmo sem `META_TOKEN` e gravavam uma linha de falha por
+  // ciclo. Duas consequências ruins: uma execução local (onde o token não existe) suja o
+  // `creator.job_log` de PRODUÇÃO e acende "job com falha" no rodapé do painel de verdade;
+  // e um deploy que esquecesse o token viraria ruído repetido em vez de um erro só, claro.
+  // Falhar uma vez e não agendar é mais honesto que falhar de hora em hora.
+  if (env.META_TOKEN) {
+    // cadastro novo tem que aparecer na fila rápido — este continua de hora em hora, não faz
+    // sentido esperar a janela das 6h para ver quem se cadastrou às 7h.
+    setInterval(() => roda('cadastros', () => syncCadastros(pool, env.META_TOKEN, env.aoRegistrar)), HORA).unref();
+    setTimeout(() => roda('cadastros', () => syncCadastros(pool, env.META_TOKEN, env.aoRegistrar)), 15000).unref();
 
-  // os três diários entram na mesma janela das 6h, espaçados para não competirem entre si
-  // pela mesma API nem pelo mesmo pool de conexão.
-  diarioAs(HORA_UTC,     'tags',   () => syncTags(pool, env.META_TOKEN));
-  diarioAs(HORA_UTC,     'apify',  () => syncApify(pool, env.APIFY_TOKEN));
-  diarioAs(HORA_UTC + 1, 'perfis', () => syncPerfis(pool, env.META_TOKEN), 7);
+    // os diários entram na mesma janela das 6h, espaçados para não competirem entre si
+    // pela mesma API nem pelo mesmo pool de conexão.
+    diarioAs(HORA_UTC,     'tags',   () => syncTags(pool, env.META_TOKEN));
+    diarioAs(HORA_UTC + 1, 'perfis', () => syncPerfis(pool, env.META_TOKEN), 7);
 
-  // primeira rodada 2 min depois do boot, para não competir com o pré-aquecimento do cache.
-  // Continua existindo: sem ela, subir o container às 10h deixaria a tela velha até o dia
-  // seguinte — a janela fixa resolve a previsibilidade, não o boot.
-  setTimeout(() => roda('tags', () => syncTags(pool, env.META_TOKEN)), 120000).unref();
+    // primeira rodada 2 min depois do boot, para não competir com o pré-aquecimento do cache.
+    // Continua existindo: sem ela, subir o container às 10h deixaria a tela velha até o dia
+    // seguinte — a janela fixa resolve a previsibilidade, não o boot.
+    setTimeout(() => roda('tags', () => syncTags(pool, env.META_TOKEN)), 120000).unref();
+  } else {
+    console.error('[agenda] META_TOKEN ausente — tags, perfis e cadastros NÃO foram agendados');
+  }
+
+  if (env.APIFY_TOKEN) diarioAs(HORA_UTC, 'apify', () => syncApify(pool, env.APIFY_TOKEN));
+  else console.error('[agenda] APIFY_TOKEN ausente — apify NÃO foi agendado');
 
   return { roda, syncTags, syncPerfis, syncApify };
 }
