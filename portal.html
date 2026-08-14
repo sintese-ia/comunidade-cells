@@ -87,8 +87,10 @@ const esc = s => String(s==null?'':s).replace(/[<>&]/g,m=>({'<':'&lt;','>':'&gt;
 const p = P.parceiro, v = P.vendas||{}, ex = P.extrato||[], pubs = P.publicacoes||[],
       env = P.envios||[], jg = P.jogos||[];
 
-const link = p.utm_slug
-  ? 'https://cells.com.br/?utm_source=creator&utm_medium=organic&utm_campaign='+p.utm_slug : '';
+// O link vem PRONTO do servidor (linkDoCreator), curto quando existe redirect. Não montar
+// aqui: esta tela montava com `utm_medium=organic`, valor aposentado em 12/08, e entregava
+// sempre o link longo — bem na tela onde a creator COPIA o link para divulgar.
+const link = p.link || '';
 
 document.getElementById('app').innerHTML = `
 <header>

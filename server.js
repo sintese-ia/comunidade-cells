@@ -532,11 +532,16 @@ async function dadosDoCreator(parceiroId) {
   const q = (sql, p) => pool.query(sql, p).then(r => r.rows);
   const [pa] = await q(`
     SELECT p.parceiro_id, p.nome, p.instagram_handle, p.utm_slug, p.tags, p.status,
-           c.codigo AS cupom
+           c.codigo AS cupom, c.link_redirect_id
     FROM creator.parceiro p
     LEFT JOIN creator.cupom c ON c.parceiro_id = p.parceiro_id AND c.ativo
     WHERE p.parceiro_id = $1`, [parceiroId]);
   if (!pa) return null;
+  // ⚠️ O LINK VEM DAQUI, PRONTO. O portal montava o dele e usava `utm_medium=organic` — o
+  // valor que a taxonomia da casa aposentou em 12/08 — e sempre o link longo, mesmo para
+  // quem já tinha o curto. Ou seja: a tela onde a creator COPIA o link entregava justamente
+  // a versão errada. Agora é a mesma `linkDoCreator()` da aprovação e do aviso de campanha.
+  pa.link = linkDoCreator(pa);
 
   const [v] = await q(`
     SELECT count(*)::int AS pedidos, coalesce(sum(receita_liquida),0) AS receita,
