@@ -86,7 +86,15 @@ const painel = {
            -- ---- nível e comissão (item 9) ----
            nv.nivel, nv.nivel_forcado, nv.receita_3m, nv.pedidos_3m,
            nv.comissao_unica_pct, nv.comissao_assinatura_pct,
-           nv.proximo_nivel, nv.falta_para_proximo
+           nv.proximo_nivel, nv.falta_para_proximo,
+           -- pastas (item 7): lista fechada e montável, ao contrário de tags, que é texto
+           -- livre. As duas convivem — tag é anotação solta, pasta é classificação.
+           -- (sem crase neste comentário: o SQL mora em template literal e crase encerra a string)
+           (SELECT coalesce(json_agg(json_build_object('pasta_id', pa.pasta_id, 'nome', pa.nome)
+                                     ORDER BY pa.ordem, pa.nome), '[]'::json)
+              FROM creator.parceiro_pasta pp
+              JOIN creator.pasta pa ON pa.pasta_id = pp.pasta_id
+             WHERE pp.parceiro_id = p.parceiro_id) AS pastas
     FROM creator.parceiro p
     LEFT JOIN creator.leads    ld ON ld.lead_id     = p.lead_id
     LEFT JOIN creator.vw_nivel nv ON nv.parceiro_id = p.parceiro_id
@@ -260,7 +268,7 @@ const painel = {
 
   // ---- cupom por parceiro, com o estado na Shopify ----
   cupons: `
-    SELECT c.parceiro_id, c.codigo, c.desconto_pct, c.comissao_pct, c.combinavel,
+    SELECT c.cupom_id, c.parceiro_id, c.codigo, c.desconto_pct, c.comissao_pct, c.combinavel,
            c.shopify_discount_id, c.shopify_erro, c.link_redirect_id, c.ativo,
            c.criado_em::date AS criado
     FROM creator.cupom c WHERE c.ativo ORDER BY c.cupom_id
@@ -278,6 +286,14 @@ const painel = {
     FROM creator.nivel_faixa f
     LEFT JOIN creator.nivel_regra r ON r.nivel = f.nivel
     GROUP BY 1,2,3,4 ORDER BY f.ordem
+  `,
+
+  // ---- pastas, com quanta gente tem em cada ----
+  pastas: `
+    SELECT pa.pasta_id, pa.nome, pa.cor, pa.ordem,
+           (SELECT count(*)::int FROM creator.parceiro_pasta pp
+             WHERE pp.pasta_id = pa.pasta_id) AS creators
+    FROM creator.pasta pa ORDER BY pa.ordem, pa.nome
   `,
 
   // ---- saúde dos jobs de coleta (vai para o rodapé do menu) ----

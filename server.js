@@ -47,6 +47,15 @@ const pool = new Pool({
   ssl: false, max: 4, idleTimeoutMillis: 30000, statement_timeout: 60000,
 });
 
+// ⚠️ SEM ISTO O PROCESSO INTEIRO MORRE quando uma conexão OCIOSA cai.
+// O `pg` emite 'error' no pool nesse caso; um EventEmitter sem listener de 'error' vira
+// exceção não tratada e o Node encerra. Aconteceu aqui em 14/08: `read ETIMEDOUT` numa
+// conexão parada derrubou o servidor sem nenhuma requisição em andamento.
+// Em produção o Easypanel sobe de novo, então o sintoma é container reiniciando sozinho —
+// falha que se cura e por isso não aparece. O pool descarta o cliente quebrado e abre outro;
+// o que faltava era só alguém escutar.
+pool.on('error', e => console.error('[pg] conexão ociosa caiu (o pool se recupera):', e.message));
+
 const TPL = fs.readFileSync(path.join(__dirname, 'template.html'), 'utf8');
 const TPL_CREATOR = fs.readFileSync(path.join(__dirname, 'portal.html'), 'utf8');
 const COOKIE_CR = 'cc_creator';
@@ -288,6 +297,33 @@ async function criarCupomShopify({ codigo, pct, combinavel }) {
   return id;
 }
 
+// Renomeia o código de resgate na loja. Só o `code` (e o `title`, que é o rótulo do admin) —
+// percentual, escopo e ciclos ficam intocados, e é por isso que o input vai enxuto: mandar
+// `customerGets` inteiro APAGA o que não vier junto (aprendido em 12/08, quase custou 18
+// escopos). O Shopify mescla o que vem parcial.
+//
+// ⚠️ O pedido ANTIGO continua com o código antigo gravado nele. Renomear não reescreve
+// histórico de pedido — a ligação com a pessoa é por `creator.venda.cupom_id`, que não muda.
+async function renomearCupomShopify({ discountId, novo }) {
+  if (!SHOP_TOKEN) throw new Error('SHOPIFY_TOKEN não configurado');
+  const mut = `
+    mutation renomear($id: ID!, $d: DiscountCodeBasicInput!) {
+      discountCodeBasicUpdate(id: $id, basicCodeDiscount: $d) {
+        codeDiscountNode { id }
+        userErrors { field message }
+      }
+    }`;
+  const r = await postJSON(`https://${SHOP}/admin/api/2025-01/graphql.json`,
+    { 'X-Shopify-Access-Token': SHOP_TOKEN },
+    { query: mut, variables: { id: discountId, d: { code: novo, title: novo } } });
+  if (r.status !== 200) throw new Error('Shopify HTTP ' + r.status + ' ' + String(r.txt).slice(0, 160));
+  const erroApi = r.json?.errors?.[0]?.message;
+  if (erroApi) throw new Error(erroApi);
+  const res = r.json?.data?.discountCodeBasicUpdate;
+  if (res?.userErrors?.length) throw new Error(res.userErrors.map(e => e.message).join('; '));
+  return res?.codeDiscountNode?.id;
+}
+
 // ---------------------------------------------------------------- e-mail pelo Klaviyo
 // O app NÃO manda e-mail: manda um EVENTO. Quem transforma em mensagem é um flow do Klaviyo,
 // que cuida de template, remetente verificado, descadastro e entrega. Construir mailer próprio
@@ -448,6 +484,30 @@ async function criarLinkCurtoShopify({ codigo, slug }) {
   const id = res?.urlRedirect?.id;
   if (!id) throw new Error('a Shopify não devolveu o id do redirect');
   return id;
+}
+
+// O link curto é `/r/<cupom>`, então renomear o cupom SEM mexer aqui deixaria a creator com um
+// link que não bate mais com o código que ela fala. Este é o quarto lado do rename — os outros
+// três são a loja, `creator.cupom` e `creator.legado`.
+async function renomearLinkCurtoShopify({ redirectId, novo }) {
+  if (!SHOP_TOKEN) throw new Error('SHOPIFY_TOKEN não configurado');
+  const mut = `
+    mutation mover($id: ID!, $r: UrlRedirectInput!) {
+      urlRedirectUpdate(id: $id, urlRedirect: $r) {
+        urlRedirect { id path }
+        userErrors { field message }
+      }
+    }`;
+  const r = await postJSON(`https://${SHOP}/admin/api/2025-01/graphql.json`,
+    { 'X-Shopify-Access-Token': SHOP_TOKEN },
+    { query: mut, variables: { id: redirectId,
+      r: { path: '/r/' + String(novo).toLowerCase() } } });
+  if (r.status !== 200) throw new Error('Shopify HTTP ' + r.status + ' ' + String(r.txt).slice(0, 160));
+  const erroApi = r.json?.errors?.[0]?.message;
+  if (erroApi) throw new Error(erroApi);
+  const res = r.json?.data?.urlRedirectUpdate;
+  if (res?.userErrors?.length) throw new Error(res.userErrors.map(e => e.message).join('; '));
+  return res?.urlRedirect?.path;
 }
 
 // slug do link, único. `ux_parceiro_slug` é único de verdade, então tentar sem checar quebra.
@@ -1119,6 +1179,132 @@ http.createServer(async (req, res) => {
            RETURNING parceiro_id`, [c, ids]);
         invalida();
         return json(200, { ok: true, vinculados: r.rowCount, pedidos: ids.length });
+      } catch (e) { return json(200, { ok: false, erro: e.message }); }
+    });
+  }
+
+  // ---------------- renomear o cupom de quem JÁ foi aprovado ----------------
+  // O ISABELLE→ISAS de 12/08 teve que ser feito na mão em três lugares, e um deles (o link
+  // curto) nem existia ainda. São QUATRO lados, e todos têm que andar juntos:
+  //   1. o código de resgate na Shopify   3. `creator.legado` (inventário da loja)
+  //   2. `creator.cupom`                  4. o redirect `/r/<cupom>`
+  //
+  // A ORDEM é do mais reversível para o menos, igual à aprovação: banco primeiro (dá rollback),
+  // loja depois. Se a loja falhar, o banco volta atrás e o cupom antigo continua valendo —
+  // o contrário deixaria o código vivo na loja e órfão aqui.
+  if (u.pathname === '/api/cupom/renomear' && req.method === 'POST') {
+    let b = ''; req.on('data', c => { b += c; if (b.length > 20000) req.destroy(); });
+    return req.on('end', async () => {
+      const cli = await pool.connect();
+      let etapa = 'lendo o cupom';
+      try {
+        const d = JSON.parse(b || '{}');
+        const cupomId = +d.cupom_id;
+        const novo = String(d.novo || '').trim().toUpperCase();
+        if (!cupomId) return json(400, { erro: 'cupom ausente' });
+        if (!/^[A-Z0-9]{3,24}$/.test(novo))
+          return json(400, { erro: 'use de 3 a 24 letras ou números, sem espaço nem acento' });
+
+        const [cup] = (await cli.query(
+          `SELECT c.*, p.nome FROM creator.cupom c
+             JOIN creator.parceiro p ON p.parceiro_id = c.parceiro_id
+            WHERE c.cupom_id = $1`, [cupomId])).rows;
+        if (!cup) return json(404, { erro: 'cupom não encontrado' });
+        const antigo = cup.codigo;
+        if (antigo.toUpperCase() === novo) return json(400, { erro: 'o código já é esse' });
+
+        // mesma checagem da aprovação: único na LOJA inteira, não só no programa
+        etapa = 'conferindo se o código já existe';
+        const cho = await cli.query(`
+          SELECT 'programa' AS onde FROM creator.cupom  WHERE upper(codigo)=$1 AND cupom_id<>$2
+          UNION ALL SELECT 'loja'   FROM creator.legado WHERE upper(codigo)=$1`, [novo, cupomId]);
+        if (cho.rows[0])
+          return json(409, { erro: 'o código ' + novo + ' já existe ('
+            + (cho.rows[0].onde === 'loja' ? 'na Shopify' : 'no programa') + '). Escolha outro.' });
+
+        await cli.query('BEGIN');
+        etapa = 'gravando aqui';
+        await cli.query('UPDATE creator.cupom SET codigo=$2 WHERE cupom_id=$1', [cupomId, novo]);
+        await cli.query('UPDATE creator.legado SET codigo=$2 WHERE upper(codigo)=$1', [antigo.toUpperCase(), novo]);
+
+        etapa = 'renomeando na Shopify';
+        if (cup.shopify_discount_id)
+          await renomearCupomShopify({ discountId: cup.shopify_discount_id, novo });
+
+        // o link curto é o único que pode falhar sem derrubar o resto: se ele não mover, o
+        // cupom novo já vale no checkout e o link velho ainda redireciona. Fica registrado.
+        let linkNovo = null, avisoLink = null;
+        if (cup.link_redirect_id) {
+          etapa = 'movendo o link curto';
+          try { linkNovo = await renomearLinkCurtoShopify({ redirectId: cup.link_redirect_id, novo }); }
+          catch (e) { avisoLink = e.message; }
+        }
+        await cli.query('COMMIT');
+        invalida();
+        return json(200, { ok: true, antigo, novo, nome: cup.nome,
+          link: linkNovo ? SITE + linkNovo : null, aviso_link: avisoLink });
+      } catch (e) {
+        await cli.query('ROLLBACK').catch(() => {});
+        return json(200, { ok: false, erro: e.message, etapa });
+      } finally { cli.release(); }
+    });
+  }
+
+  // ---------------- pastas: criar, renomear, apagar ----------------
+  if (u.pathname === '/api/pasta' && req.method === 'POST') {
+    let b = ''; req.on('data', c => { b += c; if (b.length > 20000) req.destroy(); });
+    return req.on('end', async () => {
+      try {
+        const d = JSON.parse(b || '{}');
+        if (d.apagar) {
+          // apagar a pasta SOLTA as pessoas (ON DELETE CASCADE em parceiro_pasta), não apaga
+          // ninguém — vale dizer quantas saíram, senão parece que sumiu gente.
+          const [n] = (await pool.query(
+            'SELECT count(*)::int AS n FROM creator.parceiro_pasta WHERE pasta_id=$1', [+d.apagar])).rows;
+          await pool.query('DELETE FROM creator.pasta WHERE pasta_id=$1', [+d.apagar]);
+          invalida(); return json(200, { ok: true, soltos: n.n });
+        }
+        const nome = String(d.nome || '').trim().slice(0, 60);
+        if (!nome) return json(400, { erro: 'a pasta precisa de um nome' });
+        if (d.pasta_id) {
+          const r = await pool.query(
+            'UPDATE creator.pasta SET nome=$2, cor=$3 WHERE pasta_id=$1 RETURNING *',
+            [+d.pasta_id, nome, d.cor || null]);
+          invalida(); return json(200, { ok: true, pasta: r.rows[0] });
+        }
+        const r = await pool.query(
+          `INSERT INTO creator.pasta (nome, cor, criado_por) VALUES ($1,$2,$3) RETURNING *`,
+          [nome, d.cor || null, (d.por || 'painel').slice(0, 60)]);
+        invalida(); return json(200, { ok: true, pasta: r.rows[0] });
+      } catch (e) {
+        // o índice único é por lower(nome): "Nutri" e "nutri" são a mesma pasta de propósito
+        if (/pasta_nome_uk/.test(e.message))
+          return json(409, { ok: false, erro: 'já existe uma pasta com esse nome' });
+        return json(200, { ok: false, erro: e.message });
+      }
+    });
+  }
+
+  // ---------------- pôr / tirar creator de pasta (aceita lote) ----------------
+  if (u.pathname === '/api/parceiro/pasta' && req.method === 'POST') {
+    let b = ''; req.on('data', c => { b += c; if (b.length > 200000) req.destroy(); });
+    return req.on('end', async () => {
+      try {
+        const d = JSON.parse(b || '{}');
+        const pasta = +d.pasta_id;
+        const ids = [...new Set((d.parceiros || [d.parceiro_id]).map(Number).filter(Boolean))];
+        if (!pasta || !ids.length) return json(400, { erro: 'pasta e creator são obrigatórios' });
+        if (d.sair) {
+          const r = await pool.query(
+            'DELETE FROM creator.parceiro_pasta WHERE pasta_id=$1 AND parceiro_id = ANY($2)',
+            [pasta, ids]);
+          invalida(); return json(200, { ok: true, saíram: r.rowCount });
+        }
+        const r = await pool.query(
+          `INSERT INTO creator.parceiro_pasta (pasta_id, parceiro_id)
+           SELECT $1, x FROM unnest($2::bigint[]) AS x
+           ON CONFLICT DO NOTHING RETURNING parceiro_id`, [pasta, ids]);
+        invalida(); return json(200, { ok: true, entraram: r.rowCount, pedidos: ids.length });
       } catch (e) { return json(200, { ok: false, erro: e.message }); }
     });
   }

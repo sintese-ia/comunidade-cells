@@ -359,6 +359,11 @@
           <option value="prata">🥈 prata</option>
           <option value="bronze">🥉 bronze</option>
         </select>
+        <select id="cPasta" class="busca" style="max-width:180px" aria-label="Filtrar por pasta">
+          <option value="">qualquer pasta</option>
+          <option value="__sem__">sem pasta</option>
+        </select>
+        <button class="acbt" id="cPastas">gerenciar pastas</button>
         <button class="acbt" id="cLimpa" style="display:none">limpar filtros</button>
         <span class="cnt dim" id="cFiltroInfo"></span>
       </div>
@@ -580,6 +585,24 @@
       </div>
       <p class="obs" style="margin-top:8px">Link pessoal, vale 90 dias. <b>Eu não envio</b> — você copia e manda por onde preferir. Ele mostra só os dados dessa pessoa.</p>
     </div>
+    <div class="fsec"><h4>Pastas</h4>
+      <div class="frm">
+        <select id="fpasta" style="flex:1;min-width:200px" aria-label="Pôr em uma pasta"></select>
+        <button class="acbt ok" id="fpastaAdd">pôr na pasta</button>
+      </div>
+      <div id="fpastas" style="margin-top:9px"></div>
+      <p class="obs" style="margin-top:7px">Pasta é <b>categoria</b> — lista fechada, montada em <i>gerenciar pastas</i>. A mesma pessoa pode estar em várias. Tag, abaixo, é anotação livre.</p>
+    </div>
+    <div class="fsec"><h4>Cupom</h4>
+      <div class="frm">
+        <input id="fcupomNovo" style="width:190px;text-transform:uppercase" maxlength="24"
+               placeholder="NOVO CÓDIGO" aria-label="novo código do cupom">
+        <button class="acbt" id="fRenomear">renomear cupom</button>
+        <span class="obs" id="fcupomAtual"></span>
+      </div>
+      <p class="obs" style="margin-top:7px">Muda o código em <b>quatro lugares de uma vez</b>: na Shopify, aqui, no inventário do legado e no link curto <span style="font-family:var(--mono)">/r/&lt;cupom&gt;</span>. Pedido antigo continua ligado à pessoa — a conta é por id, não pelo texto do código.</p>
+      <p class="obs" style="margin-top:6px;color:var(--wa)" id="fcupomAviso"></p>
+    </div>
     <div class="fsec"><h4>Tags</h4>
       <div class="frm"><input id="ftags" placeholder="nutri, sp, alto-engajamento" style="flex:1;min-width:220px">
         <button class="acbt" id="fsalvatags">salvar tags</button></div></div>
@@ -755,6 +778,28 @@
   </div>
 </dialog>
 
+<!-- ---------------- pastas ---------------- -->
+<dialog class="ficha" id="dlgPastas">
+  <div class="fhd">
+    <div><h3>Pastas</h3><div class="hh">Categorias que você monta. Uma pessoa pode estar em mais de uma.</div></div>
+  </div>
+  <div class="fbd">
+    <div class="fsec">
+      <div class="frm">
+        <input id="paNova" class="busca" style="flex:1;min-width:200px" maxlength="60"
+               placeholder="nome da pasta nova" aria-label="Nome da pasta nova">
+        <button class="acbt ok" id="paCriar">criar</button>
+      </div>
+      <p class="obs" style="margin-top:7px">Apagar a pasta <b>solta</b> quem está nela — não apaga ninguém do programa.</p>
+      <div id="paLista" style="margin-top:12px"></div>
+    </div>
+  </div>
+  <div class="fft">
+    <span class="esq obs" id="paErro"></span>
+    <button class="acbt" id="paFechar">fechar</button>
+  </div>
+</dialog>
+
 <!-- ---------------- vincular creators em lote ---------------- -->
 <dialog class="ficha" id="dlgCr">
   <div class="fhd">
@@ -866,9 +911,9 @@ document.getElementById('frm').addEventListener('submit', async e => {
 
 /* =================================================== 02 CADASTROS =============== */
 const CAD = D.cadastros || [], ENVIOS = D.envios || [], PUBS = D.fichaPubs || [];
-const NIVEIS = D.niveis || [];
+const NIVEIS = D.niveis || [], PASTAS = D.pastas || [];
 let cAba = 'todos', cBusca = '', cOrd = {c:'cadastro', d:-1};
-let cNicho = '', cIdade = '', cCidade = '', cNivel = '';
+let cNicho = '', cIdade = '', cCidade = '', cNivel = '', cPasta = '';
 
 /* Popula os selects a partir do que EXISTE na base — não de uma lista fixa. Se amanhã
    entrar um nicho novo no formulário, ele aparece aqui sozinho. */
@@ -885,6 +930,8 @@ let cNicho = '', cIdade = '', cCidade = '', cNivel = '';
         .map(([k,v]) => '<option value="'+esc(k)+'">'+esc(k)+' ('+v+')</option>').join(''));
   };
   opt(nichos, 'cNicho'); opt(cidades, 'cCidade');
+  document.getElementById('cPasta').insertAdjacentHTML('beforeend',
+    PASTAS.map(p => '<option value="'+p.pasta_id+'">'+esc(p.nome)+' ('+p.creators+')</option>').join(''));
 })();
 
 function contaCad(){
@@ -918,6 +965,8 @@ function filtraCad(){
     if (cNicho  && !(f.nichos || []).includes(cNicho)) return false;
     if (cCidade && f.cidade !== cCidade) return false;
     if (cNivel  && f.nivel !== cNivel) return false;
+    if (cPasta === '__sem__') { if ((f.pastas || []).length) return false; }
+    else if (cPasta && !(f.pastas || []).some(p => String(p.pasta_id) === cPasta)) return false;
     if (cIdade) {
       const [lo, hi] = cIdade.split('-').map(Number);
       if (f.idade == null || f.idade < lo || f.idade > hi) return false;
@@ -933,6 +982,128 @@ function filtraCad(){
   });
   return L;
 }
+
+/* ---- pastas (item 7) ------------------------------------------------------
+   Lista FECHADA e montável, ao contrário de `tags`, que é texto livre. É a diferença que
+   faz o filtro devolver sempre o mesmo conjunto: "Nutri" e "nutri" são a mesma pasta. */
+const dPa = document.getElementById('dlgPastas');
+
+function pintaPastas(){
+  document.getElementById('paLista').innerHTML = PASTAS.map(p =>
+    '<div class="pub"><span class="l"><b>'+esc(p.nome)+'</b>'
+    + '<span class="sub2">'+p.creators+' creator'+(p.creators===1?'':'s')+'</span></span>'
+    + '<span class="acs">'
+      + '<button class="acbt" data-paren="'+p.pasta_id+'">renomear</button>'
+      + '<button class="acbt" data-padel="'+p.pasta_id+'" style="color:var(--cr)">apagar</button>'
+    + '</span></div>').join('')
+    || '<p class="obs">Nenhuma pasta ainda. Crie a primeira ali em cima.</p>';
+}
+async function apiPasta(corpo){
+  const err = document.getElementById('paErro'); err.textContent = 'gravando…';
+  const j = await (await fetch('/api/pasta', {method:'POST',
+    headers:{'content-type':'application/json'}, body: JSON.stringify(corpo)})).json();
+  if (!j.ok) { err.textContent = j.erro || 'não gravou'; return null; }
+  return j;
+}
+document.getElementById('cPastas').addEventListener('click', () => {
+  document.getElementById('paErro').textContent = '';
+  document.getElementById('paNova').value = '';
+  pintaPastas(); dPa.showModal();
+});
+document.getElementById('paFechar').addEventListener('click', () => dPa.close());
+document.getElementById('paCriar').addEventListener('click', async () => {
+  const nome = document.getElementById('paNova').value.trim();
+  if (!nome) { document.getElementById('paErro').textContent = 'Dê um nome à pasta.'; return; }
+  if (await apiPasta({ nome })) location.reload();
+});
+document.getElementById('paLista').addEventListener('click', async e => {
+  const ren = e.target.closest('[data-paren]');
+  if (ren) {
+    const p = PASTAS.find(x => String(x.pasta_id) === ren.dataset.paren);
+    const nome = prompt('Novo nome da pasta:', p.nome);
+    if (nome && nome.trim() && nome.trim() !== p.nome
+        && await apiPasta({ pasta_id: p.pasta_id, nome: nome.trim() })) location.reload();
+    return;
+  }
+  const del = e.target.closest('[data-padel]');
+  if (del) {
+    const p = PASTAS.find(x => String(x.pasta_id) === del.dataset.padel);
+    // dizer quantos serão soltos: "apagar" numa tela de gente dá medo de apagar gente
+    if (!confirm('Apagar a pasta "' + p.nome + '"?\n\n'
+      + (p.creators ? p.creators + ' creator(s) saem dela. Ninguém é removido do programa.'
+                    : 'Ela está vazia.'))) return;
+    if (await apiPasta({ apagar: p.pasta_id })) location.reload();
+  }
+});
+
+/* ---- pastas de UMA pessoa, dentro da ficha ---- */
+function pintaPastasDa(f){
+  const minhas = f.pastas || [];
+  const tem = new Set(minhas.map(p => p.pasta_id));
+  const sel = document.getElementById('fpasta');
+  const livres = PASTAS.filter(p => !tem.has(p.pasta_id));
+  sel.innerHTML = livres.length
+    ? livres.map(p => '<option value="'+p.pasta_id+'">'+esc(p.nome)+'</option>').join('')
+    : '<option value="">— já está em todas as pastas —</option>';
+  document.getElementById('fpastaAdd').disabled = !livres.length;
+  document.getElementById('fpastas').innerHTML = minhas.length
+    ? minhas.map(p => '<span class="chip vo" style="margin-right:5px">'+esc(p.nome)
+        + ' <button class="lnk" data-pasai="'+p.pasta_id+'" style="border:0;color:var(--cr)" '
+        + 'title="tirar desta pasta">×</button></span>').join('')
+    : '<p class="obs">Fora de todas as pastas.</p>';
+}
+document.getElementById('fpastaAdd').addEventListener('click', async () => {
+  const pasta = document.getElementById('fpasta').value;
+  if (!pasta) return;
+  const j = await (await fetch('/api/parceiro/pasta', {method:'POST',
+    headers:{'content-type':'application/json'},
+    body: JSON.stringify({pasta_id:+pasta, parceiro_id:fichaId})})).json();
+  if (!j.ok) return alert('Não gravou: '+(j.erro||'erro'));
+  location.reload();
+});
+document.getElementById('fpastas').addEventListener('click', async e => {
+  const b = e.target.closest('[data-pasai]'); if (!b) return;
+  const j = await (await fetch('/api/parceiro/pasta', {method:'POST',
+    headers:{'content-type':'application/json'},
+    body: JSON.stringify({pasta_id:+b.dataset.pasai, parceiro_id:fichaId, sair:true})})).json();
+  if (!j.ok) return alert('Não gravou: '+(j.erro||'erro'));
+  location.reload();
+});
+
+/* ---- renomear o cupom de quem já foi aprovado ----
+   São QUATRO lados (loja, creator.cupom, creator.legado e o redirect /r/<cupom>) e quem
+   garante que andam juntos é o servidor — a tela só manda o código novo. */
+function pintaCupomDa(f){
+  const c = cupomDe(f.parceiro_id);
+  const bt = document.getElementById('fRenomear');
+  document.getElementById('fcupomNovo').value = '';
+  document.getElementById('fcupomAviso').textContent = '';
+  document.getElementById('fcupomAtual').textContent = c ? 'hoje é ' + c.codigo : 'sem cupom ativo';
+  bt.disabled = !c;
+  bt.dataset.cupom = c ? c.cupom_id : '';
+  if (c && !c.shopify_discount_id)
+    document.getElementById('fcupomAviso').textContent =
+      'Este cupom não tem id da Shopify gravado — o rename só vai valer aqui, não na loja.';
+}
+document.getElementById('fRenomear').addEventListener('click', async e => {
+  const bt = e.target, novo = document.getElementById('fcupomNovo').value.trim().toUpperCase();
+  if (!bt.dataset.cupom || !novo) return;
+  if (!confirm('Renomear o cupom para ' + novo + '?\n\n'
+    + 'Muda na Shopify, aqui, no legado e no link curto. Quem já divulgou o código antigo\n'
+    + 'passa a divulgar um código que não existe mais — avise a pessoa.')) return;
+  bt.disabled = true;
+  const j = await (await fetch('/api/cupom/renomear', {method:'POST',
+    headers:{'content-type':'application/json'},
+    body: JSON.stringify({cupom_id:+bt.dataset.cupom, novo})})).json();
+  bt.disabled = false;
+  if (!j.ok) { document.getElementById('fcupomAviso').textContent =
+    (j.erro || 'não gravou') + (j.etapa ? ' (em: ' + j.etapa + ')' : ''); return; }
+  alert(j.antigo + ' virou ' + j.novo + '.'
+    + (j.link ? '\n\nO link curto agora é ' + j.link : '')
+    + (j.aviso_link ? '\n\n⚠️ O link curto NÃO moveu: ' + j.aviso_link
+       + '\nO cupom novo já vale no checkout, mas /r/' + j.antigo.toLowerCase() + ' continua no ar.' : ''));
+  location.reload();
+});
 
 /* item 3 — o @ vira link para o Instagram. A URL vem do formulário quando a pessoa se
    cadastrou; para os cupons legados é montada a partir do handle no SQL. */
@@ -952,7 +1123,12 @@ function perfilResumo(f){
   if (f.idade)  p.push(f.idade + ' anos');
   if (f.cidade) p.push(f.cidade);
   if (f.nichos && f.nichos.length) p.push(f.nichos.slice(0,2).join(', '));
-  return p.length ? ' <span class="dim">· '+esc(p.join(' · '))+'</span>' : '';
+  const txt = p.length ? ' <span class="dim">· '+esc(p.join(' · '))+'</span>' : '';
+  // pasta aparece na linha porque é o que a curadoria acabou de decidir — ter que abrir a
+  // ficha para lembrar em que pasta a pessoa está anula o motivo de existir a pasta
+  const pastas = (f.pastas || []).map(x =>
+    ' <span class="chip vo" style="font-size:10px">'+esc(x.nome)+'</span>').join('');
+  return txt + pastas;
 }
 
 const MEDALHA = {ouro:'🥇', prata:'🥈', bronze:'🥉'};
@@ -1064,20 +1240,20 @@ document.getElementById('cq').addEventListener('input', e => {
 
 /* filtros de curadoria (item 1) */
 [['cNicho', v => cNicho = v], ['cIdade', v => cIdade = v],
- ['cCidade', v => cCidade = v], ['cNivel', v => cNivel = v]]
+ ['cCidade', v => cCidade = v], ['cNivel', v => cNivel = v], ['cPasta', v => cPasta = v]]
   .forEach(([id, set]) => document.getElementById(id)
     .addEventListener('change', e => { set(e.target.value); pintaCad(); }));
 
 document.getElementById('cLimpa').addEventListener('click', () => {
-  cNicho = cIdade = cCidade = cNivel = '';
-  ['cNicho','cIdade','cCidade','cNivel'].forEach(id => document.getElementById(id).value = '');
+  cNicho = cIdade = cCidade = cNivel = cPasta = '';
+  ['cNicho','cIdade','cCidade','cNivel','cPasta'].forEach(id => document.getElementById(id).value = '');
   pintaCad();
 });
 
 /* Quantos a curadoria não alcança. Filtrar por idade some com quem não declarou idade —
    isso é correto, mas silencioso, e a tela precisa dizer em voz alta quantos sumiram. */
 function infoFiltro(mostrados){
-  const ligado = cNicho || cIdade || cCidade || cNivel;
+  const ligado = cNicho || cIdade || cCidade || cNivel || cPasta;
   document.getElementById('cLimpa').style.display = ligado ? '' : 'none';
   const el = document.getElementById('cFiltroInfo');
   if (!ligado) { el.textContent = ''; return; }
@@ -1437,6 +1613,8 @@ function abreFicha(id){
         : '<span class="chip cr" title="' + esc(x.detalhe||'') + '">falhou</span>') + '</span></div>').join('')
     : '<p class="obs">Nenhum e-mail enviado ainda.</p>';
   document.getElementById('ftags').value = (f.tags||[]).join(', ');
+  pintaPastasDa(f);
+  pintaCupomDa(f);
   pintaEnvios(id);
 
   const ps = PUBS.filter(p => p.parceiro_id === id);
