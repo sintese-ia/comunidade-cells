@@ -28,6 +28,11 @@ const SHOP      = process.env.SHOPIFY_SHOP  || 'r1n6nj-ui.myshopify.com';
 const SHOP_TOKEN = process.env.SHOPIFY_TOKEN || '';   // precisa de write_discounts
 const KLAVIYO   = process.env.KLAVIYO_KEY || '';
 const SITE      = process.env.SITE_URL || 'https://cells.com.br';
+// Grupo da comunidade de creators no WhatsApp. Vai no e-mail de aprovação: é o único canal
+// onde a creator fala com a Cells e com as outras. Em env var porque link de grupo do WhatsApp
+// pode ser revogado a qualquer momento e trocar não pode exigir deploy.
+const COMUNIDADE_WPP = process.env.COMUNIDADE_WHATSAPP
+  || 'https://chat.whatsapp.com/KMN0hiWiLHw1NFJFPxGqlR';
 // O padrão REAL da casa, medido na loja em 08/08: os ~103 cupons nominais são de 8%.
 // O business case dizia 15% — está errado, e usar 15 dobraria o desconto sem ninguém decidir.
 const DESCONTO_PADRAO = +process.env.DESCONTO_PADRAO || 8;
@@ -346,6 +351,7 @@ async function eventoAprovacao({ email, nome, cupom, link, desconto, comissao,
                       // os dois números, senão a creator descobre a diferença sozinha depois
                       comissao_assinatura_pct: comissao_assinatura ?? null,
                       nivel: nivel || null,
+                      comunidade_whatsapp: COMUNIDADE_WPP,
                       nome_creator: G.primeiroNome(nome) || null,
                       saudacao: G.saudacaoDe(nome, sexo) },
         metric: { data: { type: 'metric', attributes: { name: METRICA_APROVACAO } } },
