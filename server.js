@@ -58,6 +58,7 @@ pool.on('error', e => console.error('[pg] conexão ociosa caiu (o pool se recupe
 
 const TPL = fs.readFileSync(path.join(__dirname, 'template.html'), 'utf8');
 const TPL_CREATOR = fs.readFileSync(path.join(__dirname, 'portal.html'), 'utf8');
+const TPL_ENTRAR  = fs.readFileSync(path.join(__dirname, 'entrar.html'), 'utf8');
 const COOKIE_CR = 'cc_creator';
 let cache = { at: 0, json: null, erro: null };
 
@@ -510,6 +511,138 @@ async function renomearLinkCurtoShopify({ redirectId, novo }) {
   return res?.urlRedirect?.path;
 }
 
+// ---------------------------------------------------------------- conta da creator
+// ⚠️ O cookie da creator era assinado com a SENHA do admin. Dois níveis de confiança dividindo
+// o mesmo segredo: trocar a senha do painel derrubaria o acesso de TODAS as creators de uma
+// vez, sem aviso e sem ninguém ligar uma coisa à outra. Agora o segredo é próprio, nasce
+// sozinho no primeiro boot e mora em `creator.segredo` — não depende de alguém lembrar de
+// criar env var no Easypanel, que é exatamente o passo que ninguém dá.
+let SEGREDO_CR = null;
+async function segredoCreator() {
+  if (SEGREDO_CR) return SEGREDO_CR;
+  const r = await pool.query(`SELECT valor FROM creator.segredo WHERE chave='cookie_creator'`);
+  if (r.rows[0]) return (SEGREDO_CR = r.rows[0].valor);
+  const novo = crypto.randomBytes(32).toString('base64url');
+  // ON CONFLICT: dois containers subindo juntos gerariam dois segredos e um venceria — com
+  // o DO NOTHING + re-SELECT, os dois terminam com o mesmo.
+  await pool.query(
+    `INSERT INTO creator.segredo (chave, valor) VALUES ('cookie_creator', $1)
+     ON CONFLICT (chave) DO NOTHING`, [novo]);
+  const r2 = await pool.query(`SELECT valor FROM creator.segredo WHERE chave='cookie_creator'`);
+  return (SEGREDO_CR = r2.rows[0].valor);
+}
+const assinaCreator = pid =>
+  crypto.createHmac('sha256', SEGREDO_CR).update('cr|' + pid).digest('hex').slice(0, 32);
+
+// senha: scrypt com salt por pessoa. A senha em si nunca é gravada nem logada.
+function hashSenha(senha) {
+  const salt = crypto.randomBytes(16);
+  const N = 16384, r = 8, p = 1;
+  const h = crypto.scryptSync(String(senha).normalize('NFKC'), salt, 32, { N, r, p });
+  return ['scrypt', N, r, p, salt.toString('base64'), h.toString('base64')].join('$');
+}
+function confereSenha(senha, guardado) {
+  try {
+    const [alg, N, r, p, salt, hash] = String(guardado || '').split('$');
+    if (alg !== 'scrypt') return false;
+    const h = crypto.scryptSync(String(senha).normalize('NFKC'), Buffer.from(salt, 'base64'), 32,
+      { N: +N, r: +r, p: +p });
+    const esperado = Buffer.from(hash, 'base64');
+    // timingSafeEqual estoura se os tamanhos diferem — comparar antes, não deixar lançar
+    return h.length === esperado.length && crypto.timingSafeEqual(h, esperado);
+  } catch (e) { return false; }
+}
+
+const digitos = s => String(s || '').replace(/\D/g, '');
+
+// CPF/CNPJ: dígito verificador de verdade. Só contar caracteres deixa passar "11111111111",
+// e aí o PIX volta do banco e ninguém sabe por quê.
+function cpfValido(v) {
+  const c = digitos(v);
+  if (c.length !== 11 || /^(\d)\1{10}$/.test(c)) return false;
+  const dv = (base, peso) => {
+    const s = base.split('').reduce((a, d, i) => a + +d * (peso - i), 0);
+    const x = (s * 10) % 11; return x === 10 ? 0 : x;
+  };
+  return dv(c.slice(0, 9), 10) === +c[9] && dv(c.slice(0, 10), 11) === +c[10];
+}
+function cnpjValido(v) {
+  const c = digitos(v);
+  if (c.length !== 14 || /^(\d)\1{13}$/.test(c)) return false;
+  const dv = base => {
+    let peso = base.length === 12 ? 5 : 6, s = 0;
+    for (const d of base) { s += +d * peso; peso = peso === 2 ? 9 : peso - 1; }
+    const x = s % 11; return x < 2 ? 0 : 11 - x;
+  };
+  return dv(c.slice(0, 12)) === +c[12] && dv(c.slice(0, 13)) === +c[13];
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;
+
+// A chave PIX precisa bater com o TIPO. Chave errada não dá erro na hora — dá erro na hora
+// de pagar, semanas depois, quando ninguém lembra mais.
+function pixValido(tipo, chave) {
+  const c = String(chave || '').trim();
+  if (!c) return 'informe a chave';
+  if (tipo === 'cpf')      return cpfValido(c)  ? null : 'CPF inválido';
+  if (tipo === 'cnpj')     return cnpjValido(c) ? null : 'CNPJ inválido';
+  if (tipo === 'email')    return EMAIL_RE.test(c) ? null : 'e-mail inválido';
+  if (tipo === 'telefone') return [10, 11, 12, 13].includes(digitos(c).length)
+    ? null : 'telefone inválido — use DDD + número';
+  if (tipo === 'aleatoria') return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    .test(c) ? null : 'chave aleatória tem o formato 8-4-4-4-12';
+  return 'tipo de chave desconhecido';
+}
+
+const UF = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR',
+            'PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
+
+// corpo JSON com teto. Sem teto, um POST gigante come a memória do container.
+function corpoJSON(req, limite = 8192) {
+  return new Promise((ok, falha) => {
+    let b = '';
+    req.on('data', c => { b += c; if (b.length > limite) { req.destroy(); falha(new Error('corpo grande')); } });
+    req.on('end', () => { try { ok(JSON.parse(b || '{}')); } catch (e) { falha(new Error('JSON inválido')); } });
+    req.on('error', falha);
+  });
+}
+
+// Grava campo a campo e deixa rastro. Sem o rastro, "meu PIX sumiu" não tem resposta — e o
+// painel do Gabriel edita os MESMOS campos, então saber quem mexeu é o que resolve a briga.
+async function salvarCampos(parceiroId, campos, por) {
+  const nomes = Object.keys(campos);
+  if (!nomes.length) return 0;
+  const cli = await pool.connect();
+  try {
+    await cli.query('BEGIN');
+    const { rows: [antes] } = await cli.query(
+      `SELECT ${nomes.map(c => `"${c}"`).join(',')} FROM creator.parceiro
+        WHERE parceiro_id=$1 FOR UPDATE`, [parceiroId]);
+    // ⚠️ Coluna `date` volta do node-pg como Date, e String(Date) dá "Sat Aug 08 2026 …".
+    // Comparado com "2026-08-08" isso nunca bate: cada gravação acharia que a data mudou e
+    // encheria o rastro de edição fantasma. Mesma armadilha que quebrou a edição de campanha
+    // em 14/08 — lá saía "Sat Aug 08" na tela; aqui sairia calada, só no log.
+    const txt = v => v instanceof Date
+      ? `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}`
+        + `-${String(v.getDate()).padStart(2, '0')}`
+      : String(v ?? '');
+    const mudou = nomes.filter(c => txt(antes[c]) !== txt(campos[c]));
+    if (!mudou.length) { await cli.query('ROLLBACK'); return 0; }
+    await cli.query(
+      `UPDATE creator.parceiro SET ${mudou.map((c, i) => `"${c}"=$${i + 2}`).join(',')},
+              atualizado_em = now() WHERE parceiro_id=$1`,
+      [parceiroId, ...mudou.map(c => campos[c])]);
+    for (const c of mudou) await cli.query(
+      `INSERT INTO creator.parceiro_edicao (parceiro_id,campo,valor_antigo,valor_novo,por)
+       VALUES ($1,$2,$3,$4,$5)`,
+      [parceiroId, c, antes[c] == null ? null : String(antes[c]),
+       campos[c] == null ? null : String(campos[c]), por]);
+    await cli.query('COMMIT');
+    return mudou.length;
+  } catch (e) { await cli.query('ROLLBACK').catch(() => {}); throw e; }
+  finally { cli.release(); }
+}
+
 // slug do link, único. `ux_parceiro_slug` é único de verdade, então tentar sem checar quebra.
 async function slugLivre(cli, base) {
   // o @ entra INTEIRO, com ponto e underscore: é o que o Gabriel pediu e é o que torna o
@@ -535,8 +668,16 @@ async function dadosDoCreator(parceiroId) {
   // logar. Foi assim que apareceu.
   const t0Total = Date.now();
   const q = (sql, p) => pool.query(sql, p).then(r => r.rows);
+  // `senha_hash` NÃO sai daqui — este objeto é serializado dentro do HTML que vai para o
+  // navegador dela. Sai só o booleano `tem_senha`.
   const [pa] = await q(`
-    SELECT p.parceiro_id, p.nome, p.instagram_handle, p.utm_slug, p.tags, p.status,
+    SELECT p.parceiro_id, p.nome, p.instagram_handle, p.tiktok_handle, p.utm_slug, p.tags,
+           p.status, p.email, p.telefone_e164, p.cpf, p.cnpj, p.nascimento,
+           p.pix_tipo, p.pix_chave,
+           p.end_cep, p.end_logradouro, p.end_numero, p.end_complemento,
+           p.end_bairro, p.end_cidade, p.end_uf,
+           (p.senha_hash IS NOT NULL) AS tem_senha,
+           to_char(p.criado_em AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD') AS desde,
            c.codigo AS cupom, c.link_redirect_id
     FROM creator.parceiro p
     LEFT JOIN creator.cupom c ON c.parceiro_id = p.parceiro_id AND c.ativo
@@ -643,9 +784,24 @@ async function dadosDoCreator(parceiroId) {
   const [{ hoje }] = await q(
     `SELECT to_char(now() AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD') AS hoje`);
 
+  // ---- lista de meses: TODOS, inclusive os sem venda (pedido do Gabriel, 15/08) ----
+  // Antes só entravam os meses com movimento, e o seletor pulava de março para novembro —
+  // parecia que o painel tinha esquecido o meio do ano. Mês sem venda é informação: é ele que
+  // mostra o buraco. Vai da entrada dela no programa (ou da primeira venda, o que veio antes)
+  // até o mês corrente, sem furo.
+  const desde = [pa.desde, extrato.at(-1)?.dia, serie[0]?.dia,
+                 publicacoes.at(-1)?.dia].filter(Boolean).sort()[0] || hoje;
+  const meses = [];
+  for (let a = +desde.slice(0, 4), m = +desde.slice(5, 7);
+       `${a}-${String(m).padStart(2, '0')}` <= hoje.slice(0, 7) && meses.length < 120;) {
+    meses.push(`${a}-${String(m).padStart(2, '0')}`);
+    if (++m > 12) { m = 1; a++; }
+  }
+  meses.reverse();
+
   return { parceiro: pa, vendas: v, extrato: extratoCom, publicacoes, envios, jogos,
            cliques: { ...cl, serie }, nivel: nv || null, faixas, comissao_3m: comissao3m,
-           taxas: { unica: pctU, assinatura: pctA }, hoje };
+           taxas: { unica: pctU, assinatura: pctA }, hoje, meses };
 }
 
 const portalErro = (titulo, msg) => `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
@@ -790,29 +946,36 @@ http.createServer(async (req, res) => {
     });
   }
 
-  // ---- portal do creator (link mágico) ----
-  if (u.pathname === '/creator') {
+  // ---- portal do creator ----
+  // Duas portas: link mágico (?t=) e e-mail/@ + senha. A senha é a porta que sobrevive ao
+  // link expirar; o link continua sendo a única forma de ENTRAR a primeira vez, porque
+  // ninguém define senha antes de conseguir abrir a tela.
+  if (u.pathname === '/creator' || u.pathname.startsWith('/creator/')) {
+    await segredoCreator();
     const ck = req.headers.cookie || '';
-    let pid = null;
-    const t = u.searchParams.get('t');
+    const setaCookie = pid =>
+      `${COOKIE_CR}=${pid}.${assinaCreator(pid)}; Path=/creator; HttpOnly; Secure; ` +
+      `SameSite=Lax; Max-Age=7776000`;
 
-    if (t) {
+    // quem está logado agora (cookie), independente da rota
+    let pid = null;
+    const mc = new RegExp(`${COOKIE_CR}=(\\d+)\\.([a-f0-9]{32})`).exec(ck);
+    if (mc && mc[2] === assinaCreator(mc[1])) pid = +mc[1];
+
+    // ---- link mágico ----
+    if (u.pathname === '/creator' && u.searchParams.get('t')) {
       try {
         const r = await pool.query(`
           UPDATE creator.acesso SET usos = usos + 1, ultimo_uso = now(),
                  primeiro_uso = coalesce(primeiro_uso, now())
           WHERE token = $1 AND revogado_em IS NULL AND expira_em > now()
-          RETURNING parceiro_id`, [t]);
+          RETURNING parceiro_id`, [u.searchParams.get('t')]);
         if (!r.rows[0]) {
           res.writeHead(403, {'content-type':'text/html; charset=utf-8'});
           return res.end(portalErro('Este link não vale mais',
             'Ele expirou ou foi desativado. Peça um novo para a equipe da Cells.'));
         }
-        pid = r.rows[0].parceiro_id;
-        // cookie assinado com o token: quem não tem o token não forja o cookie
-        const sig = crypto.createHash('sha256').update('cr|' + SENHA + '|' + pid).digest('hex').slice(0, 32);
-        res.writeHead(303, { Location: '/creator', 'Set-Cookie':
-          `${COOKIE_CR}=${pid}.${sig}; Path=/creator; HttpOnly; Secure; SameSite=Lax; Max-Age=7776000` });
+        res.writeHead(303, { Location: '/creator', 'Set-Cookie': setaCookie(r.rows[0].parceiro_id) });
         return res.end();
       } catch (e) {
         res.writeHead(500, {'content-type':'text/html; charset=utf-8'});
@@ -820,29 +983,169 @@ http.createServer(async (req, res) => {
       }
     }
 
-    const m = /cc_creator=(\d+)\.([a-f0-9]{32})/.exec(ck);
-    if (m) {
-      const esperado = crypto.createHash('sha256').update('cr|' + SENHA + '|' + m[1]).digest('hex').slice(0, 32);
-      if (m[2] === esperado) pid = +m[1];
+    // ---- entrar com e-mail/@ + senha ----
+    if (u.pathname === '/creator/entrar' && req.method === 'POST') {
+      let d; try { d = await corpoJSON(req, 2048); } catch (e) { return json(400, { erro: e.message }); }
+      const quem = String(d.identificador || '').trim().replace(/^@/, '').toLowerCase();
+      const senha = String(d.senha || '');
+      if (!quem || !senha) return json(400, { erro: 'informe seu e-mail (ou @) e a senha' });
+      try {
+        const { rows } = await pool.query(`
+          SELECT parceiro_id, senha_hash, login_falhas, login_travado_ate
+            FROM creator.parceiro
+           WHERE senha_hash IS NOT NULL
+             AND (lower(email) = $1 OR lower(instagram_handle) = $1)
+           ORDER BY parceiro_id LIMIT 2`, [quem]);
+        // Resposta idêntica para "não existe" e "senha errada": respostas diferentes contam a
+        // quem pergunta quais e-mails estão cadastrados.
+        const generico = { erro: 'e-mail/@ ou senha não confere' };
+        if (rows.length !== 1) return json(401, generico);
+        const p = rows[0];
+        if (p.login_travado_ate && new Date(p.login_travado_ate) > new Date())
+          return json(429, { erro: 'muitas tentativas. Tente de novo em alguns minutos.' });
+        if (!confereSenha(senha, p.senha_hash)) {
+          // trava cresce com o número de erros; mora no BANCO, senão cada deploy zera a conta
+          const n = (p.login_falhas || 0) + 1;
+          await pool.query(
+            `UPDATE creator.parceiro SET login_falhas=$2,
+                    login_travado_ate = CASE WHEN $2 >= 5
+                      THEN now() + least($2 - 4, 30) * interval '2 minutes' ELSE NULL END
+              WHERE parceiro_id=$1`, [p.parceiro_id, n]);
+          return json(401, generico);
+        }
+        await pool.query(
+          `UPDATE creator.parceiro SET login_falhas=0, login_travado_ate=NULL, ultimo_login=now()
+            WHERE parceiro_id=$1`, [p.parceiro_id]);
+        res.writeHead(200, {'content-type':'application/json; charset=utf-8',
+          'cache-control':'no-store', 'Set-Cookie': setaCookie(p.parceiro_id) });
+        return res.end(JSON.stringify({ ok: true }));
+      } catch (e) { return json(500, { erro: 'não consegui entrar agora' }); }
     }
+
+    if (u.pathname === '/creator/sair') {
+      res.writeHead(303, { Location: '/creator', 'Set-Cookie':
+        `${COOKIE_CR}=; Path=/creator; HttpOnly; Secure; SameSite=Lax; Max-Age=0` });
+      return res.end();
+    }
+
+    // ---- daqui para baixo, precisa estar logada ----
     if (!pid) {
-      res.writeHead(401, {'content-type':'text/html; charset=utf-8'});
-      return res.end(portalErro('Você precisa do seu link',
-        'O acesso é por link pessoal enviado pela Cells. Se você perdeu o seu, é só pedir outro.'));
-    }
-    try {
-      const d = await dadosDoCreator(pid);
-      if (!d) { res.writeHead(404, {'content-type':'text/html; charset=utf-8'});
-        return res.end(portalErro('Não encontrei seu cadastro', 'Fale com a equipe da Cells.')); }
+      if (req.method === 'POST') return json(401, { erro: 'sessão expirada — entre de novo' });
       res.writeHead(200, {'content-type':'text/html; charset=utf-8','cache-control':'no-store'});
-      // replace com FUNÇÃO: com string, um `$&` ou `$'` dentro do JSON (nome de cupom, legenda
-      // de post) viraria padrão de substituição e reescreveria o payload sozinho.
-      const dados = JSON.stringify(d).replace(/</g, '\\u003c');
-      return res.end(TPL_CREATOR.replace('__DADOS__', () => dados));
-    } catch (e) {
-      res.writeHead(500, {'content-type':'text/html; charset=utf-8'});
-      return res.end(portalErro('Deu erro aqui', 'Tente de novo em instantes.'));
+      return res.end(TPL_ENTRAR);
     }
+
+    // ---- salvar perfil ----
+    if (u.pathname === '/creator/perfil' && req.method === 'POST') {
+      let d; try { d = await corpoJSON(req); } catch (e) { return json(400, { erro: e.message }); }
+      const txt = (v, n) => { const s = String(v ?? '').trim(); return s ? s.slice(0, n) : null; };
+      const email = txt(d.email, 160);
+      if (email && !EMAIL_RE.test(email)) return json(400, { erro: 'e-mail inválido' });
+      const tel = digitos(d.telefone);
+      if (tel && ![10, 11].includes(tel.length))
+        return json(400, { erro: 'telefone inválido — use DDD + número' });
+      const nasc = txt(d.nascimento, 10);
+      if (nasc && !/^\d{4}-\d{2}-\d{2}$/.test(nasc)) return json(400, { erro: 'data de nascimento inválida' });
+      const uf = txt(d.end_uf, 2);
+      if (uf && !UF.includes(uf.toUpperCase())) return json(400, { erro: 'UF inválida' });
+      const cep = digitos(d.end_cep);
+      if (cep && cep.length !== 8) return json(400, { erro: 'CEP precisa ter 8 dígitos' });
+
+      // ⚠️ `instagram_handle` NÃO entra aqui. Ele é a chave que liga a creator às publicações
+      // capturadas, ao utm_slug e ao login — deixar ela trocar sozinha órfã o histórico dela.
+      // Troca de @ passa pela equipe, que sabe migrar o resto junto.
+      const campos = {
+        nome: txt(d.nome, 120), email,
+        telefone_e164: tel ? '+55' + tel : null,
+        nascimento: nasc,
+        end_cep: cep || null, end_logradouro: txt(d.end_logradouro, 160),
+        end_numero: txt(d.end_numero, 20), end_complemento: txt(d.end_complemento, 80),
+        end_bairro: txt(d.end_bairro, 90), end_cidade: txt(d.end_cidade, 90),
+        end_uf: uf ? uf.toUpperCase() : null,
+      };
+      try {
+        const n = await salvarCampos(pid, campos, 'creator');
+        return json(200, { ok: true, campos: n });
+      } catch (e) { return json(500, { erro: 'não consegui salvar agora' }); }
+    }
+
+    // ---- salvar dados de pagamento ----
+    if (u.pathname === '/creator/financeiro' && req.method === 'POST') {
+      let d; try { d = await corpoJSON(req, 2048); } catch (e) { return json(400, { erro: e.message }); }
+      const doc = digitos(d.documento), tipoDoc = d.doc_tipo === 'cnpj' ? 'cnpj' : 'cpf';
+      if (doc) {
+        if (tipoDoc === 'cpf'  && !cpfValido(doc))  return json(400, { erro: 'CPF inválido' });
+        if (tipoDoc === 'cnpj' && !cnpjValido(doc)) return json(400, { erro: 'CNPJ inválido' });
+      }
+      const pixTipo = d.pix_tipo ? String(d.pix_tipo) : null;
+      const pixChave = String(d.pix_chave ?? '').trim() || null;
+      if (pixTipo || pixChave) {
+        if (!pixTipo || !pixChave) return json(400, { erro: 'escolha o tipo e informe a chave' });
+        const erro = pixValido(pixTipo, pixChave);
+        if (erro) return json(400, { erro });
+      }
+      // A chave PIX tem que ser do titular do documento — o banco recusa transferência para
+      // chave de terceiro, e a recusa só aparece no dia do pagamento.
+      if (pixTipo === 'cpf'  && doc && digitos(pixChave) !== doc)
+        return json(400, { erro: 'a chave CPF precisa ser o mesmo CPF do titular' });
+      if (pixTipo === 'cnpj' && doc && digitos(pixChave) !== doc)
+        return json(400, { erro: 'a chave CNPJ precisa ser o mesmo CNPJ do titular' });
+
+      const campos = { pix_tipo: pixTipo, pix_chave: pixChave };
+      campos[tipoDoc] = doc || null;
+      // trocar de CPF para CNPJ (ou o contrário) tem que limpar o outro, senão sobram os dois
+      // e ninguém sabe qual vale na hora de pagar
+      campos[tipoDoc === 'cpf' ? 'cnpj' : 'cpf'] = null;
+      try {
+        const n = await salvarCampos(pid, campos, 'creator');
+        return json(200, { ok: true, campos: n });
+      } catch (e) { return json(500, { erro: 'não consegui salvar agora' }); }
+    }
+
+    // ---- definir ou trocar a senha ----
+    if (u.pathname === '/creator/senha' && req.method === 'POST') {
+      let d; try { d = await corpoJSON(req, 2048); } catch (e) { return json(400, { erro: e.message }); }
+      const nova = String(d.nova || '');
+      if (nova.length < 8) return json(400, { erro: 'a senha precisa ter pelo menos 8 caracteres' });
+      if (nova.length > 200) return json(400, { erro: 'senha longa demais' });
+      try {
+        const { rows: [p] } = await pool.query(
+          `SELECT senha_hash, email, instagram_handle FROM creator.parceiro WHERE parceiro_id=$1`, [pid]);
+        // Já tem senha? Exige a atual. Sem isso, um celular emprestado com a sessão aberta
+        // troca a senha e tranca a dona para fora da própria conta.
+        if (p.senha_hash && !confereSenha(String(d.atual || ''), p.senha_hash))
+          return json(401, { erro: 'a senha atual não confere' });
+        if (!p.email && !p.instagram_handle)
+          return json(400, { erro: 'preencha seu e-mail em Perfil antes — é ele que você usa para entrar' });
+        await pool.query(
+          `UPDATE creator.parceiro SET senha_hash=$2, senha_em=now(), login_falhas=0,
+                  login_travado_ate=NULL WHERE parceiro_id=$1`, [pid, hashSenha(nova)]);
+        // no rastro entra só o FATO, nunca o hash e muito menos a senha
+        await pool.query(
+          `INSERT INTO creator.parceiro_edicao (parceiro_id,campo,valor_antigo,valor_novo,por)
+           VALUES ($1,'senha',NULL,$2,'creator')`,
+          [pid, p.senha_hash ? 'trocada' : 'definida']);
+        return json(200, { ok: true, entrar_com: p.email || '@' + p.instagram_handle });
+      } catch (e) { return json(500, { erro: 'não consegui salvar a senha agora' }); }
+    }
+
+    // ---- a tela ----
+    if (u.pathname === '/creator') {
+      try {
+        const d = await dadosDoCreator(pid);
+        if (!d) { res.writeHead(404, {'content-type':'text/html; charset=utf-8'});
+          return res.end(portalErro('Não encontrei seu cadastro', 'Fale com a equipe da Cells.')); }
+        res.writeHead(200, {'content-type':'text/html; charset=utf-8','cache-control':'no-store'});
+        // replace com FUNÇÃO: com string, um `$&` ou `$'` dentro do JSON (nome de cupom, legenda
+        // de post) viraria padrão de substituição e reescreveria o payload sozinho.
+        const dados = JSON.stringify(d).replace(/</g, '\\u003c');
+        return res.end(TPL_CREATOR.replace('__DADOS__', () => dados));
+      } catch (e) {
+        res.writeHead(500, {'content-type':'text/html; charset=utf-8'});
+        return res.end(portalErro('Deu erro aqui', 'Tente de novo em instantes.'));
+      }
+    }
+    return json(404, { erro: 'rota não existe' });
   }
 
   const autenticado = (req.headers.cookie || '').includes(`${COOKIE}=${TOKEN}`);

@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Comunidade Cells — entrar</title>
+<style>
+  :root{--bg:#FFF;--pg:#F6F8F7;--ink:#14181A;--mut:#6C7679;--fnt:#98A0A2;--line:#E3E8E7;
+        --ac:#0B5FFF;--ng:#B23A2B;--ng-s:#FBE9E6;
+        --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+        --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--pg);
+       color:var(--ink);font-family:var(--sans);padding:20px}
+  form{background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:30px;
+       width:min(400px,94vw)}
+  .lg{font-weight:680;font-size:20px;letter-spacing:-.025em;margin:0 0 5px}
+  .lg em{font-style:normal;color:var(--ac)}
+  p{color:var(--mut);font-size:13px;margin:0 0 20px;line-height:1.55}
+  label{display:block;font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.11em;
+        text-transform:uppercase;color:#8C9497;margin:0 0 7px}
+  input{width:100%;border:1px solid var(--line);border-radius:3px;padding:11px;font-size:15px;
+        font-family:inherit;background:var(--bg);color:var(--ink)}
+  input:focus{outline:2px solid var(--ac);outline-offset:1px;border-color:var(--ac)}
+  .c{margin-bottom:15px}
+  button{width:100%;margin-top:6px;background:var(--ink);color:#fff;border:none;border-radius:3px;
+         padding:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}
+  button[disabled]{opacity:.5;cursor:default}
+  .er{background:var(--ng-s);color:var(--ng);font-size:12.5px;padding:9px 11px;border-radius:3px;
+      margin-bottom:15px;font-weight:600;display:none}
+  .er.on{display:block}
+  .ft{margin-top:20px;padding-top:15px;border-top:1px solid var(--line);
+      font-size:12px;color:var(--fnt);line-height:1.6}
+</style>
+</head>
+<body>
+<form id="f" autocomplete="on">
+  <div class="lg">comunidade <em>cells</em></div>
+  <p>Seu painel de creator. Entre com o e-mail (ou o seu @) e a senha que você cadastrou.</p>
+  <div class="er" id="er" role="alert"></div>
+  <div class="c">
+    <label for="q">E-mail ou @</label>
+    <input id="q" name="username" autocomplete="username" required autofocus
+           inputmode="email" placeholder="voce@email.com">
+  </div>
+  <div class="c">
+    <label for="s">Senha</label>
+    <input id="s" name="password" type="password" autocomplete="current-password" required>
+  </div>
+  <button type="submit" id="b">Entrar</button>
+  <div class="ft">
+    Ainda não tem senha? Ela se define <b>dentro do painel</b>, na aba Acesso — entre pelo link
+    pessoal que a Cells te mandou e cadastre por lá.<br>
+    Perdeu o link ou esqueceu a senha? Fale com a gente que a gente manda outro.
+  </div>
+</form>
+<script>
+const f = document.getElementById('f'), er = document.getElementById('er'),
+      b = document.getElementById('b');
+f.addEventListener('submit', async ev => {
+  ev.preventDefault();
+  er.classList.remove('on'); b.disabled = true; b.textContent = 'entrando…';
+  try {
+    const r = await fetch('/creator/entrar', {
+      method: 'POST', headers: {'content-type':'application/json'},
+      body: JSON.stringify({ identificador: document.getElementById('q').value,
+                             senha: document.getElementById('s').value })});
+    const j = await r.json().catch(() => ({}));
+    if (r.ok && j.ok) { location.href = '/creator'; return; }
+    er.textContent = j.erro || 'não consegui entrar'; er.classList.add('on');
+  } catch (e) { er.textContent = 'sem conexão com o servidor'; er.classList.add('on'); }
+  b.disabled = false; b.textContent = 'Entrar';
+});
+</script>
+</body>
+</html>
