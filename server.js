@@ -975,7 +975,12 @@ http.createServer(async (req, res) => {
           return res.end(portalErro('Este link não vale mais',
             'Ele expirou ou foi desativado. Peça um novo para a equipe da Cells.'));
         }
-        res.writeHead(303, { Location: '/creator', 'Set-Cookie': setaCookie(r.rows[0].parceiro_id) });
+        // no-store no REDIRECT também, não só na página. Sem isto o navegador guarda o 303 e
+        // reentrega a versão antiga da página junto — vi acontecer duas vezes em 15/08,
+        // abrindo o link depois de um deploy. Na creator seria pior: ela abriria o link,
+        // veria número velho e não teria como saber que é cache.
+        res.writeHead(303, { Location: '/creator', 'cache-control': 'no-store',
+          'Set-Cookie': setaCookie(r.rows[0].parceiro_id) });
         return res.end();
       } catch (e) {
         res.writeHead(500, {'content-type':'text/html; charset=utf-8'});
