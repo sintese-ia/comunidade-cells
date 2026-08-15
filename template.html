@@ -417,7 +417,29 @@
     </div>
   </section>
 
-  <!-- ============ 04 ANÁLISES ============ -->
+  <!-- ============ 04 APURAÇÃO ============ -->
+  <section class="mod" data-mod="apuracao">
+    <div class="topo">
+      <div><h1>Apuração</h1>
+        <p class="lede">Quanto pagar a cada creator, por mês. Sai de <b>venda paga, não cancelada, de cupom que conta</b> — e a comissão vem da régua do nível, não do cupom. Fechar o mês <b>congela</b> o valor: depois disso mudar de nível não reescreve o passado.</p></div>
+      <div class="stamp" id="stampAp"></div>
+    </div>
+    <div class="panel">
+      <div class="barra">
+        <select id="apMes" aria-label="mês de competência"></select>
+        <button class="bt" id="apFechar">fechar o mês</button>
+        <span class="cnt" id="apCnt"></span>
+      </div>
+      <div id="apAviso"></div>
+      <div id="apLista"></div>
+      <div class="empty">
+        <span class="tg">o que NÃO entra</span>
+        <p>Pedido <b>cancelado</b> ou <b>reembolsado</b>, pedido ainda <b>pending</b> (dinheiro que não entrou) e cupom marcado como <b>fora da apuração</b> — hoje só o <code>DRCARLOS</code>, que não é pessoa. Em 15/08 esses três filtros tiraram <b>R$ 4.048,23</b> do que a tela antiga chamava de receita de creator.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 05 ANÁLISES ============ -->
   <section class="mod" data-mod="analises">
     <div class="topo">
       <div><h1>Análises</h1>
@@ -2352,10 +2374,106 @@ document.querySelectorAll('th[data-l]').forEach(t => t.addEventListener('click',
 pintaLegado();
 
 /* =================================================== NAVEGAÇÃO ================= */
+/* ---------------- apuração ---------------- */
+/* Só vai ao servidor quando alguém abre a aba — e recarrega a cada abertura, porque é a única
+   tela do painel onde ler número velho custa dinheiro de verdade. */
+const MESPT = ['janeiro','fevereiro','março','abril','maio','junho',
+               'julho','agosto','setembro','outubro','novembro','dezembro'];
+const rotMes = m => MESPT[+m.slice(5,7)-1] + '/' + m.slice(0,4);
+let AP = { linhas: [], meses: [], mes: null };
+
+async function carregaApuracao(){
+  const lista = document.getElementById('apLista');
+  lista.innerHTML = '<div class="msg idle">carregando…</div>';
+  try {
+    const j = await (await fetch('/api/apuracao')).json();
+    if (!j.ok) throw new Error(j.erro || 'erro');
+    AP.linhas = j.linhas; AP.meses = j.meses;
+    if (!AP.mes || !AP.meses.some(m => m.mes === AP.mes)) AP.mes = (AP.meses[0]||{}).mes || null;
+    const sel = document.getElementById('apMes');
+    sel.innerHTML = AP.meses.map(m =>
+      '<option value="'+m.mes+'"'+(m.mes===AP.mes?' selected':'')+'>'+rotMes(m.mes)
+      + ' · ' + rs(m.comissao) + (m.fechado?' · fechado':'') + '</option>').join('')
+      || '<option>sem competência ainda</option>';
+    pintaApuracao();
+  } catch(e){ lista.innerHTML = '<div class="msg erro">não carregou: '+esc(e.message)+'</div>'; }
+}
+
+function pintaApuracao(){
+  const linhas = AP.linhas.filter(l => (l.competencia||'').slice(0,7) === AP.mes);
+  const total  = linhas.reduce((a,l) => a + Number(l.comissao_devida||0), 0);
+  const fechado = linhas.length && linhas.every(l => l.fechado);
+  const semPix = linhas.filter(l => Number(l.comissao_devida) > 0 && !l.pix_chave);
+
+  document.getElementById('apCnt').textContent =
+    linhas.length + ' com venda · ' + rs(total) + ' em comissão';
+  document.getElementById('apFechar').disabled = !linhas.length || fechado;
+  document.getElementById('apFechar').textContent = fechado ? 'mês já fechado' : 'fechar o mês';
+
+  /* Quem não tem PIX não recebe, e isso não pode aparecer só no dia do pagamento. */
+  document.getElementById('apAviso').innerHTML = semPix.length
+    ? '<div class="msg err"><b>'+semPix.length+'</b> '
+      + (semPix.length===1?'creator tem comissão e não cadastrou PIX':'creators têm comissão e não cadastraram PIX')
+      + ': ' + semPix.map(l => esc(l.nome||l.cupom)).join(', ')
+      + '. Sem chave, não há para onde mandar — peça pelo portal, aba Financeiro.</div>'
+    : '';
+
+  document.getElementById('apLista').innerHTML = linhas.length ? `
+  <div class="scroll"><table><thead><tr>
+    <th>creator</th><th>cupom</th><th>nível</th><th>pedidos</th>
+    <th>receita</th><th>comissão</th><th>pix</th><th>situação</th><th></th>
+  </tr></thead><tbody>` + linhas.map(l => {
+    const pago = l.status_pagamento === 'paga';
+    return '<tr>'
+      + '<td class="h"><b>'+esc(l.nome||'—')+'</b>'
+        + (l.instagram_handle?'<span class="sub2">@'+esc(l.instagram_handle)+'</span>':'')+'</td>'
+      + '<td>'+esc(l.cupom||'—')+'</td>'
+      + '<td>'+esc(l.nivel||'—')+'</td>'
+      + '<td>'+l.pedidos+'</td>'
+      + '<td>'+rs(l.receita)+'</td>'
+      + '<td><b>'+rs(l.comissao_devida)+'</b></td>'
+      + '<td>'+(l.pix_chave ? '<span class="chip ok">'+esc(l.pix_tipo)+'</span>'
+                            : '<span class="chip cr">falta</span>')+'</td>'
+      + '<td>'+esc(l.situacao)
+        + (l.pago_em?'<span class="sub2">'+String(l.pago_em).slice(0,10).split('-').reverse().join('/')+'</span>':'')+'</td>'
+      + '<td class="acs">'+(l.fechado && !pago
+          ? '<button class="acbt ok" data-pagar="'+l.parceiro_id+'">marcar paga</button>'
+          : (pago ? '<button class="acbt no" data-desfazer="'+l.parceiro_id+'">desfazer</button>' : ''))+'</td>'
+      + '</tr>';
+  }).join('') + '</tbody></table></div>'
+  : '<div class="msg idle">Nenhuma venda válida em '+(AP.mes?rotMes(AP.mes):'—')+'.</div>';
+}
+
+document.getElementById('apMes').addEventListener('change', e => { AP.mes = e.target.value; pintaApuracao(); });
+
+document.getElementById('apFechar').addEventListener('click', async e => {
+  if (!confirm('Fechar '+rotMes(AP.mes)+'? Depois disso a comissão desse mês para de ser recalculada.')) return;
+  e.target.disabled = true;
+  const j = await (await fetch('/api/apuracao/fechar?mes='+AP.mes, {method:'POST'})).json();
+  if (!j.ok) { alert('Não fechou: '+(j.erro||'erro')); e.target.disabled = false; return; }
+  await carregaApuracao();
+});
+
+document.getElementById('apLista').addEventListener('click', async e => {
+  const b = e.target.closest('[data-pagar],[data-desfazer]'); if (!b) return;
+  const pagar = !!b.dataset.pagar, id = b.dataset.pagar || b.dataset.desfazer;
+  let ref = null;
+  if (pagar) {
+    ref = prompt('Comprovante ou id do PIX (opcional, mas é o que resolve dúvida depois):') || '';
+  } else if (!confirm('Desfazer o pagamento? A linha volta para "fechada".')) return;
+  b.disabled = true;
+  const j = await (await fetch('/api/apuracao/status?id='+id+'&mes='+AP.mes
+    + '&status=' + (pagar?'paga':'fechada')
+    + (ref ? '&ref='+encodeURIComponent(ref) : ''), {method:'POST'})).json();
+  if (!j.ok) { alert('Não gravou: '+(j.erro||'erro')); b.disabled = false; return; }
+  await carregaApuracao();
+});
+
 const MODULOS = [
   ['busca',     'Buscar creator', () => null],
   ['cadastros', 'Cadastros',      () => CAD.filter(f => !f.arquivado && f.status==='pendente').length || null],
   ['campanhas', 'Campanhas',      () => CAMP.filter(c => c.status==='ativa').length || null],
+  ['apuracao',  'Apuração',       () => null],
   ['analises',  'Análises',       () => null],
   ['mencoes',   'Menções',        () => GAL.length || null],
   ['legado',    'Legado',         () => (D.legado||[]).filter(l => l.nunca_vendeu).length || null],
@@ -2384,6 +2502,7 @@ function abrir(k, semHash){
   window.scrollTo(0,0);
   // as Análises só vão ao servidor quando alguém abre a tela
   if (alvo === 'analises' && !jaAnalisou) { jaAnalisou = true; carregaAnalise(); }
+  if (alvo === 'apuracao') carregaApuracao();
 }
 document.getElementById('navLista').addEventListener('click', e => {
   const a = e.target.closest('[data-nav]'); if (!a) return;

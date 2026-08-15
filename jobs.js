@@ -143,6 +143,84 @@ async function logJob(pool, nome, ok, detalhe, itens) {
   } catch (e) { console.error('[job_log]', e.message); }
 }
 
+// ---------------------------------------------------------------- 0. vendas
+// ⚠️ ESTE JOB NÃO EXISTIA. `creator.venda` foi importada UMA vez, em 06/08/2026, por um script
+// avulso, e nada mais a alimentava. Achado em 15/08:
+//   · 3 pedidos de 10 a 13/08 (R$ 374,07) nunca entraram. Uma creator vende hoje e o portal
+//     dela mostra zero — e o portal acabou de ser distribuído para creator.
+//   · 4 pedidos cancelados e 3 `pending` continuavam contados como venda, R$ 833,46 que
+//     viraria comissão paga sobre dinheiro que a Cells não tem.
+// Os dois vêm do mesmo defeito: importar uma vez não é sincronizar. Pedido muda depois de
+// criado — é cancelado, é reembolsado, sai do `pending`.
+//
+// Não usa a Shopify: `commerce.orders_enriched` já é alimentada pelo webhook e tem tudo.
+// Um job que lê o banco da casa não tem rate limit, não tem token para expirar e não some
+// quando o app custom é reinstalado.
+//
+// ⚠️ `subtotal_price` do Shopify JÁ É líquido do desconto (conferido em 15/08 no pedido
+// #1051: subtotal 190,60 + total_discounts 16,57 = 207,17 de tabela). Por isso ele vai para
+// `receita_liquida`. `receita_bruta` recebe subtotal + desconto, que é o que o nome promete —
+// no import de 06/08 as duas colunas ficaram com o MESMO valor, e "bruta" mentia.
+async function syncVendas(pool) {
+  const cli = await pool.connect();
+  try {
+    // O casamento cupom↔pedido é o mesmo de creator.vw_venda: código principal OU um dos
+    // códigos da lista. `coupon_codes_all` é array em 2.355 linhas e objeto em 1 — sem o
+    // jsonb_typeof, essa única linha derruba a query inteira com "cannot extract elements".
+    const { rows: [r] } = await cli.query(`
+      WITH ped AS (
+        SELECT o.order_id, o.created_at, o.subtotal_price, o.total_discounts,
+               o.financial_status, o.cancelled_at, o.order_name, o.customer_id,
+               c.cupom_id, c.parceiro_id,
+               row_number() OVER (PARTITION BY o.order_id ORDER BY c.cupom_id) AS n
+          FROM commerce.orders_enriched o
+          JOIN creator.cupom c
+            ON upper(coalesce(o.coupon_code_primary,'')) = upper(c.codigo)
+            OR (jsonb_typeof(o.coupon_codes_all) = 'array' AND EXISTS (
+                  SELECT 1 FROM jsonb_array_elements_text(o.coupon_codes_all) x
+                   WHERE upper(x.value) = upper(c.codigo)))
+      ),
+      -- um pedido com dois cupons de creator ficaria com o valor contado duas vezes e as duas
+      -- pessoas achariam que venderam. Fica com o primeiro; o conflito aparece em
+      -- creator.vw_conflito_atribuicao, que existe para isso.
+      unico AS (SELECT * FROM ped WHERE n = 1),
+      novas AS (
+        INSERT INTO creator.venda
+          (parceiro_id, cupom_id, pedido_id, pedido_numero, pedido_em, atribuicao,
+           receita_bruta, desconto, receita_liquida, situacao, cancelado_em,
+           sincronizado_em, payload)
+        SELECT u.parceiro_id, u.cupom_id, u.order_id::text,
+               ltrim(u.order_name, '#'), u.created_at, 'cupom',
+               coalesce(u.subtotal_price,0) + coalesce(u.total_discounts,0),
+               coalesce(u.total_discounts,0), coalesce(u.subtotal_price,0),
+               u.financial_status, u.cancelled_at, now(),
+               jsonb_build_object('fonte','job:vendas')
+          FROM unico u
+         WHERE NOT EXISTS (SELECT 1 FROM creator.venda v WHERE v.pedido_id = u.order_id::text)
+        RETURNING 1),
+      -- o UPDATE é o motivo do job existir: sem ele, cancelamento nunca volta
+      mudou AS (
+        UPDATE creator.venda v
+           SET situacao = u.financial_status, cancelado_em = u.cancelled_at,
+               sincronizado_em = now()
+          FROM unico u
+         WHERE v.pedido_id = u.order_id::text
+           AND (v.situacao IS DISTINCT FROM u.financial_status
+             OR v.cancelado_em IS DISTINCT FROM u.cancelled_at)
+        RETURNING 1)
+      SELECT (SELECT count(*) FROM novas)::int AS novas,
+             (SELECT count(*) FROM mudou)::int AS atualizados`);
+
+    // quantos deixaram de valer — é o número que muda dinheiro, então vai para o log
+    const { rows: [f] } = await cli.query(`
+      SELECT count(*) FILTER (WHERE cancelado_em IS NOT NULL)::int AS cancelados,
+             count(*) FILTER (WHERE coalesce(situacao,'paid') <> 'paid'
+                                AND cancelado_em IS NULL)::int  AS nao_pagos
+        FROM creator.venda WHERE atribuicao='cupom'`);
+    return { novas: r.novas, atualizados: r.atualizados, ...f };
+  } finally { cli.release(); }
+}
+
 // ---------------------------------------------------------------- 1. /tags
 // Incremental: só grava o que ainda não existe (ON CONFLICT no ig_media_id), e para de paginar
 // assim que bate numa página inteira já conhecida. Métrica sempre vira linha nova — curtida
@@ -805,9 +883,16 @@ function agendar(pool, env) {
   if (env.APIFY_TOKEN) diarioAs(HORA_UTC, 'apify', () => syncApify(pool, env.APIFY_TOKEN));
   else console.error('[agenda] APIFY_TOKEN ausente — apify NÃO foi agendado');
 
-  return { roda, syncTags, syncPerfis, syncApify };
+  // vendas: DE HORA EM HORA e SEM depender de token nenhum — só lê o Postgres da casa.
+  // Fica fora do `if (META_TOKEN)` de propósito: é o job que mantém o dinheiro certo, e o
+  // dia em que o token da Meta expirar não pode levar a apuração junto.
+  // Roda 30s depois do boot para o painel já subir com o mês corrente fechado.
+  setInterval(() => roda('vendas', () => syncVendas(pool)), HORA).unref();
+  setTimeout(() => roda('vendas', () => syncVendas(pool)), 30000).unref();
+
+  return { roda, syncTags, syncPerfis, syncApify, syncVendas };
 }
 
-module.exports = { syncTags, syncPerfis, syncApify, syncCadastros, avisarRegistro, perfilDe, salvarPerfil,
+module.exports = { syncTags, syncPerfis, syncApify, syncCadastros, syncVendas, avisarRegistro, perfilDe, salvarPerfil,
                    guardarStory, guardarVideo, buscarVideoDe, limparMidia,
                    extrairStories, agendar, logJob, extrairMensagens, guardarMensagem };

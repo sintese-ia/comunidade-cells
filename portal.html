@@ -220,17 +220,22 @@ let aba = (location.hash || '').replace('#','') || 'inicio';
 // ---- o que aconteceu num mês ----
 // Os totais saem dos MESMOS registros que a lista embaixo mostra. Assim o número grande é,
 // por construção, a soma do que está listado — não dá para divergirem.
+// ⚠️ `pedidos` é a LISTA (inclui cancelado, para aparecer na tela) e `valem` é o que SOMA.
+// Todo total sai de `valem`. Pedido cancelado que continuasse somando viraria comissão paga
+// sobre dinheiro que a Cells devolveu ao cliente.
 function doMes(ym){
   const pedidos = ex.filter(e => ymDe(e.dia) === ym);
+  const valem   = pedidos.filter(e => e.valida !== false);
   const cliques = (cl.serie||[]).filter(d => ymDe(d.dia) === ym);
   const conteudos = pubs.filter(c => ymDe(c.dia) === ym);
-  const receita  = pedidos.reduce((a,e) => a + Number(e.receita_liquida||0), 0);
-  const comissao = pedidos.reduce((a,e) => a + Number(e.comissao||0), 0);
-  return { ym, pedidos, cliques, conteudos, receita, comissao,
+  const receita  = valem.reduce((a,e) => a + Number(e.receita_liquida||0), 0);
+  const comissao = valem.reduce((a,e) => a + Number(e.comissao||0), 0);
+  return { ym, pedidos, valem, cliques, conteudos, receita, comissao,
     cliquesTot: cliques.reduce((a,d) => a + d.cliques, 0),
-    novos: pedidos.filter(e => e.cliente_novo).length,
-    assinaturas: pedidos.filter(e => e.virou_assinatura).length,
-    ticket: pedidos.length ? receita/pedidos.length : 0 };
+    novos: valem.filter(e => e.cliente_novo).length,
+    assinaturas: valem.filter(e => e.virou_assinatura).length,
+    cancelados: pedidos.length - valem.length,
+    ticket: valem.length ? receita/valem.length : 0 };
 }
 
 // ⚠️ "primeiro mês com venda" só vale se NÃO existe mês anterior com venda em lugar nenhum.
@@ -317,7 +322,8 @@ function telaInicio(){
   <div>
     <div class="k">Faturamento em ${curto(sel)}</div>
     <div class="v">${rs(m.receita)}</div>
-    <div class="n">${m.pedidos.length} ${m.pedidos.length===1?'pedido':'pedidos'} com o seu cupom
+    <div class="n">${m.valem.length} ${m.valem.length===1?'pedido':'pedidos'} com o seu cupom${
+      m.cancelados ? ' · '+m.cancelados+(m.cancelados===1?' cancelado':' cancelados')+' fora da conta' : ''}
       ${delta(sel, m.receita, ant.receita)}</div>
   </div>
   <div>
@@ -346,7 +352,7 @@ ${m.receita || m.cliquesTot ? `<section>
     <span class="ct">${rs(m.receita)}</span>
     <p>Quanto o seu cupom faturou em cada dia do mês.</p></div>
   <div class="sb">
-    ${m.receita ? barras(sel, porDia(m.pedidos, e => e.receita_liquida), 'rs', rs)
+    ${m.receita ? barras(sel, porDia(m.valem, e => e.receita_liquida), 'rs', rs)
       : '<div class="vazio">Sem faturamento em ' + rotulo(sel) + '.</div>'}
     ${m.cliquesTot ? `<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line2)">
       <div style="font-size:12.5px;color:var(--mut);margin-bottom:6px">Cliques no seu link
@@ -358,15 +364,19 @@ ${m.receita || m.cliquesTot ? `<section>
 
 <section>
   <div class="sh"><h2>Seus pedidos em ${rotulo(sel)}</h2>
-    <span class="ct">${m.pedidos.length} ${m.pedidos.length===1?'pedido':'pedidos'}</span>
+    <span class="ct">${m.valem.length} ${m.valem.length===1?'pedido':'pedidos'}${
+      m.cancelados ? ' · '+m.cancelados+' fora' : ''}</span>
     <p>Cada compra feita com o seu cupom, com a comissão na taxa do seu nível de hoje.</p></div>
-  <div class="sb">${m.pedidos.length ? m.pedidos.map(e => `
-    <div class="lin"><span class="d">${dtc(e.dia)}</span>
-      <span class="t">Pedido ${esc(e.pedido_numero||e.pedido_id)}${e.cliente_novo?' · cliente novo':''}${
-        e.virou_assinatura?' · <span class="tag">assinatura</span>':''}</span>
+  <div class="sb">${m.pedidos.length ? m.pedidos.map(e => {
+    const fora = e.valida === false;
+    return `<div class="lin"${fora?' style="opacity:.55"':''}><span class="d">${dtc(e.dia)}</span>
+      <span class="t">Pedido ${esc(e.pedido_numero||e.pedido_id)}${e.cliente_novo&&!fora?' · cliente novo':''}${
+        e.virou_assinatura&&!fora?' · <span class="tag">assinatura</span>':''}${
+        fora?' · <span class="tag" style="background:var(--ng-s);color:var(--ng)">'+esc(e.motivo||'fora da conta')+'</span>':''}</span>
       <span class="v" style="font-weight:500;color:var(--ok);font-size:12px;margin-right:10px">${
         e.comissao ? rs(e.comissao) : ''}</span>
-      <span class="v">${rs(e.receita_liquida)}</span></div>`).join('')
+      <span class="v"${fora?' style="text-decoration:line-through"':''}>${rs(e.receita_liquida)}</span></div>`;
+  }).join('')
     : `<div class="vazio">Nenhum pedido em ${rotulo(sel)}.${
         vida.pedidos ? ' Na vida inteira você já fez '+n(vida.pedidos)+'.' :
         ' Compartilhe seu cupom e ele aparece aqui.'}</div>`}</div>

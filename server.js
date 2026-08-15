@@ -696,7 +696,7 @@ async function dadosDoCreator(parceiroId) {
   const [v] = await q(`
     SELECT count(*)::int AS pedidos, coalesce(sum(receita_liquida),0) AS receita,
            round(avg(receita_liquida),2) AS ticket
-    FROM creator.venda WHERE parceiro_id=$1 AND atribuicao='cupom'`, [parceiroId]);
+    FROM creator.vw_venda_valida WHERE parceiro_id=$1`, [parceiroId]);
 
   // ⚠️ `dia` é o dia de SÃO PAULO, calculado aqui, e é ele que a tela usa para saber a que MÊS
   // o pedido pertence. Não devolvo `pedido_em` cru para o navegador porque node-pg entrega
@@ -704,12 +704,24 @@ async function dadosDoCreator(parceiroId) {
   // Lisboa veria pedido da meia-noite de 31/07 como agosto.
   // Sem LIMIT apertado: o creator com mais pedidos na base tem 28, e a tela agora fatia por
   // mês — cortar em 60 esconderia os meses antigos justamente de quem mais vendeu.
+  // ⚠️ O extrato lê a tabela CRUA de propósito, e não vw_venda_valida: pedido cancelado tem
+  // que APARECER, marcado, e não contar. Sumir com ele é pior — a creator viu a venda
+  // acontecer, e um pedido que some sem explicação vira mensagem no DM perguntando o que
+  // houve. Quem decide o que soma é a coluna `valida`.
   const extrato = await q(`
-    SELECT pedido_id, pedido_numero, receita_liquida, cliente_novo,
-           coalesce(virou_assinatura, false) AS virou_assinatura,
-           to_char(pedido_em AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD') AS dia
-    FROM creator.venda WHERE parceiro_id=$1 AND atribuicao='cupom'
-    ORDER BY pedido_em DESC LIMIT 500`, [parceiroId]);
+    SELECT v.pedido_id, v.pedido_numero, v.receita_liquida, v.cliente_novo,
+           coalesce(v.virou_assinatura, false) AS virou_assinatura,
+           to_char(v.pedido_em AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD') AS dia,
+           (v.cancelado_em IS NULL AND coalesce(v.situacao,'paid') = 'paid'
+            AND NOT c.fora_apuracao) AS valida,
+           CASE WHEN v.cancelado_em IS NOT NULL THEN 'cancelado'
+                WHEN coalesce(v.situacao,'paid') = 'refunded' THEN 'reembolsado'
+                WHEN coalesce(v.situacao,'paid') <> 'paid' THEN 'pagamento pendente'
+           END AS motivo
+    FROM creator.venda v
+    JOIN creator.cupom c ON c.cupom_id = v.cupom_id
+    WHERE v.parceiro_id=$1 AND v.atribuicao='cupom'
+    ORDER BY v.pedido_em DESC LIMIT 500`, [parceiroId]);
 
   const publicacoes = await q(`
     SELECT u.tipo, u.publicado_em, u.permalink, left(coalesce(u.legenda,''),90) AS legenda,
@@ -765,15 +777,16 @@ async function dadosDoCreator(parceiroId) {
   const [c3] = await q(`
     SELECT coalesce(sum(receita_liquida) FILTER (WHERE NOT coalesce(virou_assinatura,false)),0) AS unica,
            coalesce(sum(receita_liquida) FILTER (WHERE coalesce(virou_assinatura,false)),0) AS assin
-      FROM creator.venda
-     WHERE parceiro_id=$1 AND atribuicao='cupom'
+      FROM creator.vw_venda_valida
+     WHERE parceiro_id=$1
        AND (pedido_em AT TIME ZONE 'America/Sao_Paulo')::date
            >= ((now() AT TIME ZONE 'America/Sao_Paulo')::date - interval '3 months')::date`,
     [parceiroId]);
   const comissao3m = Math.round(Number(c3.unica) * pctU + Number(c3.assin) * pctA) / 100;
 
-  // comissão por pedido: o número solto no topo não convence, a linha do extrato convence
-  const extratoCom = extrato.map(e => ({ ...e, comissao: comissaoDe(e) }));
+  // comissão por pedido: o número solto no topo não convence, a linha do extrato convence.
+  // Pedido inválido vai com comissão ZERO — a linha aparece, o dinheiro não.
+  const extratoCom = extrato.map(e => ({ ...e, comissao: e.valida ? comissaoDe(e) : 0 }));
 
   // avisa se voltar a arrastar — 15s passou meses sem ninguém notar porque ninguém mediu
   const gasto = Date.now() - t0Total;
@@ -2141,8 +2154,9 @@ http.createServer(async (req, res) => {
     const fns = { cadastros: () => J.syncCadastros(pool, META, eventoRegistro),
                   tags:  () => J.syncTags(pool, META),
                   perfis:() => J.syncPerfis(pool, META),
-                  apify: () => J.syncApify(pool, APIFY) };
-    if (!fns[nome]) return json(400, { erro: 'job desconhecido: use cadastros, tags, perfis ou apify' });
+                  apify: () => J.syncApify(pool, APIFY),
+                  vendas: () => J.syncVendas(pool) };
+    if (!fns[nome]) return json(400, { erro: 'job desconhecido: use cadastros, tags, perfis, apify ou vendas' });
     try {
       const r = await fns[nome]();
       invalida();   // o job mexeu no banco — a próxima leitura tem que ser fresca
@@ -2150,6 +2164,78 @@ http.createServer(async (req, res) => {
       return json(200, { ok: true, job: nome, resultado: r });
     }
     catch (e) { await J.logJob(pool, nome, false, e.message, 0); return json(200, { ok: false, erro: e.message }); }
+  }
+
+  // ---------------- apuração: quanto pagar, e o registro de que foi pago ----------------
+  // `creator.vw_apuracao` existia desde sempre e NINGUÉM lia — nem view nem arquivo do app.
+  // Era o motor de comissão sem painel: o número existia e não chegava a lugar nenhum.
+  if (u.pathname === '/api/apuracao') {
+    const mes = /^\d{4}-\d{2}$/.test(u.searchParams.get('mes') || '') ? u.searchParams.get('mes') : null;
+    try {
+      const linhas = await pool.query(`
+        SELECT a.*, p.pix_tipo, p.pix_chave, p.email,
+               coalesce(p.cpf, p.cnpj) AS documento
+          FROM creator.vw_apuracao a
+          JOIN creator.parceiro p ON p.parceiro_id = a.parceiro_id
+         WHERE ($1::text IS NULL OR to_char(a.competencia,'YYYY-MM') = $1)
+         ORDER BY a.competencia DESC, a.comissao_devida DESC NULLS LAST`, [mes]);
+      const meses = await pool.query(`
+        SELECT to_char(competencia,'YYYY-MM') AS mes, count(*)::int AS creators,
+               sum(comissao_devida)::numeric(12,2) AS comissao,
+               bool_and(fechado) AS fechado
+          FROM creator.vw_apuracao GROUP BY 1 ORDER BY 1 DESC`);
+      return json(200, { ok: true, linhas: linhas.rows, meses: meses.rows });
+    } catch (e) { return json(200, { ok: false, erro: e.message }); }
+  }
+
+  // FECHAR o mês: congela o valor. Depois disso a comissão para de se mexer — se a pessoa
+  // subir de nível em outubro, julho continua valendo o que valia em julho.
+  if (u.pathname === '/api/apuracao/fechar' && req.method === 'POST') {
+    const mes = u.searchParams.get('mes') || '';
+    if (!/^\d{4}-\d{2}$/.test(mes)) return json(400, { erro: 'mês no formato AAAA-MM' });
+    // ⚠️ Não deixa fechar mês que ainda está correndo: pedido do dia 28 pode ser cancelado, e
+    // congelar antes disso é congelar um número que ainda vai mudar.
+    const [{ corrente }] = (await pool.query(
+      `SELECT to_char(now() AT TIME ZONE 'America/Sao_Paulo','YYYY-MM') AS corrente`)).rows;
+    if (mes >= corrente) return json(400, {
+      erro: `${mes} ainda não terminou. Feche só mês encerrado — pedido de agora ainda pode ser cancelado.` });
+    try {
+      const r = await pool.query(`
+        INSERT INTO creator.comissao_mes
+          (parceiro_id, competencia, nivel, pct_unica, pct_assinatura,
+           pedidos, receita, comissao)
+        SELECT a.parceiro_id, a.competencia, coalesce(a.nivel,'bronze'),
+               coalesce(a.pct_unica,0), coalesce(a.pct_assinatura,0),
+               a.pedidos, a.receita, a.comissao_devida
+          FROM creator.vw_apuracao a
+         WHERE to_char(a.competencia,'YYYY-MM') = $1 AND a.comissao_devida > 0
+        ON CONFLICT (parceiro_id, competencia) DO NOTHING
+        RETURNING parceiro_id`, [mes]);
+      return json(200, { ok: true, mes, congeladas: r.rowCount });
+    } catch (e) { return json(200, { ok: false, erro: e.message }); }
+  }
+
+  // marcar como paga / solicitada. `pago_ref` guarda o comprovante — sem ele, "paguei" é
+  // memória de alguém.
+  if (u.pathname === '/api/apuracao/status' && req.method === 'POST') {
+    const id = +u.searchParams.get('id'), mes = u.searchParams.get('mes') || '';
+    const st = u.searchParams.get('status') || '';
+    const ref = (u.searchParams.get('ref') || '').slice(0, 120) || null;
+    if (!id || !/^\d{4}-\d{2}$/.test(mes)) return json(400, { erro: 'parceiro e mês são obrigatórios' });
+    if (!['fechada', 'solicitada', 'paga', 'cancelada'].includes(st))
+      return json(400, { erro: 'status inválido' });
+    try {
+      const r = await pool.query(`
+        UPDATE creator.comissao_mes
+           SET status=$3, pago_ref = coalesce($4, pago_ref),
+               solicitado_em = CASE WHEN $3='solicitada' THEN coalesce(solicitado_em, now()) ELSE solicitado_em END,
+               pago_em       = CASE WHEN $3='paga' THEN coalesce(pago_em, now())
+                                    WHEN $3='cancelada' THEN NULL ELSE pago_em END
+         WHERE parceiro_id=$1 AND competencia = to_date($2,'YYYY-MM')
+        RETURNING status, pago_em`, [id, mes, st, ref]);
+      if (!r.rows[0]) return json(404, { erro: 'esse mês ainda não foi fechado para essa pessoa' });
+      return json(200, { ok: true, ...r.rows[0] });
+    } catch (e) { return json(200, { ok: false, erro: e.message }); }
   }
 
   if (u.pathname === '/api/jobs') {

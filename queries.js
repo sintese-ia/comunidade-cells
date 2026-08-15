@@ -31,8 +31,12 @@ const painel = {
       (SELECT count(*) FROM creator.parceiro)                                   AS cadastrados,
       (SELECT count(*) FROM creator.parceiro WHERE status='ativo')              AS ativos,
       (SELECT count(*) FROM creator.parceiro WHERE status='pendente' AND NOT arquivado) AS pendentes,
-      (SELECT count(*) FROM creator.venda)                                      AS vendas,
-      (SELECT round(sum(receita_liquida),2) FROM creator.venda)                 AS receita,
+      -- ⚠️ vw_venda_valida, não creator.venda: a tabela crua tem pedido cancelado,
+      -- reembolsado, pending e o cupom fantasma DRCARLOS. Em 15/08 a diferença era
+      -- 122 → 87 pedidos e R$ 19.699,85 → R$ 15.651,62. O rodapé é o número que o Gabriel
+      -- lê de relance; ele não pode discordar da tela de Apuração logo abaixo.
+      (SELECT count(*) FROM creator.vw_venda_valida)                            AS vendas,
+      (SELECT round(sum(receita_liquida),2) FROM creator.vw_venda_valida)       AS receita,
       (SELECT count(*) FROM creator.cupom WHERE ativo)                          AS cupons,
       (SELECT min(publicado_em)::date FROM creator.publicacao)                  AS desde,
       (SELECT max(publicado_em)::date FROM creator.publicacao)                  AS ate
@@ -56,10 +60,10 @@ const painel = {
            (SELECT count(*) FROM creator.envio e WHERE e.parceiro_id=p.parceiro_id)::int AS envios,
            (SELECT c.codigo FROM creator.cupom c
              WHERE c.parceiro_id=p.parceiro_id AND c.ativo ORDER BY c.cupom_id LIMIT 1) AS cupom,
-           (SELECT count(*) FROM creator.venda vn
-             WHERE vn.parceiro_id=p.parceiro_id AND vn.atribuicao='cupom')::int AS pedidos,
-           (SELECT round(sum(vn.receita_liquida),2) FROM creator.venda vn
-             WHERE vn.parceiro_id=p.parceiro_id AND vn.atribuicao='cupom') AS receita,
+           (SELECT count(*) FROM creator.vw_venda_valida vn
+             WHERE vn.parceiro_id=p.parceiro_id)::int AS pedidos,
+           (SELECT round(sum(vn.receita_liquida),2) FROM creator.vw_venda_valida vn
+             WHERE vn.parceiro_id=p.parceiro_id) AS receita,
            -- ⚠️ Estar ATIVO não quer dizer que a pessoa foi avisada. Os 28 que vieram do cupom
            -- legado nasceram ativos e com cupom sem nunca receber um e-mail. Sem esta coluna a
            -- tela mostra os dois casos igual — e foi exatamente o que confundiu em 08/08.
@@ -220,10 +224,9 @@ const painel = {
              ORDER BY p.parceiro_id LIMIT 1) AS nome,
            (SELECT count(*) FROM creator.publicacao u
              WHERE lower(u.instagram_handle) = hs.chave)::int AS marcacoes,
-           (SELECT count(*) FROM creator.venda v
+           (SELECT count(*) FROM creator.vw_venda_valida v
              JOIN creator.parceiro p2 ON p2.parceiro_id = v.parceiro_id
-            WHERE coalesce(lower(p2.instagram_handle),'id:'||p2.parceiro_id) = hs.chave
-              AND v.atribuicao='cupom')::int AS pedidos
+            WHERE coalesce(lower(p2.instagram_handle),'id:'||p2.parceiro_id) = hs.chave)::int AS pedidos
     FROM (SELECT DISTINCT chave FROM hs) hs
     ORDER BY 4 DESC, 5 DESC, 1
   `,
@@ -330,9 +333,9 @@ const PUB = `
 
 const VEN = `
   SELECT ${CHAVE} AS ch, v.pedido_em::date AS dia, v.receita_liquida, v.cliente_novo
-  FROM creator.venda v
+  FROM creator.vw_venda_valida v
   JOIN creator.parceiro p ON p.parceiro_id = v.parceiro_id
-  WHERE v.atribuicao = 'cupom' AND v.pedido_em::date BETWEEN $1 AND $2
+  WHERE v.pedido_em::date BETWEEN $1 AND $2
     AND ($3 = '' OR ${CHAVE} = $3)`;
 
 const CLQ = `
