@@ -60,6 +60,10 @@ const TPL = fs.readFileSync(path.join(__dirname, 'template.html'), 'utf8');
 const TPL_CREATOR = fs.readFileSync(path.join(__dirname, 'portal.html'), 'utf8');
 const TPL_ENTRAR  = fs.readFileSync(path.join(__dirname, 'entrar.html'), 'utf8');
 const COOKIE_CR = 'cc_creator';
+// Endereço público do portal. Vira link em e-mail, então não pode ser caminho relativo —
+// e estava escrito na mão em dois lugares, que é como um deles fica para trás numa mudança.
+const PORTAL_URL = (process.env.PORTAL_URL || 'https://comunidade-cells.sinteseia.com.br')
+  .replace(/\/+$/, '');
 let cache = { at: 0, json: null, erro: null };
 
 // ---------------------------------------------------------------- Postgres
@@ -357,12 +361,19 @@ async function eventoRegistro({ email, nome, instagram, sexo }) {
 
 // Mesmo caminho do aviso de aprovação, com a campanha junto. Separado em métrica própria
 // porque o flow é outro: aqui o assunto é "seu link mudou para esta campanha", não boas-vindas.
-async function eventoCampanha({ email, nome, campanha, briefing, cupom, link, inicio, fim }) {
+async function eventoCampanha({ email, nome, campanha, briefing, cupom, link, inicio, fim, anexos }) {
   if (!KLAVIYO) throw new Error('KLAVIYO_KEY não configurada');
   if (!email) throw new Error('sem e-mail no cadastro');
+  // ⚠️ O arquivo NÃO vai anexado: anexo pesado derruba entregabilidade, e link registra quem
+  // baixou o briefing — que é o único sinal de que a campanha foi lida. O link exige login da
+  // creator e confere se ela participa da campanha, então mandar por e-mail é seguro.
+  // Para o link aparecer no e-mail, o template do Klaviyo precisa imprimir `event.anexos`;
+  // enquanto ninguém mexer no template, a propriedade viaja e não é usada — igual ao bloco do
+  // WhatsApp de 14/08.
   const corpo = { data: { type: 'event', attributes: {
     properties: { campanha, briefing: briefing || null, cupom: cupom || null, link,
-                  inicio: inicio || null, fim: fim || null, nome_creator: nome || null },
+                  inicio: inicio || null, fim: fim || null, nome_creator: nome || null,
+                  anexos: (anexos || []).length ? anexos : null },
     metric: { data: { type: 'metric', attributes: { name: METRICA_CAMPANHA } } },
     profile: { data: { type: 'profile', attributes: { email,
                ...(nome ? { first_name: String(nome).split(/\s+/)[0] } : {}) } } },
@@ -741,6 +752,24 @@ async function dadosDoCreator(parceiroId) {
     SELECT jogo, pontos, entregas, detalhe FROM creator.vw_placar
     WHERE parceiro_id=$1 ORDER BY pontos DESC`, [parceiroId]);
 
+  // ---- campanhas de que ela participa, com briefing e anexos ----
+  // `conteudo` NÃO sai daqui: são até 10 MB por arquivo e este objeto é serializado dentro do
+  // HTML. Só os metadados; o arquivo vem por /creator/anexo?id=, que confere o vínculo.
+  const campanhas = await q(`
+    SELECT c.campanha_id, c.nome, c.briefing, c.tipo, c.status,
+           to_char(c.inicio,'YYYY-MM-DD') AS inicio,
+           to_char(c.fim,'YYYY-MM-DD')    AS fim,
+           coalesce((SELECT json_agg(json_build_object(
+                       'anexo_id', x.anexo_id, 'nome', x.nome, 'mime', x.mime, 'bytes', x.bytes)
+                       ORDER BY x.criado_em)
+                       FROM creator.campanha_anexo x
+                      WHERE x.campanha_id = c.campanha_id), '[]'::json) AS anexos
+      FROM creator.campanha c
+      JOIN creator.campanha_parceiro cp ON cp.campanha_id = c.campanha_id
+                                        AND cp.parceiro_id = $1 AND cp.saiu_em IS NULL
+     WHERE c.status <> 'cancelada'
+     ORDER BY c.inicio DESC NULLS LAST`, [parceiroId]);
+
   // ---- cliques no link (pedido do Gabriel, 14/08) ----
   // Série diária COMPLETA, esparsa: só os dias que tiveram clique. Antes eram 30 dias fixos
   // com generate_series preenchendo os vazios no banco — não serve mais, porque a tela virou
@@ -812,7 +841,7 @@ async function dadosDoCreator(parceiroId) {
   }
   meses.reverse();
 
-  return { parceiro: pa, vendas: v, extrato: extratoCom, publicacoes, envios, jogos,
+  return { parceiro: pa, vendas: v, extrato: extratoCom, publicacoes, envios, jogos, campanhas,
            cliques: { ...cl, serie }, nivel: nv || null, faixas, comissao_3m: comissao3m,
            taxas: { unica: pctU, assinatura: pctA }, hoje, meses };
 }
@@ -1049,6 +1078,13 @@ http.createServer(async (req, res) => {
     // ---- daqui para baixo, precisa estar logada ----
     if (!pid) {
       if (req.method === 'POST') return json(401, { erro: 'sessão expirada — entre de novo' });
+      // ⚠️ Rota de DOWNLOAD não pode responder a tela de login com 200: o navegador salvaria
+      // o HTML da tela num arquivo chamado "anexo" e a creator abriria isso achando que é o
+      // briefing. Redireciona, e a tela de login aparece como tela.
+      if (u.pathname === '/creator/anexo') {
+        res.writeHead(303, { Location: '/creator', 'cache-control': 'no-store' });
+        return res.end();
+      }
       res.writeHead(200, {'content-type':'text/html; charset=utf-8','cache-control':'no-store'});
       return res.end(TPL_ENTRAR);
     }
@@ -1145,6 +1181,51 @@ http.createServer(async (req, res) => {
           [pid, p.senha_hash ? 'trocada' : 'definida']);
         return json(200, { ok: true, entrar_com: p.email || '@' + p.instagram_handle });
       } catch (e) { return json(500, { erro: 'não consegui salvar a senha agora' }); }
+    }
+
+    // ---- baixar anexo de campanha ----
+    // ⚠️ O vínculo é conferido AQUI, contra o parceiro_id do cookie. Sem esta checagem,
+    // qualquer creator logada baixaria o briefing de qualquer campanha só trocando o número
+    // na URL — inclusive de campanha que ela não participa.
+    if (u.pathname === '/creator/anexo') {
+      const anexo = +u.searchParams.get('id');
+      if (!anexo) { res.writeHead(400); return res.end('anexo ausente'); }
+      try {
+        const { rows: [a] } = await pool.query(`
+          SELECT x.anexo_id, x.nome, x.mime, x.conteudo
+            FROM creator.campanha_anexo x
+            JOIN creator.campanha_parceiro cp ON cp.campanha_id = x.campanha_id
+                                             AND cp.parceiro_id = $2 AND cp.saiu_em IS NULL
+           WHERE x.anexo_id = $1`, [anexo, pid]);
+        if (!a) {
+          res.writeHead(404, {'content-type':'text/html; charset=utf-8'});
+          return res.end(portalErro('Arquivo não encontrado',
+            'Ou ele foi removido, ou é de uma campanha da qual você não participa.'));
+        }
+        // quem baixou o briefing é o único sinal de que a campanha foi LIDA
+        pool.query(`
+          INSERT INTO creator.campanha_anexo_download (anexo_id, parceiro_id)
+          VALUES ($1,$2)
+          ON CONFLICT (anexo_id, parceiro_id)
+          DO UPDATE SET vezes = creator.campanha_anexo_download.vezes + 1, ultimo_em = now()`,
+          [anexo, pid]).catch(e => console.error('[anexo] não registrei o download:', e.message));
+        pool.query(`UPDATE creator.campanha_anexo
+                       SET baixados = baixados + 1, ultimo_download = now()
+                     WHERE anexo_id = $1`, [anexo]).catch(() => {});
+
+        res.writeHead(200, {
+          'content-type': a.mime,
+          // filename entre aspas e sem caractere de controle: o nome já foi higienizado na
+          // subida, mas o header é o lugar onde um nome torto vira injeção de cabeçalho
+          'content-disposition': `attachment; filename="${String(a.nome).replace(/["\r\n]/g, '')}"`,
+          'content-length': a.conteudo.length,
+          'cache-control': 'private, no-store',
+        });
+        return res.end(a.conteudo);
+      } catch (e) {
+        res.writeHead(500, {'content-type':'text/html; charset=utf-8'});
+        return res.end(portalErro('Deu erro aqui', 'Tente de novo em instantes.'));
+      }
     }
 
     // ---- a tela ----
@@ -1406,7 +1487,7 @@ http.createServer(async (req, res) => {
         `INSERT INTO creator.acesso (token,parceiro_id,expira_em,criado_por)
          VALUES ($1,$2, now() + ($3 || ' days')::interval, $4)`,
         [tok, id, String(dias), (u.searchParams.get('por') || 'painel').slice(0, 60)]);
-      return json(200, { ok: true, url: 'https://comunidade-cells.sinteseia.com.br/creator?t=' + tok,
+      return json(200, { ok: true, url: PORTAL_URL + '/creator?t=' + tok,
                          expira_em_dias: dias });
     } catch (e) { return json(200, { ok: false, erro: e.message }); }
   }
@@ -1954,12 +2035,19 @@ http.createServer(async (req, res) => {
           LEFT JOIN creator.cupom cu ON cu.parceiro_id=p.parceiro_id AND cu.ativo
           WHERE p.parceiro_id = ANY($1)`, [ids])).rows;
 
+        // link do briefing, não o arquivo. Só os metadados vão para o Klaviyo.
+        const anexos = (await pool.query(
+          `SELECT anexo_id, nome, mime, bytes FROM creator.campanha_anexo
+            WHERE campanha_id=$1 ORDER BY criado_em`, [c])).rows
+          .map(a => ({ nome: a.nome, tamanho_kb: Math.max(1, Math.round(a.bytes / 1024)),
+                       url: PORTAL_URL + '/creator/anexo?id=' + a.anexo_id }));
+
         const res = [];
         for (const p of pessoas) {
           const link = linkDoCreator(p);
           try {
             const props = await eventoCampanha({ email: p.email, nome: p.nome, campanha: cam.nome,
-              briefing: cam.briefing, cupom: p.cupom, link,
+              briefing: cam.briefing, cupom: p.cupom, link, anexos,
               inicio: cam.inicio, fim: cam.fim });
             await pool.query(`
               INSERT INTO creator.email_log (parceiro_id,campanha_id,para,assunto,tipo,estado,payload)
@@ -2164,6 +2252,59 @@ http.createServer(async (req, res) => {
       return json(200, { ok: true, job: nome, resultado: r });
     }
     catch (e) { await J.logJob(pool, nome, false, e.message, 0); return json(200, { ok: false, erro: e.message }); }
+  }
+
+  // ---------------- anexos de campanha (item 4) ----------------
+  // Sobe em base64 dentro de JSON, e não multipart: são 10 MB no máximo, o parser nativo do
+  // Node não faz multipart e trazer uma dependência para isso é caro para o que resolve.
+  if (u.pathname === '/api/campanha/anexo' && req.method === 'POST') {
+    const id = +u.searchParams.get('id');
+    if (!id) return json(400, { erro: 'campanha ausente' });
+    // 10 MB viram ~13,4 MB em base64; o teto do corpo tem que caber isso mais o resto
+    let d; try { d = await corpoJSON(req, 15 * 1024 * 1024); }
+    catch (e) { return json(400, { erro: e.message === 'corpo grande' ? 'arquivo maior que 10 MB' : e.message }); }
+
+    const OK = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+    if (!OK.includes(d.mime)) return json(400, {
+      erro: 'só PDF, JPEG, PNG ou WEBP. Vídeo fica fora — usa storage externo e ninguém pediu.' });
+    let buf;
+    try { buf = Buffer.from(String(d.base64 || ''), 'base64'); }
+    catch (e) { return json(400, { erro: 'arquivo ilegível' }); }
+    if (!buf.length) return json(400, { erro: 'arquivo vazio' });
+    if (buf.length > 10 * 1024 * 1024) return json(400, { erro: 'arquivo maior que 10 MB' });
+
+    // ⚠️ Confere a ASSINATURA do arquivo, não só o mime que o navegador declarou. Sem isso,
+    // qualquer coisa renomeada para .pdf entra no banco e depois é servida com
+    // Content-Type: application/pdf para a creator.
+    const assina = {
+      'application/pdf': b => b.slice(0, 5).toString('latin1') === '%PDF-',
+      'image/jpeg': b => b[0] === 0xFF && b[1] === 0xD8,
+      'image/png':  b => b.slice(0, 8).equals(Buffer.from([0x89,0x50,0x4E,0x47,0x0D,0x0A,0x1A,0x0A])),
+      'image/webp': b => b.slice(0, 4).toString('latin1') === 'RIFF'
+                      && b.slice(8, 12).toString('latin1') === 'WEBP',
+    };
+    if (!assina[d.mime](buf)) return json(400, {
+      erro: 'o conteúdo do arquivo não bate com o tipo declarado' });
+
+    const nome = String(d.nome || 'arquivo').replace(/[^\w .()-]/g, '_').slice(0, 120);
+    try {
+      const r = await pool.query(`
+        INSERT INTO creator.campanha_anexo (campanha_id, nome, mime, bytes, conteudo, criado_por)
+        VALUES ($1,$2,$3,$4,$5,'painel') RETURNING anexo_id, nome, mime, bytes, criado_em`,
+        [id, nome, d.mime, buf.length, buf]);
+      return json(200, { ok: true, anexo: r.rows[0] });
+    } catch (e) { return json(200, { ok: false, erro: e.message }); }
+  }
+
+  if (u.pathname === '/api/campanha/anexo' && req.method === 'DELETE') {
+    const anexo = +u.searchParams.get('anexo');
+    if (!anexo) return json(400, { erro: 'anexo ausente' });
+    try {
+      const r = await pool.query(
+        'DELETE FROM creator.campanha_anexo WHERE anexo_id=$1 RETURNING nome', [anexo]);
+      if (!r.rows[0]) return json(404, { erro: 'anexo não existe' });
+      return json(200, { ok: true, apagado: r.rows[0].nome });
+    } catch (e) { return json(200, { ok: false, erro: e.message }); }
   }
 
   // ---------------- apuração: quanto pagar, e o registro de que foi pago ----------------

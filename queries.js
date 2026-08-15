@@ -176,7 +176,16 @@ const painel = {
                      'handle', p.instagram_handle) ORDER BY p.nome)
               FROM creator.campanha_parceiro cp
               JOIN creator.parceiro p ON p.parceiro_id=cp.parceiro_id
-             WHERE cp.campanha_id=c.campanha_id AND cp.saiu_em IS NULL) AS participantes
+             WHERE cp.campanha_id=c.campanha_id AND cp.saiu_em IS NULL) AS participantes,
+           -- anexos (item 4). A coluna conteudo NUNCA sai daqui: sao ate 10 MB por arquivo e este
+           -- resultado vai serializado dentro do HTML do painel. So metadado; o arquivo vem
+           -- pela rota de download, que confere o vinculo com a campanha.
+           -- (sem crase neste comentario: o SQL mora em template literal)
+           coalesce((SELECT json_agg(json_build_object(
+                       'anexo_id', x.anexo_id, 'nome', x.nome, 'mime', x.mime,
+                       'bytes', x.bytes, 'baixados', x.baixados) ORDER BY x.criado_em)
+                       FROM creator.campanha_anexo x
+                      WHERE x.campanha_id = c.campanha_id), '[]'::json) AS anexos
     FROM creator.vw_campanha_resultado c
     ORDER BY (c.status='ativa') DESC, c.inicio DESC
   `,

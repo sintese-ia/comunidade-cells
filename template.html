@@ -152,6 +152,7 @@
   .salvo{font-family:var(--mono);font-size:9px;color:var(--ok);margin-left:5px;
          text-transform:uppercase;letter-spacing:.08em}
 
+  .anx{margin-top:9px;display:flex;align-items:center;flex-wrap:wrap;gap:4px}
   .empty{padding:16px 15px;background:var(--sub);border-top:1px dashed var(--line);
          display:flex;gap:12px;align-items:flex-start}
   .empty .tg{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;
@@ -1775,6 +1776,20 @@ function pintaCamp(){
       + '<div class="res">'+res.map(([k,v])=>'<div><div class="k">'+k+'</div><div class="v">'+v+'</div></div>').join('')+'</div>'
       + (pl.length ? '<p class="obs" style="margin-top:9px"><b>Placar:</b> '
           + pl.map(p => n(p.pontos)+' pts — '+esc(p.nome||'@'+p.instagram_handle)).join(' · ')+'</p>' : '')
+      // anexos (item 4): briefing em PDF e referência em imagem. Vídeo fica fora de propósito.
+      // `baixados` é o que responde "o creator leu o briefing?" — sem isso, "mandei" é palavra.
+      + '<div class="anx">'
+        + (c.anexos||[]).map(a => '<span class="chip vo" style="margin-right:5px">'
+            + esc(a.nome) + ' · ' + (a.bytes>=1048576 ? (a.bytes/1048576).toFixed(1)+' MB'
+                                                      : Math.max(1,Math.round(a.bytes/1024))+' KB')
+            + ' · ' + a.baixados + (a.baixados===1?' download':' downloads')
+            + ' <button class="lnk" data-canexdel="'+a.anexo_id+'" style="border:0;color:var(--cr)" '
+            + 'title="remover anexo">×</button></span>').join('')
+        + '<label class="acbt" style="cursor:pointer">+ anexo'
+          + '<input type="file" data-canex="'+c.campanha_id+'" hidden '
+          + 'accept="application/pdf,image/jpeg,image/png,image/webp"></label>'
+        + '<span class="dim" data-canexmsg="'+c.campanha_id+'" style="font-size:11px;margin-left:8px"></span>'
+      + '</div>'
       + '<div class="acs">'
       + '<select class="acbt" data-cst="'+c.campanha_id+'">'
         + ['rascunho','ativa','encerrada','cancelada','arquivada'].map(s =>
@@ -1799,6 +1814,45 @@ document.querySelectorAll('[data-cs]').forEach(b => b.addEventListener('click', 
   document.querySelectorAll('[data-cs]').forEach(x => x.setAttribute('aria-pressed','false'));
   b.setAttribute('aria-pressed','true'); campAba = b.dataset.cs; pintaCamp();
 }));
+
+/* ---- anexos de campanha ---- */
+/* Sobe em base64 dentro de JSON: o parser nativo do Node não faz multipart, e trazer uma
+   dependência para 10 MB de PDF é caro para o que resolve. */
+const TETO_ANEXO = 10 * 1024 * 1024;
+document.getElementById('listaCamp').addEventListener('change', async e => {
+  const inp = e.target.closest('[data-canex]'); if (!inp) return;
+  const id = inp.dataset.canex, f = inp.files && inp.files[0];
+  const msg = document.querySelector('[data-canexmsg="'+id+'"]');
+  inp.value = '';                       // permite reescolher o MESMO arquivo depois de um erro
+  if (!f) return;
+  if (f.size > TETO_ANEXO) { msg.textContent = 'maior que 10 MB'; return; }
+  msg.textContent = 'enviando…';
+  try {
+    const b64 = await new Promise((ok, no) => {
+      const r = new FileReader();
+      r.onload  = () => ok(String(r.result).split(',')[1]);
+      r.onerror = () => no(new Error('não consegui ler o arquivo'));
+      r.readAsDataURL(f);
+    });
+    const j = await (await fetch('/api/campanha/anexo?id='+id, {
+      method:'POST', headers:{'content-type':'application/json'},
+      body: JSON.stringify({ nome: f.name, mime: f.type, base64: b64 })})).json();
+    if (!j.ok) { msg.textContent = j.erro || 'não subiu'; return; }
+    msg.textContent = '';
+    const c = CAMP.find(x => String(x.campanha_id) === String(id));
+    if (c) { c.anexos = (c.anexos||[]).concat(j.anexo); pintaCamp(); }
+  } catch (err) { msg.textContent = err.message; }
+});
+
+document.getElementById('listaCamp').addEventListener('click', async e => {
+  const b = e.target.closest('[data-canexdel]'); if (!b) return;
+  if (!confirm('Remover este anexo? Quem já baixou continua com o arquivo.')) return;
+  const j = await (await fetch('/api/campanha/anexo?anexo='+b.dataset.canexdel,
+                               {method:'DELETE'})).json();
+  if (!j.ok) return alert('Não removeu: '+(j.erro||'erro'));
+  CAMP.forEach(c => c.anexos = (c.anexos||[]).filter(a => String(a.anexo_id) !== String(b.dataset.canexdel)));
+  pintaCamp();
+});
 
 document.getElementById('listaCamp').addEventListener('change', async e => {
   const st = e.target.closest('[data-cst]');

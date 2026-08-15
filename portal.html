@@ -184,7 +184,7 @@ const pc = x => Number(x||0).toLocaleString('pt-BR',{maximumFractionDigits:1}) +
 
 const p = P.parceiro, vida = P.vendas||{}, ex = P.extrato||[], pubs = P.publicacoes||[],
       env = P.envios||[], jg = P.jogos||[],
-      cl = P.cliques||{}, nv = P.nivel||null, faixas = P.faixas||[];
+      cl = P.cliques||{}, nv = P.nivel||null, faixas = P.faixas||[], camps = P.campanhas||[];
 
 const MEDALHA = {ouro:'🥇', prata:'🥈', bronze:'🥉'};
 const MES = ['janeiro','fevereiro','março','abril','maio','junho',
@@ -283,6 +283,7 @@ const campo = (id, rot, val, extra) => `<div class="cp2${extra&&extra.full?' ful
 const ABAS = [
   {id:'inicio',     ic:'▦', rot:'Resultados'},
   {id:'nivel',      ic:'◆', rot:'Nível e metas'},
+  {id:'campanhas',  ic:'✦', rot:'Campanhas'},
   {id:'conteudos',  ic:'▶', rot:'Conteúdos'},
   {id:'financeiro', ic:'▤', rot:'Financeiro'},
   {id:'perfil',     ic:'●', rot:'Meus dados'},
@@ -458,6 +459,37 @@ ${jg.length ? `<section>
 </section>` : ''}`;
 }
 
+// ---------------------------------------------------------------- Campanhas
+// O briefing NÃO vai anexado no e-mail: anexo pesado derruba entregabilidade, e o link
+// registra quem baixou — que é o único sinal de que a campanha foi lida.
+const kb = b => b >= 1048576 ? (b/1048576).toFixed(1).replace('.',',')+' MB'
+                             : Math.max(1, Math.round(b/1024))+' KB';
+const ICONE = {'application/pdf':'PDF','image/jpeg':'JPG','image/png':'PNG','image/webp':'WEBP'};
+
+function telaCampanhas(){
+  const viva = c => c.status === 'ativa';
+  return `<h1 class="tt">Campanhas<small>As campanhas em que a Cells te colocou.</small></h1>
+${camps.length ? camps.map(c => `<section>
+  <div class="sh"><h2>${esc(c.nome)}</h2>
+    <span class="ct">${viva(c)?'em andamento':esc(c.status)}</span>
+    <p>${c.inicio ? dtc(c.inicio) : 'sem início'} ${c.fim ? 'até '+dtc(c.fim) : '— sem data de fim'}
+      · ${c.tipo === 'pontuacao' ? 'vale pontos' : 'vale comissão'}</p></div>
+  <div class="sb">
+    ${c.briefing ? '<div style="font-size:13.5px;color:var(--ink2);white-space:pre-wrap;line-height:1.6">'
+      + esc(c.briefing) + '</div>' : '<div class="vazio">Sem briefing escrito.</div>'}
+    ${(c.anexos||[]).length ? `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line2)">
+      ${c.anexos.map(a => `<div class="lin">
+        <span class="tag">${ICONE[a.mime]||'ARQ'}</span>
+        <span class="t"><a href="/creator/anexo?id=${a.anexo_id}" style="color:var(--ac)">${esc(a.nome)}</a></span>
+        <span class="v" style="font-weight:500;font-size:11px;color:var(--fnt)">${kb(a.bytes)}</span>
+      </div>`).join('')}
+    </div>` : ''}
+  </div>
+</section>`).join('')
+: `<section><div class="sb"><div class="vazio">Você ainda não está em nenhuma campanha.
+   Quando entrar, o briefing e os arquivos aparecem aqui.</div></div></section>`}`;
+}
+
 // ---------------------------------------------------------------- Conteúdos
 function telaConteudos(){
   return `<h1 class="tt">Conteúdos e envios<small>Lista completa, não só o mês escolhido.</small></h1>
@@ -591,8 +623,9 @@ function telaAcesso(){
 }
 
 // ================================================================ render
-const TELAS = {inicio:telaInicio, nivel:telaNivel, conteudos:telaConteudos,
-               financeiro:telaFinanceiro, perfil:telaPerfil, acesso:telaAcesso};
+const TELAS = {inicio:telaInicio, nivel:telaNivel, campanhas:telaCampanhas,
+               conteudos:telaConteudos, financeiro:telaFinanceiro, perfil:telaPerfil,
+               acesso:telaAcesso};
 
 function desenhar(){
   if (!TELAS[aba]) aba = 'inicio';
