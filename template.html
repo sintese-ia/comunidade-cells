@@ -1203,7 +1203,13 @@ function pintaCad(){
       + '<td'+(f.receita?' style="font-weight:600"':' class="dim"')+'>'+(f.receita?nm(f.receita):'—')+'</td>'
       + celNivel(f)
       + '<td>'+(() => { const c = cupomDe(f.parceiro_id);
-          if (!c) return '<span class="dim">—</span>';
+          // ⚠️ Sem cupom mas COM clique: o link da pessoa já está circulando e a venda que
+          // vier dele não gruda em ninguém. É o único caso em que "sem cupom" custa dinheiro,
+          // então não pode sair como um traço igual aos outros.
+          if (!c) return f.cliques_orfaos
+            ? '<span class="chip cr" title="o link desta pessoa já recebeu clique, mas sem cupom '
+              + 'ativo a venda não é atribuída a ninguém">'+f.cliques_orfaos+' cliques sem cupom</span>'
+            : '<span class="dim">—</span>';
           const cod = c.shopify_erro
             ? '<span class="chip cr" title="'+esc(c.shopify_erro)+'">'+esc(c.codigo)+' inativo</span>'
             : '<span class="chip ok">'+esc(c.codigo)+'</span>'

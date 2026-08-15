@@ -46,6 +46,23 @@ const painel = {
   // É a tela que o Gabriel abre de manhã. Tudo que decide o status tem que estar aqui,
   // sem precisar abrir o Instagram de ninguém.
   cadastros: `
+    -- ⚠️ Tráfego que não atribui a ninguém: o link da pessoa já circula (o utm_slug nasce no
+    -- cadastro), mas sem cupom ativo a venda que vier dele não gruda em ninguém. Hoje é 1
+    -- caso — Solange Müller, 7 cliques, pendente desde sempre — e ele estava enterrado num
+    -- .md em vez de aparecer na tela de quem decide.
+    -- (Sem crase neste comentário: crase aqui dentro FECHA o template literal do JS.)
+    --
+    -- ⚠️ CTE, não subconsulta correlacionada. Escrito como subconsulta por linha, isto sozinho
+    -- levou a query de 45ms para 8s — creator.vw_clique_dia varre web.sessions com join OR, e
+    -- rodava uma vez POR CADASTRO. Medido antes de subir; é a mesma armadilha que fez o portal
+    -- da creator levar 15s em 14/08.
+    WITH orfaos AS (
+      SELECT k.parceiro_id, sum(k.cliques)::int AS cliques
+        FROM creator.vw_clique_dia k
+       WHERE NOT EXISTS (SELECT 1 FROM creator.cupom c2
+                          WHERE c2.parceiro_id = k.parceiro_id AND c2.ativo)
+       GROUP BY 1
+    )
     SELECT p.parceiro_id, p.nome, p.instagram_handle, p.email, p.telefone_e164,
            p.status, p.arquivado, p.tags, p.utm_slug, p.criado_em::date AS cadastro,
            p.aprovado_em::date AS aprovado, p.reprovado_motivo, p.decidido_por,
@@ -58,6 +75,7 @@ const painel = {
            CASE WHEN s.seguidores > 0 AND v.views_marc > 0
                 THEN round(v.views_marc::numeric / s.seguidores, 2) END AS vps,
            (SELECT count(*) FROM creator.envio e WHERE e.parceiro_id=p.parceiro_id)::int AS envios,
+           coalesce(orf.cliques, 0) AS cliques_orfaos,
            (SELECT c.codigo FROM creator.cupom c
              WHERE c.parceiro_id=p.parceiro_id AND c.ativo ORDER BY c.cupom_id LIMIT 1) AS cupom,
            (SELECT count(*) FROM creator.vw_venda_valida vn
@@ -102,6 +120,7 @@ const painel = {
     FROM creator.parceiro p
     LEFT JOIN creator.leads    ld ON ld.lead_id     = p.lead_id
     LEFT JOIN creator.vw_nivel nv ON nv.parceiro_id = p.parceiro_id
+    LEFT JOIN orfaos           orf ON orf.parceiro_id = p.parceiro_id
     LEFT JOIN LATERAL (
       SELECT seguidores, engajamento_pct, posts_30d, ultimo_post, bio, fonte
       FROM creator.perfil_snapshot ps
