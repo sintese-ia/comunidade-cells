@@ -2476,7 +2476,7 @@ pintaLegado();
 const MESPT = ['janeiro','fevereiro','março','abril','maio','junho',
                'julho','agosto','setembro','outubro','novembro','dezembro'];
 const rotMes = m => MESPT[+m.slice(5,7)-1] + '/' + m.slice(0,4);
-let AP = { linhas: [], meses: [], mes: null };
+let AP = { linhas: [], meses: [], mes: null, vigencia: null };
 
 async function carregaApuracao(){
   const lista = document.getElementById('apLista');
@@ -2484,7 +2484,7 @@ async function carregaApuracao(){
   try {
     const j = await (await fetch('/api/apuracao')).json();
     if (!j.ok) throw new Error(j.erro || 'erro');
-    AP.linhas = j.linhas; AP.meses = j.meses;
+    AP.linhas = j.linhas; AP.meses = j.meses; AP.vigencia = j.vigencia || null;
     if (!AP.mes || !AP.meses.some(m => m.mes === AP.mes)) AP.mes = (AP.meses[0]||{}).mes || null;
     const sel = document.getElementById('apMes');
     sel.innerHTML = AP.meses.map(m =>
@@ -2501,12 +2501,25 @@ function pintaApuracao(){
   const fechado = linhas.length && linhas.every(l => l.fechado);
   const semPix = linhas.filter(l => Number(l.comissao_devida) > 0 && !l.pix_chave);
 
+  // antes da vigência o programa NÃO pagava comissão — só dava cupom. O número continua na
+  // tela porque ele descreve o que a régua de hoje daria, mas NÃO é dívida e não fecha.
+  const antesDaVigencia = !!(AP.vigencia && AP.mes && AP.mes < AP.vigencia);
+
   document.getElementById('apCnt').textContent =
-    linhas.length + ' com venda · ' + rs(total) + ' em comissão';
-  document.getElementById('apFechar').disabled = !linhas.length || fechado;
-  document.getElementById('apFechar').textContent = fechado ? 'mês já fechado' : 'fechar o mês';
+    linhas.length + ' com venda · ' + rs(total)
+    + (antesDaVigencia ? ' (referência, não devido)' : ' em comissão');
+  document.getElementById('apFechar').disabled = !linhas.length || fechado || antesDaVigencia;
+  document.getElementById('apFechar').textContent =
+    antesDaVigencia ? 'antes da vigência' : fechado ? 'mês já fechado' : 'fechar o mês';
 
   /* Quem não tem PIX não recebe, e isso não pode aparecer só no dia do pagamento. */
+  if (antesDaVigencia) {
+    document.getElementById('apAviso').innerHTML =
+      '<div class="msg idle" style="border-left:3px solid var(--wa)">A Cells só paga comissão '
+      + 'a partir de <b>' + rotMes(AP.vigencia) + '</b>. Antes disso o programa só dava <b>cupom '
+      + 'de desconto</b> — nenhum mês anterior foi pago nem deve ser. O valor abaixo é o que a '
+      + 'régua de hoje daria, para referência, e o mês não pode ser fechado.</div>';
+  } else
   document.getElementById('apAviso').innerHTML = semPix.length
     ? '<div class="msg err"><b>'+semPix.length+'</b> '
       + (semPix.length===1?'creator tem comissão e não cadastrou PIX':'creators têm comissão e não cadastraram PIX')

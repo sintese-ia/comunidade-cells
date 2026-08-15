@@ -463,6 +463,12 @@ function linkCurto(codigo) {
 // concordem, que é o tipo de detalhe que quebra calado meses depois.
 function linkDoCreator(p) {
   if (!p) return linkCreator(undefined);
+  // ⚠️ Usa `link_path` — o caminho que o redirect REALMENTE tem na loja — e só cai no código
+  // do cupom como último recurso. Derivar do código é uma suposição: na renomeação, a troca
+  // do redirect é a única das quatro frentes que pode falhar sem derrubar o resto, e quando
+  // ela falha o código é o novo e o redirect ainda é o antigo. O link derivado daria 404 na
+  // mão da creator, com o cupom funcionando — ninguém descobriria.
+  if (p.link_path) return SITE + p.link_path;
   const cod = p.codigo || p.cupom;
   return p.link_redirect_id && cod ? linkCurto(cod) : linkCreator(p.utm_slug);
 }
@@ -495,7 +501,10 @@ async function criarLinkCurtoShopify({ codigo, slug }) {
   if (res?.userErrors?.length) throw new Error(res.userErrors.map(e => e.message).join('; '));
   const id = res?.urlRedirect?.id;
   if (!id) throw new Error('a Shopify não devolveu o id do redirect');
-  return id;
+  // devolve o PATH junto: é ele que vai para creator.cupom.link_path, e o que a loja gravou
+  // é a única fonte confiável do caminho — supor que é `/r/<codigo>` é a suposição que este
+  // campo existe para desfazer.
+  return { id, path: res?.urlRedirect?.path || ('/r/' + String(codigo).toLowerCase()) };
 }
 
 // O link curto é `/r/<cupom>`, então renomear o cupom SEM mexer aqui deixaria a creator com um
@@ -689,7 +698,7 @@ async function dadosDoCreator(parceiroId) {
            p.end_bairro, p.end_cidade, p.end_uf,
            (p.senha_hash IS NOT NULL) AS tem_senha,
            to_char(p.criado_em AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD') AS desde,
-           c.codigo AS cupom, c.link_redirect_id
+           c.codigo AS cupom, c.link_redirect_id, c.link_path
     FROM creator.parceiro p
     LEFT JOIN creator.cupom c ON c.parceiro_id = p.parceiro_id AND c.ativo
     WHERE p.parceiro_id = $1`, [parceiroId]);
@@ -1719,8 +1728,13 @@ http.createServer(async (req, res) => {
         let linkNovo = null, avisoLink = null;
         if (cup.link_redirect_id) {
           etapa = 'movendo o link curto';
-          try { linkNovo = await renomearLinkCurtoShopify({ redirectId: cup.link_redirect_id, novo }); }
-          catch (e) { avisoLink = e.message; }
+          try {
+            linkNovo = await renomearLinkCurtoShopify({ redirectId: cup.link_redirect_id, novo });
+            // grava o caminho SÓ depois que a loja confirmou. Se a chamada falhar, link_path
+            // continua o antigo e a creator segue com um link que FUNCIONA até alguém consertar.
+            await cli.query('UPDATE creator.cupom SET link_path=$2 WHERE cupom_id=$1',
+                            [cupomId, linkNovo]);
+          } catch (e) { avisoLink = e.message; }
         }
         await cli.query('COMMIT');
         invalida();
@@ -1869,18 +1883,20 @@ http.createServer(async (req, res) => {
         // igual. Por isso não aborta a aprovação nem entra em `shopify_erro` — aquilo é
         // reservado para cupom quebrado, que é o defeito que a tela precisa gritar.
         etapa = 'criando o link curto';
-        let redirectId = null;
-        try { redirectId = await criarLinkCurtoShopify({ codigo, slug }); }
+        let redirectId = null, redirectPath = null;
+        try { const rd = await criarLinkCurtoShopify({ codigo, slug });
+              redirectId = rd.id; redirectPath = rd.path; }
         catch (e) { console.error('link curto falhou para ' + codigo + ':', e.message); }
-        const link = redirectId ? linkCurto(codigo) : linkCreator(slug);
+        const link = redirectPath ? SITE + redirectPath : linkCreator(slug);
 
         etapa = 'gravando o cupom';
         const cup = (await cli.query(`
           INSERT INTO creator.cupom (parceiro_id, codigo, desconto_pct, comissao_pct,
                                      combinavel, shopify_discount_id, shopify_erro,
-                                     link_redirect_id, ativo)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,true) RETURNING *`,
-          [id, codigo, desconto, comissao, !!d.combinavel, shopifyId, shopifyErro, redirectId])).rows[0];
+                                     link_redirect_id, link_path, ativo)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,true) RETURNING *`,
+          [id, codigo, desconto, comissao, !!d.combinavel, shopifyId, shopifyErro,
+           redirectId, redirectPath])).rows[0];
 
         etapa = 'atualizando o cadastro';
         const novo = (await cli.query(`
@@ -1992,7 +2008,7 @@ http.createServer(async (req, res) => {
     try {
       const r = await pool.query(`
         SELECT p.parceiro_id, p.nome, p.email, p.utm_slug, p.instagram_handle,
-               cu.codigo AS cupom, cu.link_redirect_id,
+               cu.codigo AS cupom, cu.link_redirect_id, cu.link_path,
                (SELECT max(el.criado_em) FROM creator.email_log el
                  WHERE el.parceiro_id=p.parceiro_id AND el.campanha_id=$1
                    AND el.estado='evento_enviado')::date AS avisado_em
@@ -2030,7 +2046,7 @@ http.createServer(async (req, res) => {
 
         const pessoas = (await pool.query(`
           SELECT p.parceiro_id, p.nome, p.email, p.utm_slug,
-                 cu.codigo AS cupom, cu.link_redirect_id
+                 cu.codigo AS cupom, cu.link_redirect_id, cu.link_path
           FROM creator.parceiro p
           LEFT JOIN creator.cupom cu ON cu.parceiro_id=p.parceiro_id AND cu.ativo
           WHERE p.parceiro_id = ANY($1)`, [ids])).rows;
@@ -2325,7 +2341,13 @@ http.createServer(async (req, res) => {
                sum(comissao_devida)::numeric(12,2) AS comissao,
                bool_and(fechado) AS fechado
           FROM creator.vw_apuracao GROUP BY 1 ORDER BY 1 DESC`);
-      return json(200, { ok: true, linhas: linhas.rows, meses: meses.rows });
+      // ⚠️ A tela calcula competência desde janeiro/2025, mas o programa só passa a PAGAR
+      // comissão a partir da vigência. Sem mandar isso para a tela, o botão "fechar o mês"
+      // criaria dívida que nunca existiu — num número que a creator vê no próprio portal.
+      const vig = await pool.query(
+        `SELECT valor FROM creator.config WHERE chave='comissao_vigencia'`);
+      return json(200, { ok: true, linhas: linhas.rows, meses: meses.rows,
+                         vigencia: (vig.rows[0]?.valor || '').slice(0, 7) });
     } catch (e) { return json(200, { ok: false, erro: e.message }); }
   }
 
@@ -2340,6 +2362,14 @@ http.createServer(async (req, res) => {
       `SELECT to_char(now() AT TIME ZONE 'America/Sao_Paulo','YYYY-MM') AS corrente`)).rows;
     if (mes >= corrente) return json(400, {
       erro: `${mes} ainda não terminou. Feche só mês encerrado — pedido de agora ainda pode ser cancelado.` });
+    // ⚠️ Antes da vigência o programa NÃO pagava comissão — só dava cupom de desconto. Fechar
+    // uma dessas competências inventaria dívida. A trava mora no servidor, não só na tela:
+    // a tela é a que dá para contornar.
+    const vg = (await pool.query(
+      `SELECT valor FROM creator.config WHERE chave='comissao_vigencia'`)).rows[0]?.valor;
+    if (vg && mes < String(vg).slice(0, 7)) return json(400, {
+      erro: `A Cells só paga comissão a partir de ${String(vg).slice(0,7)}. Antes disso o `
+          + `programa só dava cupom de desconto — fechar ${mes} criaria dívida que não existe.` });
     try {
       const r = await pool.query(`
         INSERT INTO creator.comissao_mes
