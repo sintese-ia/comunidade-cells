@@ -548,21 +548,31 @@ async function dadosDoCreator(parceiroId) {
   // a versão errada. Agora é a mesma `linkDoCreator()` da aprovação e do aviso de campanha.
   pa.link = linkDoCreator(pa);
 
+  // Só o acumulado da vida. Os números DO MÊS saem do extrato, no navegador — assim o que
+  // está escrito em cima é, por construção, a soma dos pedidos listados embaixo. Quando o
+  // total vinha de um SELECT e a lista de outro, os dois podiam divergir e ninguém veria.
+  // (Os antigos `pedidos_mes`/`receita_mes` daqui ainda cortavam o mês por UTC.)
   const [v] = await q(`
     SELECT count(*)::int AS pedidos, coalesce(sum(receita_liquida),0) AS receita,
-           round(avg(receita_liquida),2) AS ticket,
-           count(*) FILTER (WHERE pedido_em >= date_trunc('month', current_date))::int AS pedidos_mes,
-           coalesce(sum(receita_liquida) FILTER (WHERE pedido_em >= date_trunc('month', current_date)),0) AS receita_mes
+           round(avg(receita_liquida),2) AS ticket
     FROM creator.venda WHERE parceiro_id=$1 AND atribuicao='cupom'`, [parceiroId]);
 
+  // ⚠️ `dia` é o dia de SÃO PAULO, calculado aqui, e é ele que a tela usa para saber a que MÊS
+  // o pedido pertence. Não devolvo `pedido_em` cru para o navegador porque node-pg entrega
+  // timestamptz como Date e o mês sairia do fuso de quem abriu a página — uma creator em
+  // Lisboa veria pedido da meia-noite de 31/07 como agosto.
+  // Sem LIMIT apertado: o creator com mais pedidos na base tem 28, e a tela agora fatia por
+  // mês — cortar em 60 esconderia os meses antigos justamente de quem mais vendeu.
   const extrato = await q(`
-    SELECT pedido_id, pedido_numero, pedido_em, receita_liquida, cliente_novo,
-           coalesce(virou_assinatura, false) AS virou_assinatura
+    SELECT pedido_id, pedido_numero, receita_liquida, cliente_novo,
+           coalesce(virou_assinatura, false) AS virou_assinatura,
+           to_char(pedido_em AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD') AS dia
     FROM creator.venda WHERE parceiro_id=$1 AND atribuicao='cupom'
-    ORDER BY pedido_em DESC LIMIT 60`, [parceiroId]);
+    ORDER BY pedido_em DESC LIMIT 500`, [parceiroId]);
 
   const publicacoes = await q(`
     SELECT u.tipo, u.publicado_em, u.permalink, left(coalesce(u.legenda,''),90) AS legenda,
+           to_char(u.publicado_em AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD') AS dia,
            m.curtidas, m.visualizacoes
     FROM creator.publicacao u
     LEFT JOIN LATERAL (SELECT max(curtidas) curtidas,
@@ -579,19 +589,17 @@ async function dadosDoCreator(parceiroId) {
     WHERE parceiro_id=$1 ORDER BY pontos DESC`, [parceiroId]);
 
   // ---- cliques no link (pedido do Gabriel, 14/08) ----
-  // Série diária dos últimos 30 dias, com os dias VAZIOS incluídos: sem eles o gráfico
-  // encolhe os intervalos sem clique e um pico isolado vira uma linha cheia de atividade.
-  const [cl] = await q(`
-    SELECT coalesce(sum(cliques), 0)::int AS total,
-           coalesce(sum(cliques) FILTER (WHERE dia >= date_trunc('month', current_date)), 0)::int AS mes,
-           coalesce(sum(cliques) FILTER (WHERE dia >= current_date - 29), 0)::int AS d30,
-           max(dia) AS ultimo
-      FROM creator.vw_clique_dia WHERE parceiro_id = $1`, [parceiroId]);
+  // Série diária COMPLETA, esparsa: só os dias que tiveram clique. Antes eram 30 dias fixos
+  // com generate_series preenchendo os vazios no banco — não serve mais, porque a tela virou
+  // mensal e precisa desenhar julho inteiro se a creator escolher julho. Quem preenche os
+  // dias vazios agora é o navegador, que já sabe quantos dias tem o mês escolhido.
+  // `dia` sai como texto: é chave de mês, não data para fazer conta com fuso.
   const serie = await q(`
-    SELECT d::date AS dia, coalesce(c.cliques, 0)::int AS cliques
-      FROM generate_series(current_date - 29, current_date, '1 day') d
-      LEFT JOIN creator.vw_clique_dia c ON c.dia = d::date AND c.parceiro_id = $1
-     ORDER BY 1`, [parceiroId]);
+    SELECT to_char(dia, 'YYYY-MM-DD') AS dia, sum(cliques)::int AS cliques
+      FROM creator.vw_clique_dia WHERE parceiro_id = $1
+     GROUP BY dia ORDER BY dia`, [parceiroId]);
+  const cl = { total: serie.reduce((a, d) => a + d.cliques, 0),
+               ultimo: serie.length ? serie[serie.length - 1].dia : null };
 
   // ---- nível e comissão ----
   // ⚠️ A comissão é CALCULADA a partir da régua de hoje (creator.nivel_regra), não lida de
@@ -630,8 +638,14 @@ async function dadosDoCreator(parceiroId) {
   const gasto = Date.now() - t0Total;
   if (gasto > 2000) console.error(`[portal] ${gasto}ms para montar o painel do parceiro ${parceiroId}`);
 
+  // `hoje` vem do servidor em hora de São Paulo. A tela precisa saber qual é o mês corrente
+  // para abrir nele, e `new Date()` no navegador responderia com o fuso de quem abriu.
+  const [{ hoje }] = await q(
+    `SELECT to_char(now() AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD') AS hoje`);
+
   return { parceiro: pa, vendas: v, extrato: extratoCom, publicacoes, envios, jogos,
-           cliques: { ...cl, serie }, nivel: nv || null, faixas, comissao_3m: comissao3m };
+           cliques: { ...cl, serie }, nivel: nv || null, faixas, comissao_3m: comissao3m,
+           taxas: { unica: pctU, assinatura: pctA }, hoje };
 }
 
 const portalErro = (titulo, msg) => `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
@@ -821,7 +835,10 @@ http.createServer(async (req, res) => {
       if (!d) { res.writeHead(404, {'content-type':'text/html; charset=utf-8'});
         return res.end(portalErro('Não encontrei seu cadastro', 'Fale com a equipe da Cells.')); }
       res.writeHead(200, {'content-type':'text/html; charset=utf-8','cache-control':'no-store'});
-      return res.end(TPL_CREATOR.replace('__DADOS__', JSON.stringify(d).replace(/</g, '\\u003c')));
+      // replace com FUNÇÃO: com string, um `$&` ou `$'` dentro do JSON (nome de cupom, legenda
+      // de post) viraria padrão de substituição e reescreveria o payload sozinho.
+      const dados = JSON.stringify(d).replace(/</g, '\\u003c');
+      return res.end(TPL_CREATOR.replace('__DADOS__', () => dados));
     } catch (e) {
       res.writeHead(500, {'content-type':'text/html; charset=utf-8'});
       return res.end(portalErro('Deu erro aqui', 'Tente de novo em instantes.'));

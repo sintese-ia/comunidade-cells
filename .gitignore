@@ -3,3 +3,10 @@ node_modules
 *.log
 node_modules/
 package-lock.json
+.DS_Store
+
+# ⚠️ ESTE REPO É PÚBLICO.
+# ref-visao-influenciador/ são prints de painel de outra empresa e trazem dado pessoal de
+# uma creator na tela de perfil: nome completo, CPF, celular, endereço, nascimento.
+# Servem de referência de tela para a gente, não vão para o GitHub.
+ref-visao-influenciador/

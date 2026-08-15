@@ -8,7 +8,8 @@
   :root{
     --bg:#FFFFFF;--pg:#F6F8F7;--ink:#14181A;--ink2:#3E4749;--mut:#6C7679;--fnt:#98A0A2;
     --line:#E3E8E7;--line2:#EFF3F2;--ac:#0B5FFF;--ac-s:#EDF3FF;
-    --ok:#0F7A4E;--ok-s:#E5F4ED;--wa:#8A5800;--wa-s:#FBF1DC;--vo:#98A0A2;--vo-s:#F1F4F3;
+    --ok:#0F7A4E;--ok-s:#E5F4ED;--wa:#8A5800;--wa-s:#FBF1DC;--ng:#B23A2B;--ng-s:#FBE9E6;
+    --vo:#98A0A2;--vo-s:#F1F4F3;
     --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
     --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;
   }
@@ -21,25 +22,49 @@
   header h1{margin:3px 0 0;font-size:23px;letter-spacing:-.024em;font-weight:660}
   header .hh{font-family:var(--mono);font-size:12px;color:var(--fnt);margin-top:3px}
 
-  .destaque{background:var(--bg);border:1px solid var(--line);border-radius:4px;margin-top:14px;
-            padding:22px 20px;text-align:center}
-  .destaque .k{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut)}
-  .destaque .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:42px;font-weight:560;
-               letter-spacing:-.03em;line-height:1;margin-top:10px}
-  .destaque .n{font-size:12.5px;color:var(--mut);margin-top:9px}
+  /* ---- seletor de mês: é o comando da tela, então fica grudado no topo ---- */
+  .per{position:sticky;top:0;z-index:5;background:var(--bg);border:1px solid var(--line);
+       border-radius:4px;margin-top:14px;padding:9px 10px;display:flex;align-items:center;gap:8px}
+  .per .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;
+          color:var(--mut);padding-left:4px;flex:none}
+  .per select{flex:1;min-width:0;border:1px solid var(--line);border-radius:3px;background:var(--pg);
+              color:var(--ink);font-family:inherit;font-size:14.5px;font-weight:600;padding:8px 10px;
+              text-align:center;text-align-last:center;-webkit-appearance:none;appearance:none;cursor:pointer}
+  .per button{flex:none;width:36px;height:36px;border:1px solid var(--line);border-radius:3px;
+              background:var(--bg);color:var(--ink);font-size:15px;line-height:1;cursor:pointer}
+  .per button:disabled{color:var(--line);cursor:default}
+  .per button:focus-visible,.per select:focus-visible{outline:2px solid var(--ac);outline-offset:1px}
+
+  .dois{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);
+        border:1px solid var(--line);border-radius:4px;margin-top:14px;overflow:hidden}
+  .dois > div{background:var(--bg);padding:20px 18px 18px}
+  .dois .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut)}
+  .dois .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:31px;font-weight:560;
+           letter-spacing:-.03em;line-height:1;margin-top:11px}
+  .dois .n{font-size:11.5px;color:var(--fnt);margin-top:8px}
+  @media(max-width:460px){.dois{grid-template-columns:1fr}.dois .v{font-size:27px}}
+
+  .delta{font-family:var(--mono);font-size:10.5px;font-weight:600;padding:2px 6px;border-radius:2px;
+         background:var(--vo-s);color:var(--mut);white-space:nowrap}
+  .delta.up{background:var(--ok-s);color:var(--ok)}
+  .delta.down{background:var(--ng-s);color:var(--ng)}
 
   .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1px;
         background:var(--line);border:1px solid var(--line);border-radius:4px;margin-top:14px;overflow:hidden}
   .cel{background:var(--bg);padding:14px 15px}
   .cel .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--mut)}
   .cel .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:23px;font-weight:520;
-          margin-top:7px;line-height:1;letter-spacing:-.02em}
+          margin-top:7px;line-height:1;letter-spacing:-.02em;white-space:nowrap}
+  /* "R$ 196,36" não cabe em 23px na coluna estreita e quebrava em duas linhas */
+  .cel .v.din{font-size:18px}
   .cel .n{font-size:11px;color:var(--fnt);margin-top:5px}
 
   section{background:var(--bg);border:1px solid var(--line);border-radius:4px;margin-top:14px;overflow:hidden}
-  .sh{padding:14px 18px 11px;border-bottom:1px solid var(--line2)}
+  .sh{padding:14px 18px 11px;border-bottom:1px solid var(--line2);display:flex;
+      align-items:baseline;gap:10px;flex-wrap:wrap}
   .sh h2{margin:0;font-size:15.5px;font-weight:640;letter-spacing:-.01em}
-  .sh p{margin:4px 0 0;font-size:12.5px;color:var(--mut)}
+  .sh p{margin:4px 0 0;font-size:12.5px;color:var(--mut);flex-basis:100%}
+  .sh .ct{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--fnt)}
   .sb{padding:14px 18px}
 
   .codigo{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -66,10 +91,12 @@
   .bar span{display:block;height:100%;background:var(--ac);border-radius:99px}
   .bar.full span{background:var(--ok)}
 
-  /* ---- barras de clique por dia ---- */
-  .spark{display:flex;align-items:flex-end;gap:2px;height:56px;margin-top:2px}
-  .spark i{flex:1;background:var(--ac-s);border-radius:1px 1px 0 0;min-height:2px;display:block}
+  /* ---- barras por dia do mês ---- */
+  .spark{display:flex;align-items:flex-end;gap:2px;height:64px;margin-top:2px}
+  .spark i{flex:1;background:var(--line2);border-radius:1px 1px 0 0;min-height:2px;display:block}
   .spark i.tem{background:var(--ac)}
+  .spark i.rs{background:var(--ok)}
+  .spark i.fut{background:transparent;border-bottom:2px solid var(--line2)}
   .sparkl{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;
           color:var(--fnt);margin-top:6px}
 
@@ -86,12 +113,9 @@
   .escada .et{display:flex;justify-content:space-between;font-size:12px;color:var(--mut);margin-bottom:5px}
 
   .vazio{font-size:13px;color:var(--fnt);padding:4px 0}
+  .nota{font-size:11.5px;color:var(--fnt);line-height:1.6}
   footer{margin-top:22px;font-size:11.5px;color:var(--fnt);line-height:1.7;text-align:center}
-  .erro{background:var(--bg);border:1px solid var(--line);border-left:3px solid var(--wa);
-        border-radius:4px;padding:22px;text-align:center;margin-top:40px}
-  .erro h1{margin:0 0 8px;font-size:19px}
-  .erro p{margin:0;font-size:13.5px;color:var(--mut);line-height:1.6}
-  @media(max-width:520px){.wrap{padding:20px 12px 60px}.destaque .v{font-size:34px}}
+  @media(max-width:520px){.wrap{padding:20px 12px 60px}}
 </style>
 </head>
 <body>
@@ -100,51 +124,184 @@
 const P = __DADOS__;
 const n  = v => v==null ? '—' : Number(v).toLocaleString('pt-BR');
 const rs = v => 'R$ ' + Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
-const dt = s => s ? String(s).slice(8,10)+'/'+String(s).slice(5,7)+'/'+String(s).slice(2,4) : '—';
 const esc = s => String(s==null?'':s).replace(/[<>&]/g,m=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[m]));
+const pc = x => Number(x||0).toLocaleString('pt-BR',{maximumFractionDigits:1}) + '%';
 
-const p = P.parceiro, v = P.vendas||{}, ex = P.extrato||[], pubs = P.publicacoes||[],
+const p = P.parceiro, vida = P.vendas||{}, ex = P.extrato||[], pubs = P.publicacoes||[],
       env = P.envios||[], jg = P.jogos||[],
       cl = P.cliques||{}, nv = P.nivel||null, faixas = P.faixas||[];
 
 const MEDALHA = {ouro:'🥇', prata:'🥈', bronze:'🥉'};
-const pc = x => Number(x||0).toLocaleString('pt-BR',{maximumFractionDigits:1}) + '%';
+const MES = ['janeiro','fevereiro','março','abril','maio','junho',
+             'julho','agosto','setembro','outubro','novembro','dezembro'];
+
+// ⚠️ TODA data aqui é STRING 'YYYY-MM-DD' vinda do servidor, já no fuso de São Paulo.
+// Nada de `new Date(...)` para descobrir dia ou mês: o navegador da creator pode estar em
+// outro fuso, e um pedido da meia-noite de 31/07 apareceria em agosto na tela dela.
+const ymDe   = d => String(d||'').slice(0,7);
+const rotulo = ym => MES[+ym.slice(5,7)-1] + ' de ' + ym.slice(0,4);
+const curto  = ym => MES[+ym.slice(5,7)-1].slice(0,3) + '/' + ym.slice(2,4);
+const dia    = d => String(d||'').slice(8,10)+'/'+String(d||'').slice(5,7);
+const dtc    = d => d ? String(d).slice(8,10)+'/'+String(d).slice(5,7)+'/'+String(d).slice(2,4) : '—';
+// dias do mês sem cair no fuso local: dia 0 do mês seguinte, em UTC
+const diasNoMes = ym => new Date(Date.UTC(+ym.slice(0,4), +ym.slice(5,7), 0)).getUTCDate();
+const ymAntes = ym => { let a=+ym.slice(0,4), m=+ym.slice(5,7)-1;
+  if(!m){m=12;a--;} return a+'-'+String(m).padStart(2,'0'); };
 
 // O link vem PRONTO do servidor (linkDoCreator), curto quando existe redirect. Não montar
 // aqui: esta tela montava com `utm_medium=organic`, valor aposentado em 12/08, e entregava
 // sempre o link longo — bem na tela onde a creator COPIA o link para divulgar.
 const link = p.link || '';
 
-document.getElementById('app').innerHTML = `
+// ---- meses que existem para esta creator ----
+// Vem de tudo que tem data: pedido, clique e conteúdo. O mês corrente entra sempre, mesmo
+// vazio — senão quem ainda não vendeu neste mês abriria a tela em maio e acharia que parou.
+const ymHoje = ymDe(P.hoje);
+const meses = [...new Set([ymHoje,
+  ...ex.map(e => ymDe(e.dia)),
+  ...(cl.serie||[]).map(d => ymDe(d.dia)),
+  ...pubs.map(c => ymDe(c.dia))].filter(Boolean))].sort().reverse();
+
+let sel = ymHoje;
+
+// ---- o que aconteceu num mês ----
+// Os totais saem dos MESMOS registros que a lista embaixo mostra. Assim o número grande é,
+// por construção, a soma do que está listado — não dá para divergirem.
+function doMes(ym){
+  const pedidos = ex.filter(e => ymDe(e.dia) === ym);
+  const cliques = (cl.serie||[]).filter(d => ymDe(d.dia) === ym);
+  const conteudos = pubs.filter(c => ymDe(c.dia) === ym);
+  const receita  = pedidos.reduce((a,e) => a + Number(e.receita_liquida||0), 0);
+  const comissao = pedidos.reduce((a,e) => a + Number(e.comissao||0), 0);
+  return { ym, pedidos, cliques, conteudos, receita, comissao,
+    cliquesTot: cliques.reduce((a,d) => a + d.cliques, 0),
+    novos: pedidos.filter(e => e.cliente_novo).length,
+    assinaturas: pedidos.filter(e => e.virou_assinatura).length,
+    ticket: pedidos.length ? receita/pedidos.length : 0 };
+}
+
+// variação contra o mês anterior. Sem base (mês anterior zerado) não existe "%": mostrar
+// "+100%" quando se sai de zero é enfeite, não informação.
+// ⚠️ "primeiro mês com venda" só vale se NÃO existe mês anterior com venda em lugar nenhum.
+// Olhar só o mês imediatamente anterior chamava novembro/25 do Gabriel de primeiro mês —
+// ele já tinha vendido em janeiro, fevereiro e março. Um elogio errado é pior que nenhum.
+function delta(ym, atual, anterior){
+  if (!atual && !anterior) return '';
+  const houveAntes = ex.some(e => e.dia.slice(0,7) < ym && Number(e.receita_liquida) > 0);
+  if (!anterior) return !houveAntes ? '<span class="delta up">primeiro mês com venda</span>'
+                                    : '<span class="delta">mês anterior sem venda</span>';
+  if (!atual) return '<span class="delta down">sem venda neste mês</span>';
+  const d = Math.round((atual/anterior - 1) * 100);
+  if (!d) return '<span class="delta">igual ao mês anterior</span>';
+  return '<span class="delta ' + (d>0?'up':'down') + '">' + (d>0?'+':'') + d + '% vs mês anterior</span>';
+}
+
+// barras por dia do mês, com os dias VAZIOS incluídos: sem eles o gráfico encolhe os
+// intervalos parados e um pico isolado vira uma linha cheia de atividade.
+function barras(ym, valores, classe, fmt){
+  const nd = diasNoMes(ym);
+  const hoje = ym === ymHoje ? +P.hoje.slice(8,10) : nd;
+  const mx = Math.max(1, ...Object.values(valores));
+  let html = '<div class="spark">';
+  for (let d = 1; d <= nd; d++){
+    const k = ym + '-' + String(d).padStart(2,'0');
+    const v = valores[k] || 0;
+    const futuro = d > hoje;
+    html += '<i class="' + (v ? classe : (futuro ? 'fut' : '')) + '" style="height:' +
+      (v ? Math.max(7, Math.round(v/mx*100)) : 2) + '%" title="' + d + '/' + ym.slice(5,7) +
+      ': ' + fmt(v) + '"></i>';
+  }
+  return html + '</div><div class="sparkl"><span>1</span><span>' +
+    (ym===ymHoje ? 'hoje' : nd) + '</span></div>';
+}
+
+function pagina(){
+  const m = doMes(sel), ant = doMes(ymAntes(sel));
+  const i = meses.indexOf(sel);
+  const nomes = {reels:'Reels',carrossel:'Carrossel',feed_imagem:'Foto',story:'Stories',venda:'Vendas'};
+
+  const porDia = (arr, chave, val) => arr.reduce((o,x) => {
+    o[x[chave]] = (o[x[chave]]||0) + Number(val(x)); return o; }, {});
+
+  return `
 <header>
   <div class="oi">Olá,</div>
   <h1>${esc((p.nome||'').split(' ')[0] || p.instagram_handle)}</h1>
   <div class="hh">@${esc(p.instagram_handle||'—')}${p.tags&&p.tags.length?' · '+p.tags.map(esc).join(' · '):''}</div>
 </header>
 
-<div class="destaque">
-  <div class="k">Você já gerou</div>
-  <div class="v">${rs(v.receita)}</div>
-  <div class="n">${n(v.pedidos)} ${v.pedidos===1?'pedido':'pedidos'} com o seu cupom${
-    v.receita_mes ? ' · <b>'+rs(v.receita_mes)+'</b> neste mês' : ''}</div>
+<div class="per">
+  <span class="k">Mês</span>
+  <button id="ant" ${i >= meses.length-1 ? 'disabled' : ''} aria-label="mês anterior">‹</button>
+  <select id="mes" aria-label="escolha o mês">
+    ${meses.map(ym => `<option value="${ym}"${ym===sel?' selected':''}>${rotulo(ym)}</option>`).join('')}
+  </select>
+  <button id="prox" ${i <= 0 ? 'disabled' : ''} aria-label="próximo mês">›</button>
+</div>
+
+<div class="dois">
+  <div>
+    <div class="k">Faturamento em ${curto(sel)}</div>
+    <div class="v">${rs(m.receita)}</div>
+    <div class="n">${m.pedidos.length} ${m.pedidos.length===1?'pedido':'pedidos'} com o seu cupom
+      ${delta(sel, m.receita, ant.receita)}</div>
+  </div>
+  <div>
+    <div class="k">Sua comissão em ${curto(sel)}</div>
+    <div class="v" style="color:var(--ok)">${rs(m.comissao)}</div>
+    <div class="n">${nv ? pc(nv.comissao_unica_pct)+' compra única · '+pc(nv.comissao_assinatura_pct)+' assinatura'
+                        : 'sem taxa definida ainda'}</div>
+  </div>
 </div>
 
 <div class="grid">
-  <div class="cel"><div class="k">Pedidos</div><div class="v">${n(v.pedidos)}</div>
-    <div class="n">${n(v.pedidos_mes)} neste mês</div></div>
-  <div class="cel"><div class="k">Ticket médio</div><div class="v">${v.ticket?rs(v.ticket):'—'}</div>
-    <div class="n">por pedido</div></div>
-  <div class="cel"><div class="k">Cliques no link</div><div class="v">${n(cl.total)}</div>
-    <div class="n">${cl.d30 ? n(cl.d30)+' nos últimos 30 dias' : 'nenhum nos últimos 30 dias'}</div></div>
-  <div class="cel"><div class="k">Conteúdos</div><div class="v">${n(pubs.length)}</div>
+  <div class="cel"><div class="k">Ticket médio</div><div class="v din">${m.ticket?rs(m.ticket):'—'}</div>
+    <div class="n">por pedido no mês</div></div>
+  <div class="cel"><div class="k">Cliques no link</div><div class="v">${n(m.cliquesTot)}</div>
+    <div class="n">${m.cliquesTot ? 'no mês' : 'nenhum no mês'}</div></div>
+  <div class="cel"><div class="k">Clientes novos</div><div class="v">${n(m.novos)}</div>
+    <div class="n">primeira compra na Cells</div></div>
+  <div class="cel"><div class="k">Assinaturas</div><div class="v">${n(m.assinaturas)}</div>
+    <div class="n">viraram CellsClub</div></div>
+  <div class="cel"><div class="k">Conteúdos</div><div class="v">${n(m.conteudos.length)}</div>
     <div class="n">marcando a Cells</div></div>
-  <div class="cel"><div class="k">Pontos</div><div class="v">${jg.length?n(jg.reduce((a,j)=>a+(j.pontos||0),0)):'—'}</div>
-    <div class="n">${jg.length?'nos jogos ativos':'sem jogo ativo'}</div></div>
 </div>
+
+${m.receita || m.cliquesTot ? `<section>
+  <div class="sh"><h2>Dia a dia de ${rotulo(sel)}</h2>
+    <span class="ct">${rs(m.receita)}</span>
+    <p>Quanto o seu cupom faturou em cada dia do mês.</p></div>
+  <div class="sb">
+    ${m.receita ? barras(sel, porDia(m.pedidos, 'dia', e => e.receita_liquida), 'rs', rs)
+      : '<div class="vazio">Sem faturamento em ' + rotulo(sel) + '.</div>'}
+    ${m.cliquesTot ? `<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line2)">
+      <div style="font-size:12.5px;color:var(--mut);margin-bottom:6px">Cliques no seu link
+        · <b>${n(m.cliquesTot)}</b> no mês</div>
+      ${barras(sel, porDia(m.cliques, 'dia', d => d.cliques), 'tem', v => v + (v===1?' clique':' cliques'))}
+    </div>` : ''}
+  </div>
+</section>` : ''}
+
+<section>
+  <div class="sh"><h2>Seus pedidos em ${rotulo(sel)}</h2>
+    <span class="ct">${m.pedidos.length} ${m.pedidos.length===1?'pedido':'pedidos'}</span>
+    <p>Cada compra feita com o seu cupom, com a comissão na taxa do seu nível de hoje.</p></div>
+  <div class="sb">${m.pedidos.length ? m.pedidos.map(e => `
+    <div class="lin"><span class="d">${dtc(e.dia)}</span>
+      <span class="t">Pedido ${esc(e.pedido_numero||e.pedido_id)}${e.cliente_novo?' · cliente novo':''}${
+        e.virou_assinatura?' · <span class="tag">assinatura</span>':''}</span>
+      <span class="v" style="font-weight:500;color:var(--ok);font-size:12px;margin-right:10px">${
+        e.comissao ? rs(e.comissao) : ''}</span>
+      <span class="v">${rs(e.receita_liquida)}</span></div>`).join('')
+    : `<div class="vazio">Nenhum pedido em ${rotulo(sel)}.${
+        vida.pedidos ? ' Na vida inteira você já fez '+n(vida.pedidos)+'.' :
+        ' Compartilhe seu cupom e ele aparece aqui.'}</div>`}</div>
+</section>
 
 ${nv ? `<section>
   <div class="sh"><h2>Seu nível e sua comissão</h2>
-    <p>O nível vem do que você vendeu nos <b>últimos 3 meses</b> — sobe e desce sozinho.</p></div>
+    <p>O nível <b>não muda com o mês escolhido</b>: ele vem do que você vendeu nos
+      <b>últimos 3 meses</b>, e sobe e desce sozinho.</p></div>
   <div class="sb">
     <div class="niv">
       <span class="medalha">${MEDALHA[nv.nivel]||'🥉'}</span>
@@ -156,7 +313,7 @@ ${nv ? `<section>
     <div class="taxas">
       <div><div class="k">Compra única</div><div class="v">${pc(nv.comissao_unica_pct)}</div></div>
       <div><div class="k">Assinatura</div><div class="v">${pc(nv.comissao_assinatura_pct)}</div></div>
-      <div><div class="k">Sua comissão · 3 meses</div>
+      <div><div class="k">Comissão · 3 meses</div>
         <div class="v">${rs(P.comissao_3m)}</div></div>
     </div>
 
@@ -177,23 +334,9 @@ ${nv ? `<section>
           Number(f.piso)>0 ? 'a partir de '+rs(f.piso) : 'de entrada'}</span></div>`).join('')}
     </div>
 
-    <p style="margin:13px 0 0;font-size:12px;color:var(--fnt);line-height:1.6">
-      A comissão acima é calculada sobre a <b>receita líquida</b> (já sem o desconto do cupom)
-      dos pedidos dos últimos 3 meses, na taxa do seu nível de hoje.</p>
-  </div>
-</section>` : ''}
-
-${cl.total ? `<section>
-  <div class="sh"><h2>Cliques no seu link</h2>
-    <p>Últimos 30 dias. ${cl.ultimo ? 'O mais recente foi em <b>'+dt(cl.ultimo)+'</b>.' : ''}</p></div>
-  <div class="sb">
-    <div class="spark">${(cl.serie||[]).map(d => {
-      const mx = Math.max(1, ...(cl.serie||[]).map(x => x.cliques));
-      return `<i class="${d.cliques?'tem':''}" style="height:${
-        d.cliques ? Math.max(6, Math.round(d.cliques/mx*100)) : 2}%"
-        title="${dt(d.dia)}: ${d.cliques} clique${d.cliques===1?'':'s'}"></i>`;
-    }).join('')}</div>
-    <div class="sparkl"><span>${dt((cl.serie||[])[0]?.dia)}</span><span>hoje</span></div>
+    <p class="nota" style="margin:13px 0 0">
+      A comissão é calculada sobre a <b>receita líquida</b> — o que sobra depois do desconto do
+      seu cupom — na taxa do seu nível <b>de hoje</b>.</p>
   </div>
 </section>` : ''}
 
@@ -213,7 +356,9 @@ ${cl.total ? `<section>
 </section>
 
 ${jg.length ? `<section>
-  <div class="sh"><h2>Suas metas</h2><p>Atualiza sozinho conforme você publica e vende.</p></div>
+  <div class="sh"><h2>Suas metas</h2>
+    <p>Cada jogo tem o próprio prazo, então <b>não segue o mês escolhido</b> — atualiza sozinho
+      conforme você publica e vende.</p></div>
   <div class="sb">${jg.map(j => `
     <div style="margin-bottom:16px">
       <div style="font-size:13.5px;font-weight:600;margin-bottom:8px">${esc(j.jogo)}
@@ -221,7 +366,6 @@ ${jg.length ? `<section>
       ${Object.entries(j.detalhe||{}).map(([tipo,d]) => {
         const meta = d.meta, feito = d.feito||0;
         const pct = meta ? Math.min(100, Math.round(feito/meta*100)) : (feito?100:0);
-        const nomes = {reels:'Reels',carrossel:'Carrossel',feed_imagem:'Foto',story:'Stories',venda:'Vendas'};
         return `<div class="meta"><div class="mh"><span>${nomes[tipo]||tipo}</span>
           <b>${feito}${meta?' / '+meta:''}</b></div>
           <div class="bar${meta&&feito>=meta?' full':''}"><span style="width:${pct}%"></span></div></div>`;
@@ -230,48 +374,54 @@ ${jg.length ? `<section>
 </section>` : ''}
 
 <section>
-  <div class="sh"><h2>Seus pedidos</h2>
-    <p>Cada compra feita com o seu cupom, com a comissão na taxa do seu nível de hoje.</p></div>
-  <div class="sb">${ex.length ? ex.map(e => `
-    <div class="lin"><span class="d">${dt(e.pedido_em)}</span>
-      <span class="t">Pedido ${esc(e.pedido_numero||e.pedido_id)}${e.cliente_novo?' · cliente novo':''}${
-        e.virou_assinatura?' · <span class="tag">assinatura</span>':''}</span>
-      <span class="v" style="font-weight:500;color:var(--mut);font-size:12px;margin-right:10px">${
-        e.comissao ? rs(e.comissao) : ''}</span>
-      <span class="v">${rs(e.receita_liquida)}</span></div>`).join('')
-    : '<div class="vazio">Nenhum pedido ainda. Compartilhe seu cupom e ele aparece aqui.</div>'}</div>
-</section>
-
-<section>
-  <div class="sh"><h2>Seus conteúdos</h2><p>O que a gente capturou do seu perfil.</p></div>
-  <div class="sb">${pubs.length ? pubs.slice(0,20).map(c => `
+  <div class="sh"><h2>Seus conteúdos em ${rotulo(sel)}</h2>
+    <span class="ct">${m.conteudos.length} de ${pubs.length}</span>
+    <p>O que a gente capturou do seu perfil.</p></div>
+  <div class="sb">${m.conteudos.length ? m.conteudos.map(c => `
     <div class="lin"><span class="tag">${esc(String(c.tipo).replace('feed_',''))}</span>
-      <span class="d">${dt(c.publicado_em)}</span>
+      <span class="d">${dtc(c.dia)}</span>
       <span class="t">${c.permalink?`<a href="${esc(c.permalink)}" target="_blank" rel="noopener" style="color:inherit">${esc(c.legenda||'ver post')}</a>`:esc(c.legenda||'—')}</span>
       <span class="v">${c.visualizacoes?n(c.visualizacoes)+' views':(c.curtidas!=null?n(c.curtidas)+'♥':'')}</span></div>`).join('')
-    : '<div class="vazio">Nenhum conteúdo capturado ainda. Marque @cellsoficial nos seus posts.</div>'}</div>
+    : `<div class="vazio">Nenhum conteúdo em ${rotulo(sel)}.${
+        pubs.length ? ' O mais recente foi em '+dtc(pubs[0].dia)+'.'
+                    : ' Marque @cellsoficial nos seus posts.'}</div>`}</div>
 </section>
 
 ${env.length ? `<section>
-  <div class="sh"><h2>Seus envios</h2><p>O que a Cells mandou pra você.</p></div>
+  <div class="sh"><h2>Seus envios</h2><p>O que a Cells mandou pra você. Lista completa, não só o mês.</p></div>
   <div class="sb">${env.map(e => `
     <div class="lin"><span class="tag">${esc(String(e.tipo).replace('_',' '))}</span>
-      <span class="d">${dt(e.solicitado_em)}</span>
+      <span class="d">${dia(e.solicitado_em)}</span>
       <span class="t">${esc(e.itens||'—')}${e.rastreio?' · '+esc(e.rastreio):''}</span>
       <span class="v" style="font-size:11px;font-weight:500">${esc(String(e.status).replace('_',' '))}</span></div>`).join('')}</div>
 </section>` : ''}
 
 <footer>
-  Comunidade Cells · seus números atualizam sozinhos<br>
+  Na vida inteira: <b>${rs(vida.receita)}</b> em ${n(vida.pedidos)}
+  ${vida.pedidos===1?'pedido':'pedidos'} · seus números atualizam sozinhos<br>
   Dúvida sobre pagamento ou sobre um pedido? Fale com a gente.
 </footer>`;
+}
 
-document.querySelectorAll('.cp').forEach(b => b.addEventListener('click', async () => {
+const app = document.getElementById('app');
+function desenhar(){
+  app.innerHTML = pagina();
+  const i = meses.indexOf(sel);
+  document.getElementById('mes').onchange = e => { sel = e.target.value; desenhar(); };
+  document.getElementById('ant').onclick  = () => { if(i < meses.length-1){ sel = meses[i+1]; desenhar(); } };
+  document.getElementById('prox').onclick = () => { if(i > 0){ sel = meses[i-1]; desenhar(); } };
+}
+desenhar();
+
+// delegação: a página é redesenhada a cada troca de mês, então prender o listener num botão
+// específico o perderia na primeira troca.
+document.addEventListener('click', async ev => {
+  const b = ev.target.closest('.cp'); if (!b) return;
   const el = document.getElementById(b.dataset.c);
   try { await navigator.clipboard.writeText(el.value); }
   catch(e) { el.select(); document.execCommand('copy'); }
   const o = b.textContent; b.textContent = 'copiado'; setTimeout(()=>b.textContent=o, 1500);
-}));
+});
 </script>
 </body>
 </html>
