@@ -406,8 +406,12 @@
     <div class="panel">
       <div class="barra">
         <button class="bt" id="novaCamp">nova campanha</button>
-        <button class="aba" data-cs="vivas" aria-pressed="true">em uso</button>
-        <button class="aba" data-cs="todas" aria-pressed="false">todas</button>
+        <button class="aba" data-cs="vivas"     aria-pressed="true">em uso <b id="k-vivas">0</b></button>
+        <button class="aba" data-cs="rascunho"  aria-pressed="false">rascunho <b id="k-rascunho">0</b></button>
+        <button class="aba" data-cs="encerrada" aria-pressed="false">encerradas <b id="k-encerrada">0</b></button>
+        <button class="aba" data-cs="cancelada" aria-pressed="false">canceladas <b id="k-cancelada">0</b></button>
+        <button class="aba" data-cs="arquivada" aria-pressed="false">arquivadas <b id="k-arquivada">0</b></button>
+        <button class="aba" data-cs="todas"     aria-pressed="false">todas <b id="k-todas">0</b></button>
         <span class="cnt" id="cntCamp"></span>
       </div>
       <div id="listaCamp"></div>
@@ -1745,10 +1749,34 @@ pintaCad();
 const CAMP = D.campanhas || [], PLACAR = D.placar || [];
 let campAba = 'vivas';
 
+// "em uso" é ATIVA, e só. Antes era "tudo que não está arquivada", então rascunho, encerrada
+// e cancelada apareciam juntas com o que está rodando — três estados diferentes numa lista só,
+// e campanha cancelada continua mostrando número, que é o jeito mais fácil de ler resultado
+// onde não houve resultado.
+const FILTRO_CAMP = {
+  vivas:     c => c.status === 'ativa',
+  rascunho:  c => c.status === 'rascunho',
+  encerrada: c => c.status === 'encerrada',
+  cancelada: c => c.status === 'cancelada',
+  arquivada: c => c.status === 'arquivada',
+  todas:     () => true,
+};
+const ROTULO_CAMP = { vivas:'em uso', rascunho:'em rascunho', encerrada:'encerrada',
+                      cancelada:'cancelada', arquivada:'arquivada', todas:'' };
+
 function pintaCamp(){
-  const L = CAMP.filter(c => campAba === 'todas' || c.status !== 'arquivada');
+  // contagem em TODA aba, inclusive nas vazias: aba sem número não diz se está vazia porque
+  // não existe nada ou porque o filtro errou.
+  for (const k of Object.keys(FILTRO_CAMP)) {
+    const el = document.getElementById('k-' + k);
+    if (el) el.textContent = CAMP.filter(FILTRO_CAMP[k]).length;
+  }
+  const L = CAMP.filter(FILTRO_CAMP[campAba] || FILTRO_CAMP.todas)
+    // encerrada e arquivada não têm ordem natural na tela: a mais recente é a que interessa
+    .slice().sort((a,b) => String(b.inicio||'').localeCompare(String(a.inicio||'')));
   document.getElementById('cntCamp').textContent =
-    L.length + ' campanha' + (L.length===1?'':'s');
+    L.length + ' campanha' + (L.length===1?'':'s')
+    + (ROTULO_CAMP[campAba] ? ' ' + ROTULO_CAMP[campAba] + (L.length===1?'':'s') : '');
   document.getElementById('listaCamp').innerHTML = L.length ? L.map(c => {
     const pl = PLACAR.filter(p => p.campanha_id === c.campanha_id).slice(0,6);
     // campanha não tem link próprio desde 14/08 — o creator divulga só o link dele
@@ -1797,7 +1825,9 @@ function pintaCamp(){
       + '</select>'
       + '<button class="acbt" data-cedit="'+c.campanha_id+'">editar</button>'
       + '<button class="acbt" data-cadd="'+c.campanha_id+'">+ creators</button>'
-      + ((c.participantes||[]).length
+      // ⚠️ Avisar só em campanha ATIVA. O botão aparecia em cancelada e arquivada também, e
+      // mandar briefing de campanha cancelada é o tipo de e-mail que não dá para voltar atrás.
+      + ((c.participantes||[]).length && c.status === 'ativa'
           ? '<button class="acbt ok" data-avisar="'+c.campanha_id+'">avisar os creators</button>' : '')
       + '</div>'
       + ((c.participantes||[]).length
@@ -1807,7 +1837,13 @@ function pintaCamp(){
               + 'style="border:0;color:var(--cr)" title="tirar da campanha">×</button></span>').join('')+'</p>'
           : '<p class="obs" style="margin-top:8px">Nenhum creator vinculado — sem creator a campanha não mede nada.</p>')
       + '</div>';
-  }).join('') : '<div class="msg idle">Nenhuma campanha ainda. Crie a primeira ali em cima.</div>';
+  }).join('')
+    : (campAba === 'todas'
+        ? '<div class="msg idle">Nenhuma campanha ainda. Crie a primeira ali em cima.</div>'
+        // vazio de FILTRO não é vazio de base — dizer "nenhuma campanha ainda" na aba
+        // "arquivadas" faz parecer que a base inteira sumiu
+        : '<div class="msg idle">Nenhuma campanha '+ROTULO_CAMP[campAba]+'. '
+          + 'São '+CAMP.length+' no total — veja em <b>todas</b>.</div>');
 }
 
 document.querySelectorAll('[data-cs]').forEach(b => b.addEventListener('click', () => {
