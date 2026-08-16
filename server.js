@@ -695,12 +695,28 @@ async function dadosDoCreator(parceiroId) {
            p.status, p.email, p.telefone_e164, p.cpf, p.cnpj, p.nascimento,
            p.pix_tipo, p.pix_chave,
            p.end_cep, p.end_logradouro, p.end_numero, p.end_complemento,
-           p.end_bairro, p.end_cidade, p.end_uf,
+           p.end_bairro, p.end_cidade, p.end_uf, p.end_aos_cuidados,
            (p.senha_hash IS NOT NULL) AS tem_senha,
            to_char(p.criado_em AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD') AS desde,
-           c.codigo AS cupom, c.link_redirect_id, c.link_path
+           c.codigo AS cupom, c.link_redirect_id, c.link_path,
+           l.idade AS idade_declarada
     FROM creator.parceiro p
     LEFT JOIN creator.cupom c ON c.parceiro_id = p.parceiro_id AND c.ativo
+    -- ⚠️ SÓ a idade sai do lead aqui (e nada de crase neste comentário: crase dentro de
+    -- template literal encerra a string — já quebrou este arquivo duas vezes).
+    -- Todo o resto (CPF, PIX, endereço) já foi para creator.parceiro pelo job "ficha" — é lá
+    -- que a creator edita, e ler as duas fontes na tela faria o valor "voltar" depois que
+    -- ela apagasse.
+    -- A idade fica de fora do job de propósito: o formulário perguntou IDADE, não data de
+    -- nascimento, e idade envelhece. Ela aparece como o que é — uma declaração datada — para
+    -- o campo de nascimento não ficar em branco sem explicação.
+    LEFT JOIN LATERAL (
+      SELECT x.idade FROM creator.leads x
+       WHERE (x.lead_id = p.lead_id
+              OR lower(regexp_replace(coalesce(x.instagram_handle,''),'^@','')) =
+                 lower(coalesce(p.instagram_handle,'')))
+         AND x.idade IS NOT NULL
+       ORDER BY (x.lead_id = p.lead_id) DESC, x.criado_em DESC LIMIT 1) l ON true
     WHERE p.parceiro_id = $1`, [parceiroId]);
   if (!pa) return null;
   // ⚠️ O LINK VEM DAQUI, PRONTO. O portal montava o dele e usava `utm_medium=organic` — o
@@ -1125,6 +1141,7 @@ http.createServer(async (req, res) => {
         end_numero: txt(d.end_numero, 20), end_complemento: txt(d.end_complemento, 80),
         end_bairro: txt(d.end_bairro, 90), end_cidade: txt(d.end_cidade, 90),
         end_uf: uf ? uf.toUpperCase() : null,
+        end_aos_cuidados: txt(d.end_aos_cuidados, 120),
       };
       try {
         const n = await salvarCampos(pid, campos, 'creator');

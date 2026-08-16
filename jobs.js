@@ -221,6 +221,169 @@ async function syncVendas(pool) {
   } finally { cli.release(); }
 }
 
+// ------------------------------------------------------ 0b. ficha vinda do cadastro
+// ⚠️ O DADO SEMPRE ESTEVE NO BANCO — o portal é que não olhava para ele.
+// O formulário de inscrição (`creator.leads`) pergunta CPF, chave PIX e endereço completo, e
+// 49 das 96 creators ativas responderam. `creator.parceiro` — a única tabela que o portal lê —
+// tinha esses campos ZERADOS em 100% das linhas. Resultado: a creator abria "Meus dados", via
+// tudo em branco e era convidada a digitar de novo o que ela já tinha digitado; e o painel de
+// apuração dizia "sem PIX" para gente que informou PIX no dia da inscrição.
+//
+// Este job é a ponte, e ele é SINCRONIA, não import (a lição do `creator.venda`, 15/08):
+// roda de hora em hora e conserta sozinho quem for aprovado depois, ou quem completar o
+// formulário depois de aprovado.
+//
+// TRÊS REGRAS que o SQL abaixo cumpre, e cada uma existe por um motivo:
+//
+//  1. SÓ PREENCHE O QUE ESTÁ NULO. Nunca sobrescreve. O que a creator digitou no portal, ou o
+//     que o Gabriel corrigiu na mão, vale mais que o formulário — inclusive quando o
+//     formulário é mais novo.
+//  2. PIX e ENDEREÇO entram em BLOCO, do mesmo lead. Preenchendo campo a campo "o mais
+//     recente que tiver valor", dava para casar `pix_tipo='cpf'` de um lead com a chave de
+//     telefone de outro — erro que não aparece agora, aparece no dia do pagamento. O endereço
+//     misturado seria pior: rua de um cadastro, cidade de outro, caixa perdida.
+//  3. FORMATO CONFERIDO ANTES DE ESCREVER. Hoje os 51 CPFs têm 11 dígitos e as 51 chaves PIX
+//     passam na validação do próprio servidor (medido em 16/08), mas o job vai rodar por anos
+//     sobre um formulário público. Lixo no lead não pode virar a ficha de pagamento de alguém.
+//
+// O casamento lead↔parceiro é o mesmo de `creator.vw_endereco`: `lead_id` quando existe, senão
+// o @. O `lead_id` primeiro importa — 10 pessoas têm mais de um lead, e quem trocou de @ só é
+// encontrada por ele.
+async function fichaDoCadastro(pool) {
+  const { rows: [r] } = await pool.query(`
+    WITH pares AS (
+      SELECT p.parceiro_id, x.criado_em, (x.lead_id = p.lead_id) AS dele,
+             -- ⚠️ leads guarda STRING VAZIA, não NULL (19 linhas hoje). Sem o nullif, ''
+             -- conta como "preenchido" e o job grava vazio por cima de vazio para sempre.
+             nullif(btrim(x.cpf),'')             AS cpf,
+             nullif(btrim(x.pix_tipo),'')        AS pix_tipo,
+             nullif(btrim(x.pix_chave),'')       AS pix_chave,
+             nullif(btrim(x.end_cep),'')         AS end_cep,
+             nullif(btrim(x.end_logradouro),'')  AS end_logradouro,
+             nullif(btrim(x.end_numero),'')      AS end_numero,
+             nullif(btrim(x.end_complemento),'') AS end_complemento,
+             nullif(btrim(x.end_bairro),'')      AS end_bairro,
+             nullif(btrim(x.end_cidade),'')      AS end_cidade,
+             nullif(btrim(x.end_uf),'')          AS end_uf,
+             nullif(btrim(x.end_aos_cuidados),'') AS end_aos_cuidados,
+             nullif(btrim(x.email),'')           AS email,
+             nullif(btrim(x.telefone_e164),'')   AS telefone_e164
+        FROM creator.parceiro p
+        JOIN creator.leads x
+          ON x.lead_id = p.lead_id
+          OR lower(regexp_replace(coalesce(x.instagram_handle,''),'^@','')) =
+             lower(coalesce(p.instagram_handle,''))
+       WHERE NOT p.arquivado
+    ),
+    -- CPF: só o que tem 11 dígitos. O dígito verificador quem confere é o servidor na hora
+    -- de salvar; aqui o que interessa é não gravar "não tenho" no campo de CPF.
+    doc AS (
+      SELECT DISTINCT ON (parceiro_id) parceiro_id, regexp_replace(cpf,'\\D','','g') AS cpf
+        FROM pares WHERE length(regexp_replace(cpf,'\\D','','g')) = 11
+       ORDER BY parceiro_id, dele DESC, criado_em DESC
+    ),
+    -- PIX em bloco: tipo e chave do MESMO lead, e o tipo tem que ser um dos que o portal
+    -- sabe mostrar — tipo desconhecido deixaria o <select> mudo e ela não conseguiria salvar.
+    pix AS (
+      SELECT DISTINCT ON (parceiro_id) parceiro_id, pix_tipo, pix_chave
+        FROM pares
+       WHERE pix_tipo IN ('cpf','cnpj','email','telefone','aleatoria') AND pix_chave IS NOT NULL
+       ORDER BY parceiro_id, dele DESC, criado_em DESC
+    ),
+    -- endereço em bloco: exige CEP de 8 dígitos, rua e UF de verdade. Meio endereço não
+    -- entrega encomenda e ainda apaga a sensação de que falta preencher.
+    endr AS (
+      SELECT DISTINCT ON (parceiro_id) parceiro_id,
+             regexp_replace(end_cep,'\\D','','g') AS end_cep, end_logradouro, end_numero,
+             end_complemento, end_bairro, end_cidade, upper(end_uf) AS end_uf, end_aos_cuidados
+        FROM pares
+       WHERE length(regexp_replace(end_cep,'\\D','','g')) = 8
+         AND end_logradouro IS NOT NULL
+         AND upper(end_uf) IN ('AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG',
+                               'PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO')
+       ORDER BY parceiro_id, dele DESC, criado_em DESC
+    ),
+    con AS (
+      SELECT parceiro_id,
+             (array_agg(email ORDER BY dele DESC, criado_em DESC)
+                FILTER (WHERE email ~ '^[^\\s@]+@[^\\s@]+\\.[a-zA-Z]{2,}$'))[1] AS email,
+             (array_agg(telefone_e164 ORDER BY dele DESC, criado_em DESC)
+                FILTER (WHERE telefone_e164 ~ '^\\+55\\d{10,11}$'))[1] AS telefone_e164
+        FROM pares GROUP BY parceiro_id
+    ),
+    -- o que ESTÁ FALTANDO em cada ficha. NULL aqui = não mexe.
+    alvo AS (
+      SELECT p.parceiro_id,
+             CASE WHEN p.cpf IS NULL AND p.cnpj IS NULL THEN d.cpf END AS cpf,
+             CASE WHEN p.pix_tipo IS NULL AND p.pix_chave IS NULL THEN x.pix_tipo END AS pix_tipo,
+             CASE WHEN p.pix_tipo IS NULL AND p.pix_chave IS NULL THEN x.pix_chave END AS pix_chave,
+             CASE WHEN p.end_cep IS NULL AND p.end_logradouro IS NULL THEN e.end_cep END AS end_cep,
+             CASE WHEN p.end_cep IS NULL AND p.end_logradouro IS NULL THEN e.end_logradouro END AS end_logradouro,
+             CASE WHEN p.end_cep IS NULL AND p.end_logradouro IS NULL THEN e.end_numero END AS end_numero,
+             CASE WHEN p.end_cep IS NULL AND p.end_logradouro IS NULL THEN e.end_complemento END AS end_complemento,
+             CASE WHEN p.end_cep IS NULL AND p.end_logradouro IS NULL THEN e.end_bairro END AS end_bairro,
+             CASE WHEN p.end_cep IS NULL AND p.end_logradouro IS NULL THEN e.end_cidade END AS end_cidade,
+             CASE WHEN p.end_cep IS NULL AND p.end_logradouro IS NULL THEN e.end_uf END AS end_uf,
+             CASE WHEN p.end_aos_cuidados IS NULL THEN e.end_aos_cuidados END AS end_aos_cuidados,
+             CASE WHEN p.email IS NULL THEN c.email END AS email,
+             CASE WHEN p.telefone_e164 IS NULL THEN c.telefone_e164 END AS telefone_e164
+        FROM creator.parceiro p
+        LEFT JOIN doc d USING (parceiro_id)
+        LEFT JOIN pix x USING (parceiro_id)
+        LEFT JOIN endr e USING (parceiro_id)
+        LEFT JOIN con c USING (parceiro_id)
+       WHERE NOT p.arquivado
+    ),
+    falta AS (
+      SELECT a.*, array_remove(ARRAY[
+               CASE WHEN a.cpf IS NOT NULL THEN 'cpf' END,
+               CASE WHEN a.pix_chave IS NOT NULL THEN 'pix' END,
+               CASE WHEN a.end_cep IS NOT NULL THEN 'endereço' END,
+               CASE WHEN a.end_aos_cuidados IS NOT NULL THEN 'a/c' END,
+               CASE WHEN a.email IS NOT NULL THEN 'e-mail' END,
+               CASE WHEN a.telefone_e164 IS NOT NULL THEN 'telefone' END], NULL) AS campos
+        FROM alvo a
+    ),
+    upd AS (
+      UPDATE creator.parceiro p
+         SET cpf = coalesce(p.cpf, f.cpf),
+             pix_tipo = coalesce(p.pix_tipo, f.pix_tipo),
+             pix_chave = coalesce(p.pix_chave, f.pix_chave),
+             end_cep = coalesce(p.end_cep, f.end_cep),
+             end_logradouro = coalesce(p.end_logradouro, f.end_logradouro),
+             end_numero = coalesce(p.end_numero, f.end_numero),
+             end_complemento = coalesce(p.end_complemento, f.end_complemento),
+             end_bairro = coalesce(p.end_bairro, f.end_bairro),
+             end_cidade = coalesce(p.end_cidade, f.end_cidade),
+             end_uf = coalesce(p.end_uf, f.end_uf),
+             end_aos_cuidados = coalesce(p.end_aos_cuidados, f.end_aos_cuidados),
+             email = coalesce(p.email, f.email),
+             telefone_e164 = coalesce(p.telefone_e164, f.telefone_e164),
+             atualizado_em = now()
+        FROM falta f
+       WHERE f.parceiro_id = p.parceiro_id AND cardinality(f.campos) > 0
+      RETURNING p.parceiro_id),
+    -- uma linha de rastro por pessoa, não uma por campo: o que a creator vai perguntar é
+    -- "de onde saiu meu PIX?", e a resposta é "do seu cadastro", não treze linhas.
+    rastro AS (
+      INSERT INTO creator.parceiro_edicao (parceiro_id, campo, valor_antigo, valor_novo, por)
+      SELECT f.parceiro_id, 'ficha_do_cadastro', NULL,
+             array_to_string(f.campos, ', '), 'job:cadastro'
+        FROM falta f WHERE cardinality(f.campos) > 0
+      RETURNING 1)
+    SELECT (SELECT count(*) FROM upd)::int AS fichas,
+           (SELECT count(*) FROM rastro)::int AS rastros`);
+
+  // quantas ainda ficam sem como receber — é o número que trava pagamento, então vai para o
+  // log e envelhece à vista, em vez de esperar alguém abrir a tela de apuração e descobrir.
+  const { rows: [f] } = await pool.query(`
+    SELECT count(*) FILTER (WHERE pix_chave IS NULL)::int AS sem_pix,
+           count(*) FILTER (WHERE cpf IS NULL AND cnpj IS NULL)::int AS sem_doc,
+           count(*) FILTER (WHERE end_cep IS NULL)::int AS sem_endereco
+      FROM creator.parceiro WHERE NOT arquivado AND status = 'ativo'`);
+  return { fichas: r.fichas, ...f };
+}
+
 // ---------------------------------------------------------------- 1. /tags
 // Incremental: só grava o que ainda não existe (ON CONFLICT no ig_media_id), e para de paginar
 // assim que bate numa página inteira já conhecida. Métrica sempre vira linha nova — curtida
@@ -890,9 +1053,17 @@ function agendar(pool, env) {
   setInterval(() => roda('vendas', () => syncVendas(pool)), HORA).unref();
   setTimeout(() => roda('vendas', () => syncVendas(pool)), 30000).unref();
 
-  return { roda, syncTags, syncPerfis, syncApify, syncVendas };
+  // ficha: mesma regra do vendas — só lê o Postgres da casa, então não depende de token e
+  // não pode cair junto com a Meta. É ele que leva CPF, PIX e endereço do formulário de
+  // inscrição para a ficha que o portal mostra. Roda 45s depois do boot para não competir
+  // com o `vendas`.
+  setInterval(() => roda('ficha', () => fichaDoCadastro(pool)), HORA).unref();
+  setTimeout(() => roda('ficha', () => fichaDoCadastro(pool)), 45000).unref();
+
+  return { roda, syncTags, syncPerfis, syncApify, syncVendas, fichaDoCadastro };
 }
 
-module.exports = { syncTags, syncPerfis, syncApify, syncCadastros, syncVendas, avisarRegistro, perfilDe, salvarPerfil,
+module.exports = { syncTags, syncPerfis, syncApify, syncCadastros, syncVendas, fichaDoCadastro,
+                   avisarRegistro, perfilDe, salvarPerfil,
                    guardarStory, guardarVideo, buscarVideoDe, limparMidia,
                    extrairStories, agendar, logJob, extrairMensagens, guardarMensagem };

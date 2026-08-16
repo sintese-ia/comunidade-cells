@@ -285,15 +285,15 @@ const ABAS = [
   {id:'nivel',      ic:'◆', rot:'Nível e metas'},
   {id:'campanhas',  ic:'✦', rot:'Campanhas'},
   {id:'conteudos',  ic:'▶', rot:'Conteúdos'},
-  {id:'financeiro', ic:'▤', rot:'Financeiro'},
   {id:'perfil',     ic:'●', rot:'Meus dados'},
   {id:'acesso',     ic:'⚿', rot:'Acesso'},
 ];
-// bolinha de pendência: o que falta para ela conseguir RECEBER. Sem isso, "preencha o PIX"
-// vira um aviso que só aparece se ela abrir a aba certa por acaso.
+// ⚠️ "Financeiro" NÃO é mais aba (pedido do Gabriel, 16/08): virou seção de "Meus dados".
+// Eram duas abas pedindo a ficha da mesma pessoa em pedaços — ela preenchia o endereço numa,
+// não via a outra, e ficava sem PIX sem saber. O hash antigo continua funcionando porque
+// ele já circulou em link.
 const pendente = id =>
-  (id === 'financeiro' && (!p.pix_chave || !(p.cpf || p.cnpj))) ||
-  (id === 'perfil' && !p.email) ||
+  (id === 'perfil' && (!p.email || !p.pix_chave || !(p.cpf || p.cnpj))) ||
   (id === 'acesso' && !p.tem_senha);
 
 function menu(){
@@ -514,47 +514,23 @@ ${env.length ? `<section>
 </section>` : ''}`;
 }
 
-// ---------------------------------------------------------------- Financeiro
-function telaFinanceiro(){
-  const temDoc = !!(p.cpf || p.cnpj), tipoDoc = p.cnpj ? 'cnpj' : 'cpf';
-  return `<h1 class="tt">Financeiro<small>Por onde a sua comissão vai ser paga.</small></h1>
-<section>
-  <div class="sh"><h2>Dados para o PIX</h2>
-    <p>O <b>titular da chave</b> tem que ser o mesmo CPF/CNPJ informado aqui — banco recusa
-      transferência para chave de terceiro.</p></div>
-  <div class="sb">
-    ${!temDoc || !p.pix_chave ? `<div class="aviso">Enquanto isso não estiver preenchido,
-      não temos para onde mandar a sua comissão.</div>` : ''}
-    <div class="cps">
-      ${campo('fTipoDoc','Você recebe como', tipoDoc, {select:[['cpf','Pessoa física (CPF)'],['cnpj','Pessoa jurídica (CNPJ)']]})}
-      ${campo('fDoc','CPF/CNPJ do titular', p.cnpj || p.cpf || '', {attr:'inputmode="numeric" placeholder="só números"'})}
-      ${campo('fPixTipo','Tipo de chave', p.pix_tipo || 'cpf', {select:[
-        ['cpf','CPF'],['cnpj','CNPJ'],['email','E-mail'],['telefone','Telefone'],['aleatoria','Chave aleatória']]})}
-      ${campo('fPixChave','Chave PIX', p.pix_chave || '', {attr:'placeholder="a chave, como ela é no banco"'})}
-    </div>
-    <div class="acoes"><button class="sv" id="svFin">Salvar</button>
-      <span class="msg" id="msgFin"></span></div>
-  </div>
-</section>
-<section>
-  <div class="sh"><h2>Como o pagamento funciona</h2></div>
-  <div class="sb">
-    <div class="aviso info">O desenho do pagamento — janela para pedir e data para receber —
-      ainda está sendo fechado pela Cells. Assim que estiver, aparece aqui com as datas.
-      Deixe seus dados prontos para não travar o primeiro pagamento.</div>
-    <p class="nota">A comissão que você vê em <b>Resultados</b> é calculada na taxa do seu nível
-      de hoje. Ela é a sua referência do mês, não um saldo já liberado.</p>
-  </div>
-</section>`;
-}
-
 // ---------------------------------------------------------------- Meus dados
+// Aba única: quem você é, para onde vai a caixa e por onde entra o dinheiro. Eram duas abas
+// (pedido do Gabriel, 16/08 — "juntar dados financeiros com os meus dados").
+//
+// ⚠️ NADA AQUI NASCE EM BRANCO SEM MOTIVO. CPF, chave PIX e endereço vêm do formulário de
+// inscrição, que já perguntou tudo isso; o job `ficha` leva do lead para a ficha. Só fica
+// vazio o que o banco realmente não tem — e o único campo assim é a data de nascimento: o
+// formulário perguntou IDADE, e idade não vira data.
 function telaPerfil(){
   const tel = String(p.telefone_e164||'').replace(/^\+55/,'');
-  return `<h1 class="tt">Meus dados<small>Na Cells desde ${dtc(p.desde)}.</small></h1>
+  const temDoc = !!(p.cpf || p.cnpj), tipoDoc = p.cnpj ? 'cnpj' : 'cpf';
+  const faltaReceber = !temDoc || !p.pix_chave;
+  return `<h1 class="tt">Meus dados<small>Na Cells desde ${dtc(p.desde)}. O que você preencheu
+    na inscrição já está aqui — confira e corrija o que mudou.</small></h1>
 <section>
   <div class="sh"><h2>Informações pessoais</h2>
-    <p>É com estes dados que a gente fala com você e manda produto.</p></div>
+    <p>É com estes dados que a gente fala com você.</p></div>
   <div class="sb">
     ${!p.email ? `<div class="aviso">Sem e-mail, você não recebe aviso de campanha nem consegue
       criar senha para entrar aqui sem o link.</div>` : ''}
@@ -563,7 +539,9 @@ function telaPerfil(){
       ${campo('gEmail','E-mail', p.email || '', {attr:'type="email" inputmode="email"'})}
       ${campo('gTel','Celular com DDD', tel, {attr:'inputmode="numeric" placeholder="11999998888"'})}
       ${campo('gNasc','Data de nascimento', p.nascimento ? String(p.nascimento).slice(0,10) : '',
-        {attr:'type="date"'})}
+        {attr:'type="date"', ajuda: p.nascimento ? '' : (p.idade_declarada
+          ? 'Na inscrição você declarou ' + p.idade_declarada + ' anos — a gente perguntou a idade, não a data. Preencha se quiser aparecer no aniversário.'
+          : 'A gente nunca perguntou isso. Preencha se quiser.')})}
       ${campo('gIg','Seu @', '@' + (p.instagram_handle||''), {attr:'readonly',
         ajuda:'O @ é a chave que liga você aos seus posts, ao seu link e ao seu cupom. Para trocar, fale com a gente que a gente migra o histórico junto.'})}
     </div>
@@ -582,9 +560,36 @@ function telaPerfil(){
       ${campo('gCompl','Complemento', p.end_complemento || '')}
       ${campo('gBai','Bairro', p.end_bairro || '')}
       ${campo('gCid','Cidade', p.end_cidade || '')}
+      ${campo('gAc','Aos cuidados de', p.end_aos_cuidados || '', {full:true,
+        ajuda:'Quem recebe, se não for você — porteiro, recepção, outro nome na caixa.'})}
     </div>
     <div class="acoes"><button class="sv" id="svEnd">Salvar</button>
       <span class="msg" id="msgEnd"></span></div>
+  </div>
+</section>
+<section>
+  <div class="sh"><h2>Como você recebe a comissão</h2>
+    <p>O <b>titular da chave</b> tem que ser o mesmo CPF/CNPJ informado aqui — banco recusa
+      transferência para chave de terceiro.</p></div>
+  <div class="sb">
+    ${faltaReceber ? `<div class="aviso">Enquanto isso não estiver preenchido,
+      não temos para onde mandar a sua comissão.</div>` : ''}
+    <div class="cps">
+      ${campo('fTipoDoc','Você recebe como', tipoDoc, {select:[['cpf','Pessoa física (CPF)'],['cnpj','Pessoa jurídica (CNPJ)']]})}
+      ${campo('fDoc','CPF/CNPJ do titular', p.cnpj || p.cpf || '', {attr:'inputmode="numeric" placeholder="só números"'})}
+      ${campo('fPixTipo','Tipo de chave', p.pix_tipo || 'cpf', {select:[
+        ['cpf','CPF'],['cnpj','CNPJ'],['email','E-mail'],['telefone','Telefone'],['aleatoria','Chave aleatória']]})}
+      ${campo('fPixChave','Chave PIX', p.pix_chave || '', {attr:'placeholder="a chave, como ela é no banco"'})}
+    </div>
+    <div class="acoes"><button class="sv" id="svFin">Salvar</button>
+      <span class="msg" id="msgFin"></span></div>
+    <div style="margin-top:16px;padding-top:13px;border-top:1px solid var(--line2)">
+      <div class="aviso info" style="margin-bottom:10px">O desenho do pagamento — janela para
+        pedir e data para receber — ainda está sendo fechado pela Cells. Assim que estiver,
+        aparece aqui com as datas.</div>
+      <p class="nota">A comissão que você vê em <b>Resultados</b> é calculada na taxa do seu
+        nível de hoje. Ela é a sua referência do mês, não um saldo já liberado.</p>
+    </div>
   </div>
 </section>`;
 }
@@ -624,10 +629,14 @@ function telaAcesso(){
 
 // ================================================================ render
 const TELAS = {inicio:telaInicio, nivel:telaNivel, campanhas:telaCampanhas,
-               conteudos:telaConteudos, financeiro:telaFinanceiro, perfil:telaPerfil,
-               acesso:telaAcesso};
+               conteudos:telaConteudos, perfil:telaPerfil, acesso:telaAcesso};
+
+// `#financeiro` virou seção de "Meus dados" em 16/08, mas o hash já saiu em conversa e em
+// aviso — quem clicar no link antigo cai na aba certa, não numa tela em branco.
+const APELIDO = {financeiro:'perfil'};
 
 function desenhar(){
+  if (APELIDO[aba]) aba = APELIDO[aba];
   if (!TELAS[aba]) aba = 'inicio';
   document.getElementById('menu').innerHTML = menu();
   document.getElementById('tela').innerHTML = TELAS[aba]();
@@ -653,7 +662,8 @@ document.addEventListener('click', async ev => {
   const o = b.textContent; b.textContent = 'copiado'; setTimeout(()=>b.textContent=o, 1500);
 });
 window.addEventListener('hashchange', () => {
-  const a = (location.hash||'').replace('#','') || 'inicio';
+  const cru = (location.hash||'').replace('#','') || 'inicio';
+  const a = APELIDO[cru] || cru;
   if (a !== aba && TELAS[a]) { aba = a; desenhar(); }
 });
 
@@ -690,6 +700,7 @@ const perfilAtual = () => ({
   nome: val('gNome'), email: val('gEmail'), telefone: val('gTel'), nascimento: val('gNasc'),
   end_cep: val('gCep'), end_uf: val('gUf'), end_logradouro: val('gLog'), end_numero: val('gNum'),
   end_complemento: val('gCompl'), end_bairro: val('gBai'), end_cidade: val('gCid'),
+  end_aos_cuidados: val('gAc'),
 });
 
 function ligarFormularios(){
@@ -711,6 +722,7 @@ function ligarFormularios(){
         p.end_cep = d.end_cep; p.end_uf = d.end_uf; p.end_logradouro = d.end_logradouro;
         p.end_numero = d.end_numero; p.end_complemento = d.end_complemento;
         p.end_bairro = d.end_bairro; p.end_cidade = d.end_cidade;
+        p.end_aos_cuidados = d.end_aos_cuidados;
       }); };
   }
 
