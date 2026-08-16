@@ -1037,6 +1037,21 @@ http.createServer(async (req, res) => {
                  primeiro_uso = coalesce(primeiro_uso, now())
           WHERE token = $1 AND revogado_em IS NULL AND expira_em > now()
           RETURNING parceiro_id`, [u.searchParams.get('t')]);
+        // ⚠️ Link válido de quem não foi aprovada NÃO vira cookie. A tranca lá embaixo já
+        // barra as telas, mas deixar o cookie assinado no navegador dela é guardar uma
+        // credencial que passa a valer sozinha no dia em que ela for aprovada — sem ninguém
+        // ter mandado o link de novo.
+        if (r.rows[0]) {
+          const { rows: [sit] } = await pool.query(
+            `SELECT status, arquivado FROM creator.parceiro WHERE parceiro_id=$1`,
+            [r.rows[0].parceiro_id]);
+          if (!sit || sit.arquivado || sit.status !== 'ativo') {
+            res.writeHead(403, {'content-type':'text/html; charset=utf-8','cache-control':'no-store'});
+            return res.end(portalErro('Sua inscrição está em análise',
+              'A gente ainda está avaliando o seu cadastro. Assim que aprovar, você recebe ' +
+              'um e-mail com o seu cupom e o acesso a este painel.'));
+          }
+        }
         if (!r.rows[0]) {
           res.writeHead(403, {'content-type':'text/html; charset=utf-8'});
           return res.end(portalErro('Este link não vale mais',
@@ -1098,6 +1113,28 @@ http.createServer(async (req, res) => {
       res.writeHead(303, { Location: '/creator', 'Set-Cookie':
         `${COOKIE_CR}=; Path=/creator; HttpOnly; Secure; SameSite=Lax; Max-Age=0` });
       return res.end();
+    }
+
+    // ---- o portal é só de quem JÁ FOI APROVADO ----
+    // ⚠️ Até 16/08 a única tranca era social: "a gente não manda o link para quem não foi
+    // curado". Não é tranca — é combinado. E já estava furado: dos 2 links de acesso que
+    // existiam, 1 era de uma pessoa com status `pendente`.
+    // Quem ainda não passou pela curadoria não pode ver uma tela que diz o nível dela, a
+    // comissão dela e as campanhas da casa — isso é dizer "você está dentro" para alguém que
+    // a Cells ainda não decidiu se quer. Vale para link mágico e para senha: a checagem é
+    // aqui, num lugar só, depois do `sair` (sair sempre funciona, inclusive para quem foi
+    // barrada — senão o cookie fica preso no navegador dela).
+    if (pid) {
+      const { rows: [sit] } = await pool.query(
+        `SELECT status, arquivado FROM creator.parceiro WHERE parceiro_id=$1`, [pid]);
+      if (!sit || sit.arquivado || sit.status !== 'ativo') {
+        pid = null;
+        if (req.method === 'POST') return json(403, { erro: 'sua inscrição ainda está em análise' });
+        res.writeHead(403, {'content-type':'text/html; charset=utf-8','cache-control':'no-store'});
+        return res.end(portalErro('Sua inscrição está em análise',
+          'A gente ainda está avaliando o seu cadastro. Assim que aprovar, você recebe um ' +
+          'e-mail com o seu cupom e o acesso a este painel.'));
+      }
     }
 
     // ---- daqui para baixo, precisa estar logada ----
