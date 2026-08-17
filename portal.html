@@ -184,7 +184,8 @@ const pc = x => Number(x||0).toLocaleString('pt-BR',{maximumFractionDigits:1}) +
 
 const p = P.parceiro, vida = P.vendas||{}, ex = P.extrato||[], pubs = P.publicacoes||[],
       env = P.envios||[], jg = P.jogos||[],
-      cl = P.cliques||{}, nv = P.nivel||null, faixas = P.faixas||[], camps = P.campanhas||[];
+      cl = P.cliques||{}, nv = P.nivel||null, faixas = P.faixas||[], camps = P.campanhas||[],
+      cupons = P.cupons||[];
 
 const MEDALHA = {ouro:'🥇', prata:'🥈', bronze:'🥉'};
 const MES = ['janeiro','fevereiro','março','abril','maio','junho',
@@ -384,17 +385,21 @@ ${m.receita || m.cliquesTot ? `<section>
 </section>
 
 <section>
-  <div class="sh"><h2>Seu cupom e seu link</h2>
-    <p>Quem comprar com um dos dois conta pra você.</p></div>
+  <div class="sh"><h2>${cupons.length > 1 ? 'Seus cupons e seus links' : 'Seu cupom e seu link'}</h2>
+    <p>Quem comprar com qualquer um deles conta pra você${
+      cupons.length > 1 ? ' — os '+cupons.length+' somam no mesmo lugar' : ''}.</p></div>
   <div class="sb">
-    <div class="codigo" style="margin-bottom:9px">
-      <input id="c1" value="${esc(p.cupom||'ainda sem cupom')}" readonly aria-label="seu cupom">
-      <button class="cp" data-c="c1">copiar cupom</button>
-    </div>
-    <div class="codigo">
-      <input id="c2" value="${esc(link||'ainda sem link')}" readonly aria-label="seu link">
-      <button class="cp" data-c="c2">copiar link</button>
-    </div>
+    ${(cupons.length ? cupons : [{codigo: p.cupom, link: link}]).map((c, i) => `
+      <div${i ? ' style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line2)"' : ''}>
+        <div class="codigo" style="margin-bottom:9px">
+          <input id="cc${i}" value="${esc(c.codigo||'ainda sem cupom')}" readonly aria-label="seu cupom">
+          <button class="cp" data-c="cc${i}">copiar cupom</button>
+        </div>
+        <div class="codigo">
+          <input id="cl${i}" value="${esc(c.link||'ainda sem link')}" readonly aria-label="seu link">
+          <button class="cp" data-c="cl${i}">copiar link</button>
+        </div>
+      </div>`).join('')}
   </div>
 </section>
 

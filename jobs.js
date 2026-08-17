@@ -235,9 +235,13 @@ async function syncVendas(pool) {
 //
 // TRÊS REGRAS que o SQL abaixo cumpre, e cada uma existe por um motivo:
 //
-//  1. SÓ PREENCHE O QUE ESTÁ NULO. Nunca sobrescreve. O que a creator digitou no portal, ou o
-//     que o Gabriel corrigiu na mão, vale mais que o formulário — inclusive quando o
-//     formulário é mais novo.
+//  1. SÓ PREENCHE O QUE ESTÁ NULO **E NUNCA FOI MEXIDO POR GENTE**. As duas metades importam.
+//     ⚠️ A primeira versão tinha só "está nulo", e isso era um defeito sério: NULO também é o
+//     que sobra quando alguém APAGA de propósito. Testado em 17/08 — a creator apaga o
+//     endereço e o PIX (mudou de casa, trocou de banco), salva com sucesso, e em até uma hora
+//     o job traz o dado velho de volta. Sem erro, sem aviso. No PIX isso é dinheiro indo para
+//     a chave errada. Agora o job consulta `creator.parceiro_edicao`: campo com edição humana
+//     é território dela, o job não encosta nunca mais.
 //  2. PIX e ENDEREÇO entram em BLOCO, do mesmo lead. Preenchendo campo a campo "o mais
 //     recente que tiver valor", dava para casar `pix_tipo='cpf'` de um lead com a chave de
 //     telefone de outro — erro que não aparece agora, aparece no dia do pagamento. O endereço
@@ -303,6 +307,21 @@ async function fichaDoCadastro(pool) {
                                'PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO')
        ORDER BY parceiro_id, dele DESC, criado_em DESC
     ),
+    -- ⚠️ O QUE GENTE JÁ MEXEU É INTOCÁVEL. (E nada de crase neste comentário: crase dentro de
+    -- template literal encerra a string.) Uma linha em creator.parceiro_edicao que não seja
+    -- deste job significa que uma pessoa decidiu o valor daquele campo — inclusive decidir
+    -- que ele fica VAZIO. Agrupado por bloco porque é assim que o job escreve: quem editou o
+    -- CEP mandou no endereço inteiro, e refazer só a cidade daria um endereço Frankenstein.
+    tocado AS (
+      SELECT parceiro_id,
+             bool_or(campo IN ('cpf','cnpj'))                                AS doc,
+             bool_or(campo LIKE 'pix\\_%')                                    AS pix,
+             bool_or(campo LIKE 'end\\_%' AND campo <> 'end_aos_cuidados')    AS endereco,
+             bool_or(campo = 'end_aos_cuidados')                             AS ac,
+             bool_or(campo = 'email')                                        AS email,
+             bool_or(campo = 'telefone_e164')                                AS tel
+        FROM creator.parceiro_edicao WHERE por <> 'job:cadastro' GROUP BY 1
+    ),
     con AS (
       SELECT parceiro_id,
              (array_agg(email ORDER BY dele DESC, criado_em DESC)
@@ -314,24 +333,37 @@ async function fichaDoCadastro(pool) {
     -- o que ESTÁ FALTANDO em cada ficha. NULL aqui = não mexe.
     alvo AS (
       SELECT p.parceiro_id,
-             CASE WHEN p.cpf IS NULL AND p.cnpj IS NULL THEN d.cpf END AS cpf,
-             CASE WHEN p.pix_tipo IS NULL AND p.pix_chave IS NULL THEN x.pix_tipo END AS pix_tipo,
-             CASE WHEN p.pix_tipo IS NULL AND p.pix_chave IS NULL THEN x.pix_chave END AS pix_chave,
-             CASE WHEN p.end_cep IS NULL AND p.end_logradouro IS NULL THEN e.end_cep END AS end_cep,
-             CASE WHEN p.end_cep IS NULL AND p.end_logradouro IS NULL THEN e.end_logradouro END AS end_logradouro,
-             CASE WHEN p.end_cep IS NULL AND p.end_logradouro IS NULL THEN e.end_numero END AS end_numero,
-             CASE WHEN p.end_cep IS NULL AND p.end_logradouro IS NULL THEN e.end_complemento END AS end_complemento,
-             CASE WHEN p.end_cep IS NULL AND p.end_logradouro IS NULL THEN e.end_bairro END AS end_bairro,
-             CASE WHEN p.end_cep IS NULL AND p.end_logradouro IS NULL THEN e.end_cidade END AS end_cidade,
-             CASE WHEN p.end_cep IS NULL AND p.end_logradouro IS NULL THEN e.end_uf END AS end_uf,
-             CASE WHEN p.end_aos_cuidados IS NULL THEN e.end_aos_cuidados END AS end_aos_cuidados,
-             CASE WHEN p.email IS NULL THEN c.email END AS email,
-             CASE WHEN p.telefone_e164 IS NULL THEN c.telefone_e164 END AS telefone_e164
+             CASE WHEN p.cpf IS NULL AND p.cnpj IS NULL AND NOT coalesce(t.doc,false)
+                  THEN d.cpf END AS cpf,
+             CASE WHEN p.pix_tipo IS NULL AND p.pix_chave IS NULL AND NOT coalesce(t.pix,false)
+                  THEN x.pix_tipo END AS pix_tipo,
+             CASE WHEN p.pix_tipo IS NULL AND p.pix_chave IS NULL AND NOT coalesce(t.pix,false)
+                  THEN x.pix_chave END AS pix_chave,
+             CASE WHEN p.end_cep IS NULL AND p.end_logradouro IS NULL AND NOT coalesce(t.endereco,false)
+                  THEN e.end_cep END AS end_cep,
+             CASE WHEN p.end_cep IS NULL AND p.end_logradouro IS NULL AND NOT coalesce(t.endereco,false)
+                  THEN e.end_logradouro END AS end_logradouro,
+             CASE WHEN p.end_cep IS NULL AND p.end_logradouro IS NULL AND NOT coalesce(t.endereco,false)
+                  THEN e.end_numero END AS end_numero,
+             CASE WHEN p.end_cep IS NULL AND p.end_logradouro IS NULL AND NOT coalesce(t.endereco,false)
+                  THEN e.end_complemento END AS end_complemento,
+             CASE WHEN p.end_cep IS NULL AND p.end_logradouro IS NULL AND NOT coalesce(t.endereco,false)
+                  THEN e.end_bairro END AS end_bairro,
+             CASE WHEN p.end_cep IS NULL AND p.end_logradouro IS NULL AND NOT coalesce(t.endereco,false)
+                  THEN e.end_cidade END AS end_cidade,
+             CASE WHEN p.end_cep IS NULL AND p.end_logradouro IS NULL AND NOT coalesce(t.endereco,false)
+                  THEN e.end_uf END AS end_uf,
+             CASE WHEN p.end_aos_cuidados IS NULL AND NOT coalesce(t.ac,false)
+                  THEN e.end_aos_cuidados END AS end_aos_cuidados,
+             CASE WHEN p.email IS NULL AND NOT coalesce(t.email,false) THEN c.email END AS email,
+             CASE WHEN p.telefone_e164 IS NULL AND NOT coalesce(t.tel,false)
+                  THEN c.telefone_e164 END AS telefone_e164
         FROM creator.parceiro p
         LEFT JOIN doc d USING (parceiro_id)
         LEFT JOIN pix x USING (parceiro_id)
         LEFT JOIN endr e USING (parceiro_id)
         LEFT JOIN con c USING (parceiro_id)
+        LEFT JOIN tocado t USING (parceiro_id)
        WHERE NOT p.arquivado
     ),
     falta AS (

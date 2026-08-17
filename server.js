@@ -618,11 +618,26 @@ const UF = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA
             'PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
 
 // corpo JSON com teto. Sem teto, um POST gigante come a memória do container.
+//
+// ⚠️ `req.destroy()` mata o socket ANTES de qualquer resposta sair — o cliente vê "socket hang
+// up", que o portal traduz como "sem conexão com o servidor". Ou seja: um texto colado grande
+// demais no complemento do endereço se disfarçava de queda de internet, e a creator tentava de
+// novo, igual, para sempre. Agora para de ler mas deixa o socket vivo, para o handler conseguir
+// responder 413 com uma frase que explica o que houve.
 function corpoJSON(req, limite = 8192) {
   return new Promise((ok, falha) => {
-    let b = '';
-    req.on('data', c => { b += c; if (b.length > limite) { req.destroy(); falha(new Error('corpo grande')); } });
-    req.on('end', () => { try { ok(JSON.parse(b || '{}')); } catch (e) { falha(new Error('JSON inválido')); } });
+    let b = '', estourou = false;
+    req.on('data', c => {
+      if (estourou) return;
+      b += c;
+      if (b.length > limite) {
+        estourou = true;
+        req.pause();
+        const e = new Error('o texto enviado é grande demais'); e.grande = true; falha(e);
+      }
+    });
+    req.on('end', () => { if (!estourou) { try { ok(JSON.parse(b || '{}')); }
+                                          catch (e) { falha(new Error('JSON inválido')); } } });
     req.on('error', falha);
   });
 }
@@ -701,7 +716,16 @@ async function dadosDoCreator(parceiroId) {
            c.codigo AS cupom, c.link_redirect_id, c.link_path,
            l.idade AS idade_declarada
     FROM creator.parceiro p
-    LEFT JOIN creator.cupom c ON c.parceiro_id = p.parceiro_id AND c.ativo
+    -- ⚠️ LATERAL COM ORDEM, não JOIN solto. Duas creators têm mais de um cupom ativo (JESS
+    -- tem 2, Lucas tem 3, todos com venda). Com o LEFT JOIN sem ordem, esta query devolvia
+    -- N linhas e o código pegava a primeira — que o Postgres não promete ser sempre a mesma.
+    -- A creator podia ver um cupom hoje e outro amanhã, na tela de onde ela COPIA o cupom.
+    -- Agora é sempre o mais antigo (o cupom_id menor), que é o cupom principal dela; os
+    -- outros vão na lista de cupons montada logo abaixo. (Sem crase neste comentário: crase
+    -- dentro de template literal encerra a string — terceira vez que isso quebra o arquivo.)
+    LEFT JOIN LATERAL (
+      SELECT codigo, link_redirect_id, link_path FROM creator.cupom
+       WHERE parceiro_id = p.parceiro_id AND ativo ORDER BY cupom_id LIMIT 1) c ON true
     -- ⚠️ SÓ a idade sai do lead aqui (e nada de crase neste comentário: crase dentro de
     -- template literal encerra a string — já quebrou este arquivo duas vezes).
     -- Todo o resto (CPF, PIX, endereço) já foi para creator.parceiro pelo job "ficha" — é lá
@@ -724,6 +748,14 @@ async function dadosDoCreator(parceiroId) {
   // quem já tinha o curto. Ou seja: a tela onde a creator COPIA o link entregava justamente
   // a versão errada. Agora é a mesma `linkDoCreator()` da aprovação e do aviso de campanha.
   pa.link = linkDoCreator(pa);
+
+  // TODOS os cupons ativos dela, com o link de cada um. A tela somava as vendas de todos e
+  // mostrava um só: quem tem 3 cupons via um número que não fechava com o cupom exibido, e
+  // divulgava um código sozinho achando que os outros tinham morrido.
+  const cupons = (await q(`
+    SELECT codigo, link_redirect_id, link_path FROM creator.cupom
+     WHERE parceiro_id=$1 AND ativo ORDER BY cupom_id`, [parceiroId]))
+    .map(c => ({ codigo: c.codigo, link: linkDoCreator({ ...c, cupom: c.codigo }) }));
 
   // Só o acumulado da vida. Os números DO MÊS saem do extrato, no navegador — assim o que
   // está escrito em cima é, por construção, a soma dos pedidos listados embaixo. Quando o
@@ -866,7 +898,7 @@ async function dadosDoCreator(parceiroId) {
   }
   meses.reverse();
 
-  return { parceiro: pa, vendas: v, extrato: extratoCom, publicacoes, envios, jogos, campanhas,
+  return { parceiro: pa, cupons, vendas: v, extrato: extratoCom, publicacoes, envios, jogos, campanhas,
            cliques: { ...cl, serie }, nivel: nv || null, faixas, comissao_3m: comissao3m,
            taxas: { unica: pctU, assinatura: pctA }, hoje, meses };
 }
@@ -1072,13 +1104,13 @@ http.createServer(async (req, res) => {
 
     // ---- entrar com e-mail/@ + senha ----
     if (u.pathname === '/creator/entrar' && req.method === 'POST') {
-      let d; try { d = await corpoJSON(req, 2048); } catch (e) { return json(400, { erro: e.message }); }
+      let d; try { d = await corpoJSON(req, 2048); } catch (e) { return json(e.grande ? 413 : 400, { erro: e.message }); }
       const quem = String(d.identificador || '').trim().replace(/^@/, '').toLowerCase();
       const senha = String(d.senha || '');
       if (!quem || !senha) return json(400, { erro: 'informe seu e-mail (ou @) e a senha' });
       try {
         const { rows } = await pool.query(`
-          SELECT parceiro_id, senha_hash, login_falhas, login_travado_ate
+          SELECT parceiro_id, senha_hash, login_falhas, login_travado_ate, status, arquivado
             FROM creator.parceiro
            WHERE senha_hash IS NOT NULL
              AND (lower(email) = $1 OR lower(instagram_handle) = $1)
@@ -1103,6 +1135,15 @@ http.createServer(async (req, res) => {
         await pool.query(
           `UPDATE creator.parceiro SET login_falhas=0, login_travado_ate=NULL, ultimo_login=now()
             WHERE parceiro_id=$1`, [p.parceiro_id]);
+        // ⚠️ A SENHA CONFERE, MAS A APROVAÇÃO É OUTRA PORTA — e ela vem DEPOIS da senha, de
+        // propósito: responder "em análise" antes de conferir a senha contaria a qualquer um
+        // que aquele e-mail está cadastrado e em que pé está.
+        // Testado em 17/08: sem isto, uma pendente recebia {"ok":true} + o cookie assinado, e
+        // só então batia na parede. Dois estragos — a tela dizia "entrou" e jogava num 403; e
+        // o cookie ficava 90 dias no navegador dela, valendo sozinho no dia da aprovação, sem
+        // ninguém ter reenviado nada. Era o mesmo buraco que eu já tinha fechado no link.
+        if (p.arquivado || p.status !== 'ativo')
+          return json(403, { erro: 'sua inscrição ainda está em análise — a gente avisa por e-mail assim que aprovar' });
         res.writeHead(200, {'content-type':'application/json; charset=utf-8',
           'cache-control':'no-store', 'Set-Cookie': setaCookie(p.parceiro_id) });
         return res.end(JSON.stringify({ ok: true }));
@@ -1153,15 +1194,29 @@ http.createServer(async (req, res) => {
 
     // ---- salvar perfil ----
     if (u.pathname === '/creator/perfil' && req.method === 'POST') {
-      let d; try { d = await corpoJSON(req); } catch (e) { return json(400, { erro: e.message }); }
+      let d; try { d = await corpoJSON(req); } catch (e) { return json(e.grande ? 413 : 400, { erro: e.message }); }
       const txt = (v, n) => { const s = String(v ?? '').trim(); return s ? s.slice(0, n) : null; };
       const email = txt(d.email, 160);
       if (email && !EMAIL_RE.test(email)) return json(400, { erro: 'e-mail inválido' });
       const tel = digitos(d.telefone);
       if (tel && ![10, 11].includes(tel.length))
         return json(400, { erro: 'telefone inválido — use DDD + número' });
+      // ⚠️ Conferir o FORMATO não é conferir a DATA. Testado em 17/08: "2026-13-45" passava na
+      // regex, chegava ao Postgres e voltava como 500 "não consegui salvar agora" — erro de
+      // digitação virando falha de servidor. E "1899-01-01" e "2030-01-01" eram ACEITOS e
+      // gravados: data de nascimento no futuro entrando calada no cadastro.
       const nasc = txt(d.nascimento, 10);
-      if (nasc && !/^\d{4}-\d{2}-\d{2}$/.test(nasc)) return json(400, { erro: 'data de nascimento inválida' });
+      if (nasc) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(nasc)) return json(400, { erro: 'data de nascimento inválida' });
+        const [aa, mm, dd] = nasc.split('-').map(Number);
+        const dt = new Date(Date.UTC(aa, mm - 1, dd));
+        // o round-trip pega 31/02: o Date normaliza para 03/03 e os componentes deixam de bater
+        if (dt.getUTCFullYear() !== aa || dt.getUTCMonth() !== mm - 1 || dt.getUTCDate() !== dd)
+          return json(400, { erro: 'essa data não existe' });
+        const hoje = new Date();
+        if (dt > hoje) return json(400, { erro: 'data de nascimento no futuro' });
+        if (aa < hoje.getUTCFullYear() - 110) return json(400, { erro: 'confira o ano de nascimento' });
+      }
       const uf = txt(d.end_uf, 2);
       if (uf && !UF.includes(uf.toUpperCase())) return json(400, { erro: 'UF inválida' });
       const cep = digitos(d.end_cep);
@@ -1188,7 +1243,7 @@ http.createServer(async (req, res) => {
 
     // ---- salvar dados de pagamento ----
     if (u.pathname === '/creator/financeiro' && req.method === 'POST') {
-      let d; try { d = await corpoJSON(req, 2048); } catch (e) { return json(400, { erro: e.message }); }
+      let d; try { d = await corpoJSON(req, 2048); } catch (e) { return json(e.grande ? 413 : 400, { erro: e.message }); }
       const doc = digitos(d.documento), tipoDoc = d.doc_tipo === 'cnpj' ? 'cnpj' : 'cpf';
       if (doc) {
         if (tipoDoc === 'cpf'  && !cpfValido(doc))  return json(400, { erro: 'CPF inválido' });
@@ -1221,7 +1276,7 @@ http.createServer(async (req, res) => {
 
     // ---- definir ou trocar a senha ----
     if (u.pathname === '/creator/senha' && req.method === 'POST') {
-      let d; try { d = await corpoJSON(req, 2048); } catch (e) { return json(400, { erro: e.message }); }
+      let d; try { d = await corpoJSON(req, 2048); } catch (e) { return json(e.grande ? 413 : 400, { erro: e.message }); }
       const nova = String(d.nova || '');
       if (nova.length < 8) return json(400, { erro: 'a senha precisa ter pelo menos 8 caracteres' });
       if (nova.length > 200) return json(400, { erro: 'senha longa demais' });
