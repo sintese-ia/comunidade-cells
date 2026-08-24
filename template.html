@@ -706,6 +706,7 @@
   <div class="fft">
     <span class="esq obs" id="apErro"></span>
     <button class="acbt" id="apFechar">cancelar</button>
+    <div class="fsec" id="apRegras" style="margin-top:4px"></div>
     <button class="acbt ok" id="apSalvar">aprovar</button>
   </div>
 </dialog>
@@ -1410,6 +1411,9 @@ document.getElementById('tbCad').addEventListener('click', async e => {
 // numero repetido em dois arquivos e numero que um dia diverge — foi assim que a tela
 // continuou sugerindo 8 depois da decisao de 10
 const DESCONTO = D.desconto_padrao ?? 10;
+// As regras NAO estao escritas neste arquivo de proposito: vem de core.regra_cupom, no banco.
+// Mudar a regra e um UPDATE numa linha, nao um deploy — e ninguem precisa lembrar de vir aqui.
+const REGRAS = D.regrasCupom || [];
 const CUPONS = D.cupons || [], EMAILS = D.emails || [];
 const LEGADO = D.legado || [];
 const dlgAp = document.getElementById('dlgAprovar');
@@ -1445,6 +1449,23 @@ function sugereCupom(f){
 
 function slugDe(f){
   return norml(f.instagram_handle || f.nome || '').slice(0, 24) || 'creator';
+}
+
+// A regra aparece no segundo em que ela importa: na frente de quem esta criando o cupom.
+// Doc que mora longe do momento da decisao nao e lido — foi o que o Gabriel disse em 24/08
+// ao pedir que isso ficasse escrito "no banco ou como skill".
+function pintaRegras(){
+  const el = document.getElementById('apRegras'); if (!el) return;
+  const mostra = REGRAS.filter(r => r.categoria !== 'combinacao').slice(0, 6);
+  if (!mostra.length) { el.innerHTML = ''; return; }
+  el.innerHTML = '<h4>Regras do cupom <span class="dim" style="font-weight:400;font-size:11px">'
+    + '· de core.regra_cupom, no banco</span></h4>'
+    + '<div class="empty" style="border-top:0;padding:11px 13px">'
+    + mostra.map(r => '<div style="margin-bottom:7px;font-size:12.5px;line-height:1.5">'
+        + '<b>' + esc(r.titulo) + '</b>'
+        + (r.motivo ? '<br><span class="dim">' + esc(r.motivo) + '</span>' : '')
+        + '</div>').join('')
+    + '</div>';
 }
 
 function pintaPreviewAp(){
@@ -1490,6 +1511,7 @@ function abreAprovar(id){
   document.getElementById('apLink').value =
     'https://cells.com.br/?utm_source=creator&utm_medium=influencer&utm_campaign=' + slugDe(f);
   document.getElementById('apErro').textContent = '';
+  pintaRegras();
   pintaPreviewAp();
   dlgAp.showModal();
 }

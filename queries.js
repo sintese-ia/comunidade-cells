@@ -308,6 +308,13 @@ const painel = {
   `,
 
   // ---- cupom por parceiro, com o estado na Shopify ----
+  // As regras de cupom moram no BANCO (core.regra_cupom), nao neste arquivo nem num doc.
+  // Descem para a tela e aparecem no dialogo de criar cupom — regra so serve se estiver na
+  // frente de quem esta prestes a quebra-la. Editar a regra e um UPDATE, nao um deploy.
+  regrasCupom: `
+    SELECT chave, categoria, valor, titulo, explicacao, motivo, fonte, verificado_em
+      FROM core.regra_cupom ORDER BY ordem, chave`,
+
   cupons: `
     SELECT c.cupom_id, c.parceiro_id, c.codigo, c.desconto_pct, c.comissao_pct, c.combinavel,
            c.shopify_discount_id, c.shopify_erro, c.link_redirect_id, c.ativo,
