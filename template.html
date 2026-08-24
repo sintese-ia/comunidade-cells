@@ -1202,6 +1202,10 @@ function pintaCad(){
         // aprovar, quando ja era tarde. Agora aparece na lista, ao lado do nome.
         + (f.email ? '' : '<span class="chip cr" style="margin-left:6px" '
             + 'title="sem e-mail no cadastro: não dá para mandar cupom, link nem código de acesso">sem e-mail</span>')
+        // O cluster na linha, nao so no filtro: sem isso da para olhar a lista inteira sem
+        // perceber que metade e historico do cupom legado e nao gente do programa de hoje.
+        + (f.pastas || []).map(pa => '<span class="chip" style="margin-left:6px;opacity:.75">'
+            + esc(pa.nome) + '</span>').join('')
         + ''
         + (f.instagram_handle
              // item 3: o @ abre o perfil. target=_blank porque o painel não pode perder o
