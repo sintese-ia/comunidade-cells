@@ -942,7 +942,13 @@ document.getElementById('frm').addEventListener('submit', async e => {
 const CAD = D.cadastros || [], ENVIOS = D.envios || [], PUBS = D.fichaPubs || [];
 const NIVEIS = D.niveis || [], PASTAS = D.pastas || [];
 let cAba = 'todos', cBusca = '', cOrd = {c:'cadastro', d:-1};
-let cNicho = '', cIdade = '', cCidade = '', cNivel = '', cPasta = '';
+// ⚠️ A TELA ABRE NA COMUNIDADE, nao em "todos" (decisao do Gabriel, 24/08): "queremos aprovar
+// algumas pessoas, mas queremos mesmo e acompanhar SO A COMUNIDADE". Abrir em todos misturava
+// as 27 do cupom legado — que vendem, mas nao sao o programa — com as 23 que se inscreveram, e
+// qualquer numero lido de relance saia errado. O filtro continua ali para ver o resto.
+let cNicho = '', cIdade = '', cCidade = '', cNivel = '';
+let cPasta = (PASTAS.find(p => p.nome === 'comunidade') || {}).pasta_id || '';
+cPasta = cPasta ? String(cPasta) : '';
 
 /* Popula os selects a partir do que EXISTE na base — não de uma lista fixa. Se amanhã
    entrar um nicho novo no formulário, ele aparece aqui sozinho. */
@@ -960,7 +966,9 @@ let cNicho = '', cIdade = '', cCidade = '', cNivel = '', cPasta = '';
   };
   opt(nichos, 'cNicho'); opt(cidades, 'cCidade');
   document.getElementById('cPasta').insertAdjacentHTML('beforeend',
-    PASTAS.map(p => '<option value="'+p.pasta_id+'">'+esc(p.nome)+' ('+p.creators+')</option>').join(''));
+    PASTAS.map(p => '<option value="'+p.pasta_id+'"'+(String(p.pasta_id)===cPasta?' selected':'')
+      +'>'+esc(p.nome)+' ('+p.creators+')</option>').join(''));
+  document.getElementById('cPasta').value = cPasta;
 })();
 
 function contaCad(){
