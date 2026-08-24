@@ -1396,16 +1396,29 @@ let aprovarId = null;
 
 const cupomDe = id => CUPONS.find(c => c.parceiro_id === id) || null;
 
-// sugere o código a partir do primeiro nome; se já existir na loja, numera
+// Sugere o código a partir do primeiro nome. Quando ele já existe, a segunda opção é
+// NOME + 10 — decisão do Gabriel em 24/08, e também o que a loja já faz sozinha: 38 dos
+// 187 códigos terminam em 10 (GABRIEL10, JESSICA10, CAMILA10...). RACHEL2 não é nome de
+// cupom de ninguém; RACHEL10 é, e ainda diz o desconto.
+// Só depois disso entra o sobrenome, e número solto fica como último recurso.
+// A lista de usados vem do Postgres (creator.legado = inventário da loja inteira, inclusive
+// cupom que nunca vendeu, + creator.cupom = os do programa). Conferir só contra o programa
+// deixaria reaproveitar sem querer um código que já existe na Shopify.
 function sugereCupom(f){
-  const base = norml((f.nome || f.instagram_handle || 'creator').trim().split(/\s+/)[0])
-    .toUpperCase().slice(0, 16) || 'CREATOR';
+  const partes = norml((f.nome || f.instagram_handle || 'creator').trim())
+    .toUpperCase().split(/\s+/).filter(Boolean);
+  const base = (partes[0] || 'CREATOR').slice(0, 16);
+  const sobren = (partes[1] || '').slice(0, 10);
   const usados = new Set([
     ...LEGADO.map(l => (l.codigo || '').toUpperCase()),
     ...CUPONS.map(c => (c.codigo || '').toUpperCase()),
   ]);
-  if (!usados.has(base)) return base;
-  for (let i = 2; i < 60; i++) if (!usados.has(base + i)) return base + i;
+  const livre = c => c && c.length <= 24 && !usados.has(c);
+
+  const escada = [base, base + '10'];
+  if (sobren) escada.push(base + sobren, base + sobren + '10');
+  for (const c of escada) if (livre(c)) return c;
+  for (let i = 2; i < 60; i++) if (livre(base + '10' + i)) return base + '10' + i;
   return base + Date.now().toString().slice(-4);
 }
 
