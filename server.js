@@ -2104,6 +2104,12 @@ http.createServer(async (req, res) => {
         const codigo = String(d.cupom || '').trim().toUpperCase();
         if (!/^[A-Z0-9]{3,24}$/.test(codigo))
           return json(400, { erro: 'cupom: use de 3 a 24 letras ou números, sem espaço nem acento' });
+        // O e-mail e condicao para aprovar, nao enfeite: sem ele nao ha cupom entregue, nao
+        // ha link entregue e nao ha porta de entrada no portal. A tela ja barra, mas validar
+        // so na tela e nao validar — qualquer chamada direta na API passaria por cima.
+        const emailNovo = String(d.email || '').trim().toLowerCase();
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailNovo))
+          return json(400, { erro: 'informe um e-mail válido: sem ele a pessoa não recebe o cupom nem entra no portal' });
         const desconto = Number(String(d.desconto_pct ?? DESCONTO_PADRAO).replace(',', '.'));
         const comissao = d.comissao_pct == null || d.comissao_pct === ''
           ? null : Number(String(d.comissao_pct).replace(',', '.'));
@@ -2180,8 +2186,14 @@ http.createServer(async (req, res) => {
         const novo = (await cli.query(`
           UPDATE creator.parceiro SET status='ativo', utm_slug=$2, aprovado_em=now(),
                  aprovado_por=$3, decidido_por=$3, arquivado=false,
+                 -- ⚠️ O e-mail digitado no dialogo NUNCA era gravado: viajava para o Klaviyo e
+                 -- se perdia. A pessoa aparecia "sem e-mail" para sempre no painel, mesmo
+                 -- depois de alguem ter digitado — e sem e-mail na ficha ela nao consegue
+                 -- entrar pelo codigo. Agora fica.
+                 email=$4,
                  reprovado_em=NULL, reprovado_motivo=NULL, atualizado_em=now()
-           WHERE parceiro_id=$1 RETURNING *`, [id, slug, (d.por || 'painel').slice(0, 60)])).rows[0];
+           WHERE parceiro_id=$1 RETURNING *`,
+          [id, slug, (d.por || 'painel').slice(0, 60), emailNovo])).rows[0];
 
         // registra no legado também, para o inventário não ficar desatualizado no dia seguinte
         await cli.query(`
@@ -2198,7 +2210,7 @@ http.createServer(async (req, res) => {
         // ---- e-mail, por último e fora da transação ----
         // Fora de propósito: e-mail não tem rollback. Se ele falhar, a aprovação continua
         // valendo e o painel oferece reenviar — o contrário perderia o cupom já criado.
-        const email = String(d.email || pa.email || '').trim();
+        const email = emailNovo;
         let envio = { estado: 'nao_enviado', detalhe: null };
         if (d.enviar_email !== false) {
           try {

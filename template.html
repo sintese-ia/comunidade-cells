@@ -335,6 +335,7 @@
         <button class="aba" data-fl="naoavisado" aria-pressed="false">nunca avisados <b id="c-naoavisado">0</b></button>
         <button class="aba" data-fl="reaprovar" aria-pressed="false">re-aprovar <b id="c-reaprovar">0</b></button>
         <button class="aba" data-fl="semcupom" aria-pressed="false">sem cupom <b id="c-semcupom">0</b></button>
+        <button class="aba" data-fl="sememail" aria-pressed="false">sem e-mail <b id="c-sememail">0</b></button>
         <input id="cq" class="busca" placeholder="nome, @ ou cupom" aria-label="Filtrar cadastros">
         <span class="cnt" id="cntCad"></span>
       </div>
@@ -964,7 +965,7 @@ let cNicho = '', cIdade = '', cCidade = '', cNivel = '', cPasta = '';
 
 function contaCad(){
   const c = {todos:0, pendente:0, ativo:0, pausado:0, reprovado:0, arquivado:0,
-             semig:0, naoavisado:0, reaprovar:0, semcupom:0};
+             semig:0, naoavisado:0, reaprovar:0, semcupom:0, sememail:0};
   CAD.forEach(f => {
     if (f.arquivado) { c.arquivado++; return; }
     c.todos++;
@@ -973,6 +974,7 @@ function contaCad(){
     if (f.status === 'ativo' && !f.avisado) c.naoavisado++;
     if (f.reaprovar) c.reaprovar++;
     if (f.falta_cupom) c.semcupom++;
+    if (!f.email) c.sememail++;
   });
   for (const k in c) { const e = document.getElementById('c-'+k); if (e) e.textContent = c[k]; }
 }
@@ -984,6 +986,7 @@ function filtraCad(){
     else if (cAba === 'naoavisado') { if (f.arquivado || f.status !== 'ativo' || f.avisado) return false; }
     else if (cAba === 'reaprovar') { if (f.arquivado || !f.reaprovar) return false; }
     else if (cAba === 'semcupom') { if (f.arquivado || !f.falta_cupom) return false; }
+    else if (cAba === 'sememail') { if (f.arquivado || f.email) return false; }
     else if (cAba !== 'todos') { if (f.arquivado || f.status !== cAba) return false; }
     else if (f.arquivado) return false;
     if (cBusca) {
@@ -1194,6 +1197,12 @@ function pintaCad(){
       : '<span style="color:var(--'+(f.engajamento_pct>=2?'ok':f.engajamento_pct<1?'cr':'ink')+')">'+pc(f.engajamento_pct)+'</span>';
     return '<tr>'
       + '<td class="h"><button class="lnk" data-ficha="'+f.parceiro_id+'"><b>'+esc(f.nome||'—')+'</b></button>'
+        // Sem e-mail nao e detalhe: e a pessoa que nao recebe cupom, nao recebe link e nao
+        // consegue entrar pelo codigo. Ficava escondido na ficha e so aparecia na hora de
+        // aprovar, quando ja era tarde. Agora aparece na lista, ao lado do nome.
+        + (f.email ? '' : '<span class="chip cr" style="margin-left:6px" '
+            + 'title="sem e-mail no cadastro: não dá para mandar cupom, link nem código de acesso">sem e-mail</span>')
+        + ''
         + (f.instagram_handle
              // item 3: o @ abre o perfil. target=_blank porque o painel não pode perder o
              // estado dos filtros só porque alguém foi conferir um perfil.
@@ -1489,7 +1498,12 @@ document.getElementById('apSalvar').addEventListener('click', async () => {
     email: document.getElementById('apEmail').value.trim(),
     enviar_email: document.getElementById('apEnviar').checked,
   };
-  if (corpo.enviar_email && !corpo.email) { err.textContent = 'Preencha o e-mail ou desmarque o aviso.'; return; }
+  // E-MAIL E OBRIGATORIO PARA APROVAR (decisao do Gabriel, 24/08) — nao so quando vai avisar.
+  // Sem e-mail a pessoa nao recebe o cupom, nao recebe o link e nao consegue entrar pelo
+  // codigo: aprovar sem ele e criar uma creator que a Cells nao consegue alcancar. E o que
+  // aconteceu com 18 das ativas de hoje.
+  if (!corpo.email) { err.textContent = 'Preencha o e-mail: sem ele a pessoa não recebe o cupom nem consegue entrar no portal.'; return; }
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(corpo.email)) { err.textContent = 'Esse e-mail não parece válido.'; return; }
   bt.disabled = true; err.textContent = 'aprovando…';
   const j = await (await fetch('/api/aprovar', {method:'POST',
     headers:{'content-type':'application/json'}, body: JSON.stringify(corpo)})).json();
