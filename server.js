@@ -63,6 +63,13 @@ pool.on('error', e => console.error('[pg] conexão ociosa caiu (o pool se recupe
 const TPL = fs.readFileSync(path.join(__dirname, 'template.html'), 'utf8');
 const TPL_CREATOR = fs.readFileSync(path.join(__dirname, 'portal.html'), 'utf8');
 const TPL_ENTRAR  = fs.readFileSync(path.join(__dirname, 'entrar.html'), 'utf8');
+// A porta do codigo por e-mail nasce DESLIGADA e so liga por env var, de proposito: ligar
+// significa que o app passa a mandar e-mail sozinho para creator de verdade assim que
+// alguem digita o proprio endereco. Isso e decisao do Gabriel, nao efeito colateral de
+// deploy. Com ela desligada, a rota responde e a tela nem oferece a opcao.
+const LOGIN_CODIGO = /^(1|on|sim|true)$/i.test(process.env.LOGIN_CODIGO || '');
+const CODIGO_MIN   = 10;    // minutos de vida do codigo
+const CODIGO_ERROS = 5;     // tentativas erradas antes de queimar
 const COOKIE_CR = 'cc_creator';
 // Endereço público do portal. Vira link em e-mail, então não pode ser caminho relativo —
 // e estava escrito na mão em dois lugares, que é como um deles fica para trás numa mudança.
@@ -342,6 +349,7 @@ async function renomearCupomShopify({ discountId, novo }) {
 // e-mail. Se o flow não estiver ligado no Klaviyo, o evento entra e nada sai. Por isso o
 // email_log grava `evento_enviado`, nunca `enviado`.
 const METRICA_APROVACAO = 'Creator Aprovado';
+const METRICA_CODIGO    = 'Creator Codigo Acesso';
 const METRICA_CAMPANHA  = 'Creator Campanha';
 const METRICA_REGISTRO  = 'Creator Cadastrado';
 
@@ -386,6 +394,30 @@ async function eventoCampanha({ email, nome, campanha, briefing, cupom, link, in
     { Authorization: 'Klaviyo-API-Key ' + KLAVIYO, revision: '2024-10-15' }, corpo);
   if (r.status !== 202) throw new Error('Klaviyo HTTP ' + r.status + ' ' + String(r.txt).slice(0, 200));
   return corpo.data.attributes.properties;
+}
+
+// Codigo de acesso. Mesmo caminho dos outros e-mails: o app manda o evento, o flow do
+// Klaviyo entrega. DIFERENCA IMPORTANTE: este e transacional e tem prazo — o codigo vale 10
+// minutos. Se o Klaviyo enfileirar, a creator fica olhando para a tela. Por isso o
+// email_log guarda a hora do evento: da para medir o atraso real antes de confiar nele.
+// O codigo viaja em `codigo` nas properties. Se o template do Klaviyo nao imprimir essa
+// propriedade, a pessoa recebe um e-mail sem codigo — testar o template ANTES de ligar.
+async function eventoCodigo({ email, nome, codigo, minutos, sexo }) {
+  if (!KLAVIYO) throw new Error('KLAVIYO_KEY não configurada');
+  if (!email) throw new Error('sem e-mail no cadastro');
+  const corpo = { data: { type: 'event', attributes: {
+    properties: { codigo, minutos, nome_creator: G.primeiroNome(nome) || null,
+                  saudacao: G.saudacaoDe(nome, sexo) },
+    metric: { data: { type: 'metric', attributes: { name: METRICA_CODIGO } } },
+    profile: { data: { type: 'profile', attributes: { email,
+               ...(nome ? { first_name: String(nome).split(/\s+/)[0] } : {}) } } },
+  } } };
+  const r = await postJSON('https://a.klaviyo.com/api/events/',
+    { Authorization: 'Klaviyo-API-Key ' + KLAVIYO, revision: '2024-10-15' }, corpo);
+  if (r.status !== 202) throw new Error('Klaviyo HTTP ' + r.status + ' ' + String(r.txt).slice(0, 200));
+  // devolve SEM o codigo: este objeto vai para o email_log, e log com codigo dentro e o
+  // mesmo que guardar o codigo em texto — o inverso do que a tabela faz de proposito.
+  return { minutos, enviado_para: email };
 }
 
 async function eventoAprovacao({ email, nome, cupom, link, desconto, comissao,
@@ -1154,6 +1186,137 @@ http.createServer(async (req, res) => {
       } catch (e) { return json(500, { erro: 'não consegui entrar agora' }); }
     }
 
+    // ---- entrar com CODIGO enviado por e-mail --------------------------------------
+    // Duas rotas: pedir e conferir. O codigo tem 6 digitos, vale 10 minutos, serve UMA vez,
+    // e no banco so existe o hash (scrypt, o mesmo da senha) — quem le a tabela nao entra na
+    // conta de ninguem.
+    //
+    // ⚠️ A RESPOSTA E SEMPRE A MESMA, exista a conta ou nao. Responder "nao achei esse
+    // e-mail" transforma o formulario numa lista de quem e creator da Cells: qualquer um
+    // testa endereco por endereco e descobre. O preco e que quem digita errado nao e
+    // avisado — por isso a tela diz "se existir conta, o codigo chegou".
+    if (u.pathname === '/creator/codigo' && req.method === 'POST') {
+      let d; try { d = await corpoJSON(req, 2048); } catch (e) { return json(e.grande ? 413 : 400, { erro: e.message }); }
+      if (!LOGIN_CODIGO) return json(503, { erro: 'esta forma de entrar ainda não está ligada' });
+      const email = String(d.email || '').trim().toLowerCase();
+      const igual = { ok: true, minutos: CODIGO_MIN };   // a MESMA resposta em todos os caminhos
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json(400, { erro: 'digite um e-mail válido' });
+      const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').slice(0, 60);
+      try {
+        const { rows } = await pool.query(`
+          SELECT parceiro_id, nome, email FROM creator.parceiro
+           WHERE lower(email) = $1 AND status = 'ativo' AND NOT arquivado
+           ORDER BY parceiro_id LIMIT 2`, [email]);
+        // dois cadastros com o mesmo e-mail: nao da para saber para quem e a conta, e mandar
+        // codigo para os dois deixaria uma pessoa entrar na conta da outra
+        if (rows.length !== 1) return json(200, igual);
+        const p = rows[0];
+
+        // Freio. Sem isto, o formulario vira maquina de encher a caixa de alguem: um curioso
+        // digita o e-mail da creator e dispara quantos e-mails quiser em nome da Cells.
+        const { rows: [uso] } = await pool.query(`
+          SELECT count(*) FILTER (WHERE criado_em > now() - interval '1 hour') AS na_hora,
+                 max(criado_em) AS ultimo
+            FROM creator.acesso_codigo WHERE parceiro_id = $1`, [p.parceiro_id]);
+        if (uso.ultimo && Date.now() - new Date(uso.ultimo).getTime() < 60000) return json(200, igual);
+        if (+uso.na_hora >= 5) return json(200, igual);
+
+        // randomInt e do crypto: Math.random e previsivel e daria para adivinhar o codigo
+        // de outra pessoa a partir do proprio.
+        const codigo = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+
+        // pedir codigo novo mata o anterior: dois codigos vivos ao mesmo tempo dobram a
+        // superficie e confundem quem tem dois e-mails abertos
+        await pool.query(`
+          UPDATE creator.acesso_codigo SET invalidado_em = now()
+           WHERE parceiro_id = $1 AND usado_em IS NULL AND invalidado_em IS NULL`, [p.parceiro_id]);
+        await pool.query(`
+          INSERT INTO creator.acesso_codigo (parceiro_id, codigo_hash, expira_em, pedido_ip)
+          VALUES ($1, $2, now() + ($3 || ' minutes')::interval, $4)`,
+          [p.parceiro_id, hashSenha(codigo), String(CODIGO_MIN), ip || null]);
+
+        // O e-mail sai por ultimo e fora de qualquer transacao. Se o Klaviyo falhar, o codigo
+        // ja existe e a pessoa pode pedir outro — o contrario (e-mail com codigo que o banco
+        // nao tem) e que seria insolucionavel para ela.
+        try {
+          const { rows: [lead] } = await pool.query(
+            `SELECT l.sexo FROM creator.parceiro pp
+               LEFT JOIN creator.leads l ON l.lead_id = pp.lead_id
+              WHERE pp.parceiro_id = $1`, [p.parceiro_id]);
+          const props = await eventoCodigo({ email: p.email, nome: p.nome, codigo,
+                                             minutos: CODIGO_MIN, sexo: lead && lead.sexo });
+          await pool.query(`
+            INSERT INTO creator.email_log (parceiro_id,para,assunto,tipo,estado,payload)
+            VALUES ($1,$2,'Codigo de acesso','codigo','evento_enviado',$3)`,
+            [p.parceiro_id, p.email, props]);
+        } catch (e) {
+          await pool.query(`
+            INSERT INTO creator.email_log (parceiro_id,para,assunto,tipo,estado,detalhe)
+            VALUES ($1,$2,'Codigo de acesso','codigo','falhou',$3)`,
+            [p.parceiro_id, p.email, e.message]).catch(() => {});
+          console.error('[codigo]', e.message);
+        }
+        return json(200, igual);
+      } catch (e) { console.error('[codigo]', e.message); return json(200, igual); }
+    }
+
+    if (u.pathname === '/creator/codigo/entrar' && req.method === 'POST') {
+      let d; try { d = await corpoJSON(req, 2048); } catch (e) { return json(e.grande ? 413 : 400, { erro: e.message }); }
+      if (!LOGIN_CODIGO) return json(503, { erro: 'esta forma de entrar ainda não está ligada' });
+      const email  = String(d.email || '').trim().toLowerCase();
+      const codigo = String(d.codigo || '').replace(/\D/g, '');
+      const generico = { erro: 'código não confere ou expirou — peça um novo' };
+      if (!email || codigo.length !== 6) return json(400, { erro: 'digite os 6 números do código' });
+      const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').slice(0, 60);
+      try {
+        // ⚠️ O MESMO filtro do pedido, e isto mordeu no teste: sem o status aqui, um cadastro
+        // velho e arquivado com o mesmo e-mail fazia a contagem dar 2 e a conferencia recusava
+        // um codigo legitimo — a pessoa certa, com o codigo certo, levando "nao confere".
+        // As duas rotas tem que enxergar exatamente o mesmo conjunto de pessoas.
+        const { rows } = await pool.query(`
+          SELECT parceiro_id, status, arquivado FROM creator.parceiro
+           WHERE lower(email) = $1 AND status = 'ativo' AND NOT arquivado
+           ORDER BY parceiro_id LIMIT 2`, [email]);
+        if (rows.length !== 1) return json(401, generico);
+        const p = rows[0];
+        const { rows: [c] } = await pool.query(`
+          SELECT codigo_id, codigo_hash, tentativas FROM creator.acesso_codigo
+           WHERE parceiro_id = $1 AND usado_em IS NULL AND invalidado_em IS NULL
+             AND expira_em > now()
+           ORDER BY codigo_id DESC LIMIT 1`, [p.parceiro_id]);
+        if (!c) return json(401, generico);
+
+        // 6 digitos sao um milhao de combinacoes: sem teto de tentativa, da para chutar.
+        if (c.tentativas >= CODIGO_ERROS) {
+          await pool.query(`UPDATE creator.acesso_codigo SET invalidado_em=now() WHERE codigo_id=$1`,
+            [c.codigo_id]);
+          return json(429, { erro: 'muitas tentativas neste código. Peça um novo.' });
+        }
+        if (!confereSenha(codigo, c.codigo_hash)) {
+          await pool.query(`UPDATE creator.acesso_codigo SET tentativas = tentativas + 1
+                             WHERE codigo_id = $1`, [c.codigo_id]);
+          return json(401, generico);
+        }
+
+        // ⚠️ A aprovacao e conferida DEPOIS do codigo, pelo mesmo motivo da senha: dizer "em
+        // analise" antes de conferir contaria a quem perguntasse que aquele e-mail existe.
+        if (p.arquivado || p.status !== 'ativo')
+          return json(403, { erro: 'sua inscrição ainda está em análise — a gente avisa por e-mail assim que aprovar' });
+
+        // uma vez so: marcar como usado ANTES de entregar o cookie
+        const { rowCount } = await pool.query(`
+          UPDATE creator.acesso_codigo SET usado_em = now(), usado_ip = $2
+           WHERE codigo_id = $1 AND usado_em IS NULL`, [c.codigo_id, ip || null]);
+        if (!rowCount) return json(401, generico);   // corrida: alguem usou primeiro
+
+        await pool.query(`UPDATE creator.parceiro SET login_falhas=0, login_travado_ate=NULL,
+                                 ultimo_login=now() WHERE parceiro_id=$1`, [p.parceiro_id]);
+        res.writeHead(200, {'content-type':'application/json; charset=utf-8',
+          'cache-control':'no-store', 'Set-Cookie': setaCookie(p.parceiro_id) });
+        return res.end(JSON.stringify({ ok: true }));
+      } catch (e) { console.error('[codigo]', e.message); return json(500, { erro: 'não consegui entrar agora' }); }
+    }
+
     if (u.pathname === '/creator/sair') {
       res.writeHead(303, { Location: '/creator', 'Set-Cookie':
         `${COOKIE_CR}=; Path=/creator; HttpOnly; Secure; SameSite=Lax; Max-Age=0` });
@@ -1193,7 +1356,9 @@ http.createServer(async (req, res) => {
         return res.end();
       }
       res.writeHead(200, {'content-type':'text/html; charset=utf-8','cache-control':'no-store'});
-      return res.end(TPL_ENTRAR);
+      // a tela precisa saber se a porta do codigo esta ligada — se nao estiver, ela nem
+      // oferece, para nao prometer um e-mail que o servidor vai recusar a mandar
+      return res.end(TPL_ENTRAR.replace('__CODIGO__', LOGIN_CODIGO ? 'true' : 'false'));
     }
 
     // ---- salvar perfil ----

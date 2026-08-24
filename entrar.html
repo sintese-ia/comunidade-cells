@@ -6,7 +6,7 @@
 <title>Comunidade Cells — entrar</title>
 <style>
   :root{--bg:#FFF;--pg:#F6F8F7;--ink:#14181A;--mut:#6C7679;--fnt:#98A0A2;--line:#E3E8E7;
-        --ac:#0B5FFF;--ng:#B23A2B;--ng-s:#FBE9E6;
+        --ac:#0B5FFF;--ng:#B23A2B;--ng-s:#FBE9E6;--ok:#1B7F5A;--ok-s:#E8F5EF;
         --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
         --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif}
   *{box-sizing:border-box}
@@ -22,6 +22,10 @@
   input{width:100%;border:1px solid var(--line);border-radius:3px;padding:11px;font-size:15px;
         font-family:inherit;background:var(--bg);color:var(--ink)}
   input:focus{outline:2px solid var(--ac);outline-offset:1px;border-color:var(--ac)}
+  /* o campo do código é o herói da tela: números grandes, espaçados, fáceis de conferir
+     com o e-mail aberto do lado */
+  #cod{font-family:var(--mono);font-size:27px;letter-spacing:.34em;text-align:center;
+       padding:13px 11px 13px 18px;font-weight:600}
   .c{margin-bottom:15px}
   button{width:100%;margin-top:6px;background:var(--ink);color:#fff;border:none;border-radius:3px;
          padding:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}
@@ -29,47 +33,154 @@
   .er{background:var(--ng-s);color:var(--ng);font-size:12.5px;padding:9px 11px;border-radius:3px;
       margin-bottom:15px;font-weight:600;display:none}
   .er.on{display:block}
+  .ok{background:var(--ok-s);color:var(--ok);font-size:12.5px;padding:9px 11px;border-radius:3px;
+      margin-bottom:15px;font-weight:600;line-height:1.5}
   .ft{margin-top:20px;padding-top:15px;border-top:1px solid var(--line);
       font-size:12px;color:var(--fnt);line-height:1.6}
+  .lk{background:none;border:none;color:var(--ac);font-size:12px;font-weight:600;cursor:pointer;
+      padding:0;margin:0;width:auto;font-family:inherit;text-decoration:underline}
+  .esc{display:none}
 </style>
 </head>
 <body>
-<form id="f" autocomplete="on">
+
+<!-- ---------------- porta 1: código por e-mail ---------------- -->
+<form id="fCod" class="esc" autocomplete="on">
   <div class="lg">comunidade <em>cells</em></div>
-  <p>Seu painel de creator. Entre com o e-mail (ou o seu @) e a senha que você cadastrou.</p>
-  <div class="er" id="er" role="alert"></div>
+  <p id="pCod">Seu painel de creator. Digite seu e-mail que a gente manda um código de 6 números.</p>
+  <div class="er" id="erCod" role="alert"></div>
+
+  <div id="passo1">
+    <div class="c">
+      <label for="em">Seu e-mail</label>
+      <input id="em" name="username" autocomplete="username" inputmode="email"
+             placeholder="voce@email.com" autofocus>
+    </div>
+    <button type="submit" id="bEnv">Enviar código</button>
+  </div>
+
+  <div id="passo2" class="esc">
+    <div class="ok" id="avisoEnv"></div>
+    <div class="c">
+      <label for="cod">Código de 6 números</label>
+      <!-- one-time-code deixa o iPhone e o Android oferecerem o código direto do e-mail -->
+      <input id="cod" inputmode="numeric" autocomplete="one-time-code" maxlength="6"
+             pattern="[0-9]{6}" placeholder="000000">
+    </div>
+    <button type="button" id="bEnt">Entrar</button>
+    <div class="ft">
+      Não chegou? Confira o spam. <button type="button" class="lk" id="bOutro">Pedir outro código</button>
+      · <button type="button" class="lk" id="bVoltar">trocar de e-mail</button>
+    </div>
+  </div>
+
+  <div class="ft" id="ftCod">
+    Não sabe qual e-mail está no seu cadastro, ou ele mudou? Fale com a gente que a gente ajusta.
+    <span id="temSenha">· <button type="button" class="lk" id="irSenha">entrar com senha</button></span>
+  </div>
+</form>
+
+<!-- ---------------- porta 2: senha (continua existindo) ---------------- -->
+<form id="fSen" class="esc" autocomplete="on">
+  <div class="lg">comunidade <em>cells</em></div>
+  <p>Entre com o e-mail (ou o seu @) e a senha que você cadastrou.</p>
+  <div class="er" id="erSen" role="alert"></div>
   <div class="c">
     <label for="q">E-mail ou @</label>
-    <input id="q" name="username" autocomplete="username" required autofocus
-           inputmode="email" placeholder="voce@email.com">
+    <input id="q" name="username" autocomplete="username" inputmode="email"
+           placeholder="voce@email.com">
   </div>
   <div class="c">
     <label for="s">Senha</label>
-    <input id="s" name="password" type="password" autocomplete="current-password" required>
+    <input id="s" name="password" type="password" autocomplete="current-password">
   </div>
-  <button type="submit" id="b">Entrar</button>
-  <div class="ft">
-    Ainda não tem senha? Ela se define <b>dentro do painel</b>, na aba Acesso — entre pelo link
-    pessoal que a Cells te mandou e cadastre por lá.<br>
-    Perdeu o link ou esqueceu a senha? Fale com a gente que a gente manda outro.
+  <button type="submit" id="bSen">Entrar</button>
+  <div class="ft" id="ftSen">
+    A senha se define <b>dentro do painel</b>, na aba Acesso. Perdeu o link ou esqueceu a senha?
+    Fale com a gente. <span id="temCodigo">· <button type="button" class="lk" id="irCodigo">receber um código por e-mail</button></span>
   </div>
 </form>
+
 <script>
-const f = document.getElementById('f'), er = document.getElementById('er'),
-      b = document.getElementById('b');
-f.addEventListener('submit', async ev => {
-  ev.preventDefault();
-  er.classList.remove('on'); b.disabled = true; b.textContent = 'entrando…';
+// ligado ou não pelo servidor (env LOGIN_CODIGO). Com a porta desligada, esta tela é
+// exatamente a de antes: só senha, e nenhuma promessa de e-mail que não vai sair.
+const CODIGO_LIGADO = __CODIGO__;
+const $ = id => document.getElementById(id);
+const mostra = (el, sim) => el.classList.toggle('esc', !sim);
+
+mostra($('fCod'), CODIGO_LIGADO);
+mostra($('fSen'), !CODIGO_LIGADO);
+mostra($('temCodigo'), CODIGO_LIGADO);
+
+$('irSenha').onclick  = () => { mostra($('fCod'), false); mostra($('fSen'), true); $('q').focus(); };
+$('irCodigo').onclick = () => { mostra($('fSen'), false); mostra($('fCod'), true); $('em').focus(); };
+
+function erro(el, txt){ el.textContent = txt; el.classList.add('on'); }
+function limpa(el){ el.classList.remove('on'); }
+
+async function chama(rota, corpo){
+  const r = await fetch(rota, { method:'POST', headers:{'content-type':'application/json'},
+                                body: JSON.stringify(corpo) });
+  return { ok: r.ok, j: await r.json().catch(() => ({})) };
+}
+
+// ---- pedir o código ----
+async function pedir(){
+  limpa($('erCod'));
+  const email = $('em').value.trim();
+  if (!email) { erro($('erCod'), 'digite seu e-mail'); return; }
+  $('bEnv').disabled = true; $('bEnv').textContent = 'enviando…';
   try {
-    const r = await fetch('/creator/entrar', {
-      method: 'POST', headers: {'content-type':'application/json'},
-      body: JSON.stringify({ identificador: document.getElementById('q').value,
-                             senha: document.getElementById('s').value })});
-    const j = await r.json().catch(() => ({}));
-    if (r.ok && j.ok) { location.href = '/creator'; return; }
-    er.textContent = j.erro || 'não consegui entrar'; er.classList.add('on');
-  } catch (e) { er.textContent = 'sem conexão com o servidor'; er.classList.add('on'); }
-  b.disabled = false; b.textContent = 'Entrar';
+    const { ok, j } = await chama('/creator/codigo', { email });
+    if (ok && j.ok) {
+      // ⚠️ A tela NUNCA diz se aquele e-mail existe. Diz o que ela faria em qualquer caso —
+      // senão o formulário vira uma lista de quem é creator da Cells.
+      $('avisoEnv').innerHTML = 'Se existe uma conta com <b>' + email.replace(/[<&]/g, '') +
+        '</b>, o código já está a caminho. Ele vale ' + (j.minutos || 10) + ' minutos.';
+      mostra($('passo1'), false); mostra($('passo2'), true); mostra($('ftCod'), false);
+      $('cod').focus();
+    } else erro($('erCod'), j.erro || 'não consegui enviar agora');
+  } catch (e) { erro($('erCod'), 'sem conexão com o servidor'); }
+  $('bEnv').disabled = false; $('bEnv').textContent = 'Enviar código';
+}
+$('fCod').addEventListener('submit', ev => { ev.preventDefault();
+  if ($('passo2').classList.contains('esc')) pedir(); else entrarCodigo(); });
+
+// ---- conferir o código ----
+async function entrarCodigo(){
+  limpa($('erCod'));
+  const codigo = $('cod').value.replace(/\D/g, '');
+  if (codigo.length !== 6) { erro($('erCod'), 'o código tem 6 números'); return; }
+  $('bEnt').disabled = true; $('bEnt').textContent = 'entrando…';
+  try {
+    const { ok, j } = await chama('/creator/codigo/entrar', { email: $('em').value.trim(), codigo });
+    if (ok && j.ok) { location.href = '/creator'; return; }
+    erro($('erCod'), j.erro || 'não consegui entrar');
+  } catch (e) { erro($('erCod'), 'sem conexão com o servidor'); }
+  $('bEnt').disabled = false; $('bEnt').textContent = 'Entrar';
+}
+$('bEnt').onclick = entrarCodigo;
+// digitou os 6, entra sozinho: no celular, com o código colado do e-mail, clicar é atrito
+$('cod').addEventListener('input', () => {
+  $('cod').value = $('cod').value.replace(/\D/g, '').slice(0, 6);
+  if ($('cod').value.length === 6) entrarCodigo();
+});
+
+$('bOutro').onclick  = () => { mostra($('passo2'), false); mostra($('passo1'), true); pedir(); };
+$('bVoltar').onclick = () => { mostra($('passo2'), false); mostra($('passo1'), true);
+                               mostra($('ftCod'), true); limpa($('erCod')); $('em').focus(); };
+
+// ---- senha ----
+$('fSen').addEventListener('submit', async ev => {
+  ev.preventDefault(); limpa($('erSen'));
+  $('bSen').disabled = true; $('bSen').textContent = 'entrando…';
+  try {
+    const { ok, j } = await chama('/creator/entrar',
+      { identificador: $('q').value, senha: $('s').value });
+    if (ok && j.ok) { location.href = '/creator'; return; }
+    erro($('erSen'), j.erro || 'não consegui entrar');
+  } catch (e) { erro($('erSen'), 'sem conexão com o servidor'); }
+  $('bSen').disabled = false; $('bSen').textContent = 'Entrar';
 });
 </script>
 </body>
