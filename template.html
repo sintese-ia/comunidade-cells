@@ -681,7 +681,7 @@
         <input type="checkbox" id="apComb">
         deixar empilhar com outro desconto de pedido
       </label>
-      <p class="obs" style="margin-top:7px">O padrão da loja hoje é <b>8%</b> — os 103 cupons nominais que já existem são assim, não 15% como diz o business case. <b>Comissão em branco</b> significa que ainda não há regra combinada, e a apuração não vai inventar uma.</p>
+      <p class="obs" style="margin-top:7px">Cupom de creator é <b>10%</b> (decisão de 24/08). Os cupons antigos ficam com o percentual que já têm — o de 8% só muda um a um. <b>Comissão em branco</b> significa que ainda não há regra combinada, e a apuração não vai inventar uma.</p>
       <p class="obs" id="apAvisoComb" style="margin-top:7px;color:var(--wa)"></p>
     </div>
     <div class="fsec"><h4>Link do creator</h4>
@@ -1385,6 +1385,10 @@ document.getElementById('tbCad').addEventListener('click', async e => {
    O diálogo mostra ANTES de gravar exatamente o que vai acontecer: qual código, quanto de
    desconto, qual link e o que a pessoa recebe. Aprovar dispara e-mail para uma pessoa real —
    clicar sem ver o que sai é como se manda a coisa errada. */
+// o percentual padrao vem do servidor (DESCONTO_PADRAO) e nunca e reescrito aqui:
+// numero repetido em dois arquivos e numero que um dia diverge — foi assim que a tela
+// continuou sugerindo 8 depois da decisao de 10
+const DESCONTO = D.desconto_padrao ?? 10;
 const CUPONS = D.cupons || [], EMAILS = D.emails || [];
 const LEGADO = D.legado || [];
 const dlgAp = document.getElementById('dlgAprovar');
@@ -1424,7 +1428,8 @@ function pintaPreviewAp(){
     : 'Nada é enviado agora. Dá para avisar depois pelo botão de reenviar na ficha.';
   const comb = document.getElementById('apComb').checked;
   document.getElementById('apAvisoComb').textContent = comb
-    ? 'Empilhando, este cupom soma com cupom de campanha no mesmo carrinho — é assim que 8% vira 28%.'
+    ? 'Empilhando, este cupom soma com cupom de campanha no mesmo carrinho — é assim que '
+      + DESCONTO + '% vira ' + (DESCONTO + 20) + '%.'
     : '';
 }
 
@@ -1441,7 +1446,7 @@ function abreAprovar(id){
     + (f.seguidores ? ' · ' + n(f.seguidores) + ' seguidores' : '')
     + (f.engajamento_pct ? ' · ' + pc(f.engajamento_pct) + ' de engajamento' : '');
   document.getElementById('apCupom').value = sugereCupom(f);
-  document.getElementById('apDesc').value = 8;
+  document.getElementById('apDesc').value = DESCONTO;
   document.getElementById('apCom').value = '';
   document.getElementById('apComb').checked = false;
   document.getElementById('apEmail').value = f.email || '';

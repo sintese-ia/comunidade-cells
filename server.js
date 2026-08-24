@@ -33,9 +33,13 @@ const SITE      = process.env.SITE_URL || 'https://cells.com.br';
 // pode ser revogado a qualquer momento e trocar não pode exigir deploy.
 const COMUNIDADE_WPP = process.env.COMUNIDADE_WHATSAPP
   || 'https://chat.whatsapp.com/KMN0hiWiLHw1NFJFPxGqlR';
-// O padrão REAL da casa, medido na loja em 08/08: os ~103 cupons nominais são de 8%.
-// O business case dizia 15% — está errado, e usar 15 dobraria o desconto sem ninguém decidir.
-const DESCONTO_PADRAO = +process.env.DESCONTO_PADRAO || 8;
+// DECISAO DO GABRIEL, 24/08/2026: cupom de creator e SEMPRE 10%.
+// Antes o padrao era 8 (o que a loja tinha em 08/08) e a tela repetia o 8 por conta propria,
+// em outro arquivo — dois lugares para o mesmo numero, que e como um deles envelhece calado.
+// Agora o numero nasce AQUI e desce para a tela dentro do payload (desconto_padrao).
+// Isto muda so o SUGERIDO: os cupons que ja existem continuam com o percentual que tem, e o
+// campo do dialogo continua editavel para a excecao.
+const DESCONTO_PADRAO = +process.env.DESCONTO_PADRAO || 10;
 const COOKIE  = 'cc_sess';
 // Os únicos status que um cadastro pode ter. A tela oferece exatamente estes, e o servidor
 // recusa qualquer outro — status livre vira dialeto pessoal e quebra todo filtro depois.
@@ -2530,7 +2534,7 @@ http.createServer(async (req, res) => {
   }
 
   if (u.pathname === '/api/dados') {
-    try { return json(200, await dados()); }
+    try { return json(200, { ...await dados(), desconto_padrao: DESCONTO_PADRAO }); }
     catch (e) { return json(503, { erro: e.message }); }
   }
 
@@ -2540,7 +2544,8 @@ http.createServer(async (req, res) => {
     const d = await dados();
     res.writeHead(200, {'content-type':'text/html; charset=utf-8','cache-control':'no-store',
       'x-cc-cache': Math.round((Date.now() - cache.at) / 1000) + 's'});
-    res.end(TPL.replace('__DATA__', JSON.stringify(d).replace(/</g, '\\u003c')));
+    res.end(TPL.replace('__DATA__', JSON.stringify({ ...d, desconto_padrao: DESCONTO_PADRAO })
+      .replace(/</g, '\\u003c')));
   } catch (e) {
     res.writeHead(503, {'content-type':'text/html; charset=utf-8'});
     res.end(erroPg(e.message));
