@@ -2216,7 +2216,12 @@ http.createServer(async (req, res) => {
         const r = await pool.query(`
           UPDATE creator.parceiro SET status=$2, decidido_por=$3, atualizado_em=now(),
             arquivado = false,
-            aprovado_em  = CASE WHEN $2='ativo'     THEN coalesce(aprovado_em, now()) ELSE aprovado_em END,
+            -- NAO carimbar aprovado_em aqui. Mudar o status para 'ativo' NAO e aprovar:
+            -- aprovar cria cupom, link e e-mail, e so /api/aprovar faz isso. Ate 24/08 este
+            -- CASE gravava a data mesmo assim, e o estrago era duplo: dava a entender que a
+            -- pessoa passou pelo fluxo completo, e desligava o alarme reaprovar (que testa
+            -- aprovado_em IS NULL) exatamente nas 20 que ficaram sem cupom em 21/08.
+            aprovado_em = aprovado_em,
             reprovado_em = CASE WHEN $2='reprovado' THEN coalesce(reprovado_em, now()) ELSE NULL END,
             reprovado_motivo = CASE WHEN $2='reprovado' THEN coalesce($4, reprovado_motivo) ELSE NULL END
           WHERE parceiro_id=$1 RETURNING *`, [id, valor, por, motivo || null]);

@@ -94,6 +94,16 @@ const painel = {
            -- Decisão do Gabriel: todos precisam ser aprovados, MENOS os 5 que venderam em 2026,
            -- carimbados com aprovado_por='mantido_2026'. O cupom continua vivo no meio disso.
            (p.status='ativo' AND p.aprovado_em IS NULL) AS reaprovar,
+           -- ATIVO SEM CUPOM e um estado morto e ate 24/08 era INVISIVEL: a pessoa foi
+           -- aprovada, o portal dela abre, e nao existe codigo nenhum para ela divulgar.
+           -- Aconteceu com 20 creators na curadoria de 21/08, porque o select de status
+           -- deixa a pessoa ativa sem passar pelo fluxo que cria o cupom. Nao da para
+           -- depender de reaprovar para pegar isso: aquele select carimbava aprovado_em,
+           -- entao o proprio atalho desarmava o alarme. Este flag olha o CUPOM, que e o
+           -- fato que importa, e nao a data que alguem carimbou.
+           (p.status='ativo' AND NOT p.arquivado
+             AND NOT EXISTS (SELECT 1 FROM creator.cupom c3
+                              WHERE c3.parceiro_id=p.parceiro_id AND c3.ativo)) AS falta_cupom,
            (p.aprovado_por = 'mantido_2026')            AS mantido,
            -- ---- o que a PESSOA declarou no formulário (item 1: pesquisa por nicho/idade) ----
            -- Nunca inferido: se ela não respondeu, fica null e a tela mostra vazio.

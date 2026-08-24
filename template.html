@@ -334,6 +334,7 @@
         <button class="aba" data-fl="semig" aria-pressed="false">sem instagram <b id="c-semig">0</b></button>
         <button class="aba" data-fl="naoavisado" aria-pressed="false">nunca avisados <b id="c-naoavisado">0</b></button>
         <button class="aba" data-fl="reaprovar" aria-pressed="false">re-aprovar <b id="c-reaprovar">0</b></button>
+        <button class="aba" data-fl="semcupom" aria-pressed="false">sem cupom <b id="c-semcupom">0</b></button>
         <input id="cq" class="busca" placeholder="nome, @ ou cupom" aria-label="Filtrar cadastros">
         <span class="cnt" id="cntCad"></span>
       </div>
@@ -963,7 +964,7 @@ let cNicho = '', cIdade = '', cCidade = '', cNivel = '', cPasta = '';
 
 function contaCad(){
   const c = {todos:0, pendente:0, ativo:0, pausado:0, reprovado:0, arquivado:0,
-             semig:0, naoavisado:0, reaprovar:0};
+             semig:0, naoavisado:0, reaprovar:0, semcupom:0};
   CAD.forEach(f => {
     if (f.arquivado) { c.arquivado++; return; }
     c.todos++;
@@ -971,6 +972,7 @@ function contaCad(){
     if (!f.instagram_handle) c.semig++;
     if (f.status === 'ativo' && !f.avisado) c.naoavisado++;
     if (f.reaprovar) c.reaprovar++;
+    if (f.falta_cupom) c.semcupom++;
   });
   for (const k in c) { const e = document.getElementById('c-'+k); if (e) e.textContent = c[k]; }
 }
@@ -981,6 +983,7 @@ function filtraCad(){
     else if (cAba === 'semig') { if (f.arquivado || f.instagram_handle) return false; }
     else if (cAba === 'naoavisado') { if (f.arquivado || f.status !== 'ativo' || f.avisado) return false; }
     else if (cAba === 'reaprovar') { if (f.arquivado || !f.reaprovar) return false; }
+    else if (cAba === 'semcupom') { if (f.arquivado || !f.falta_cupom) return false; }
     else if (cAba !== 'todos') { if (f.arquivado || f.status !== cAba) return false; }
     else if (f.arquivado) return false;
     if (cBusca) {
@@ -1214,7 +1217,13 @@ function pintaCad(){
           if (!c) return f.cliques_orfaos
             ? '<span class="chip cr" title="o link desta pessoa já recebeu clique, mas sem cupom '
               + 'ativo a venda não é atribuída a ninguém">'+f.cliques_orfaos+' cliques sem cupom</span>'
-            : '<span class="dim">—</span>';
+            // Creator ATIVA sem cupom não pode sair como traço: ela foi aprovada, o portal
+            // dela abre e não há nada para ela divulgar. Traço é "não se aplica"; isto é
+            // "falta fazer". Quem está pendente ainda não deveria ter cupom — esse sim é traço.
+            : f.falta_cupom
+              ? '<span class="chip cr" title="aprovada sem cupom: o portal dela abre sem nada '
+                + 'para divulgar. Use o botão criar cupom">sem cupom</span>'
+              : '<span class="dim">—</span>';
           const cod = c.shopify_erro
             ? '<span class="chip cr" title="'+esc(c.shopify_erro)+'">'+esc(c.codigo)+' inativo</span>'
             : '<span class="chip ok">'+esc(c.codigo)+'</span>'
@@ -1234,6 +1243,11 @@ function pintaCad(){
             if (f.arquivado) return '';
             // pendente → o fluxo inteiro (cupom + link + aviso)
             if (f.status === 'pendente') return '<button class="acbt ok" data-aprovar="'+f.parceiro_id+'">aprovar</button>';
+            // ATIVA SEM CUPOM: mesmo fluxo, outro nome. Antes de 24/08 esta linha não
+            // existia e a pessoa ficava num beco — o botão de aprovar só aparecia para
+            // pendente, e o de avisar exige cupom que ela não tem. Nenhum botão, nenhuma
+            // saída. /api/aprovar nunca exigiu status pendente: rodar aqui é legítimo.
+            if (f.falta_cupom) return '<button class="acbt ok" data-aprovar="'+f.parceiro_id+'">criar cupom</button>';
             // já ativo e com cupom, mas NUNCA avisado: é o caso dos 28 do cupom legado, que
             // nasceram ativos sem ninguém nunca ter mandado o link para eles
             const cp = cupomDe(f.parceiro_id);
@@ -1417,7 +1431,12 @@ function pintaPreviewAp(){
 function abreAprovar(id){
   const f = CAD.find(x => x.parceiro_id === id); if (!f) return;
   aprovarId = id;
-  document.getElementById('apTitulo').textContent = 'Aprovar ' + (f.nome || '');
+  // Quem já está ativa não está sendo aprovada de novo — está ganhando o cupom que
+  // faltou. Escrever "Aprovar" ali seria mentira, e é a tela que o Gabriel usa para saber
+  // o que vai acontecer antes de clicar.
+  document.getElementById('apTitulo').textContent =
+    (f.status === 'ativo' ? 'Criar cupom de ' : 'Aprovar ') + (f.nome || '');
+  document.getElementById('apSalvar').textContent = f.status === 'ativo' ? 'criar cupom' : 'aprovar';
   document.getElementById('apSub').innerHTML = (f.instagram_handle ? '@' + esc(f.instagram_handle) : 'sem Instagram')
     + (f.seguidores ? ' · ' + n(f.seguidores) + ' seguidores' : '')
     + (f.engajamento_pct ? ' · ' + pc(f.engajamento_pct) + ' de engajamento' : '');
