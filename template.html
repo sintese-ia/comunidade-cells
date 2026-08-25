@@ -947,11 +947,7 @@ async function apiPasta(corpo){
   if (!j.ok) { err.textContent = j.erro || 'não gravou'; return null; }
   return j;
 }
-document.getElementById('cPastas').addEventListener('click', () => {
-  document.getElementById('paErro').textContent = '';
-  document.getElementById('paNova').value = '';
-  pintaPastas(); dPa.showModal();
-});
+// o botao 'gerenciar pastas' saiu da tela em 25/08; o dialogo continua no HTML, sem porta
 document.getElementById('paFechar').addEventListener('click', () => dPa.close());
 document.getElementById('paCriar').addEventListener('click', async () => {
   const nome = document.getElementById('paNova').value.trim();
@@ -1211,33 +1207,9 @@ document.getElementById('cq').addEventListener('input', e => {
   cBusca = e.target.value.trim().toLowerCase(); pintaCad();
 });
 
-/* filtros de curadoria (item 1) */
-[['cNicho', v => cNicho = v], ['cIdade', v => cIdade = v],
- ['cCidade', v => cCidade = v], ['cNivel', v => cNivel = v], ['cPasta', v => cPasta = v]]
-  .forEach(([id, set]) => document.getElementById(id)
-    .addEventListener('change', e => { set(e.target.value); pintaCad(); }));
-
-document.getElementById('cLimpa').addEventListener('click', () => {
-  cNicho = cIdade = cCidade = cNivel = cPasta = '';
-  ['cNicho','cIdade','cCidade','cNivel','cPasta'].forEach(id => document.getElementById(id).value = '');
-  pintaCad();
-});
-
-/* Quantos a curadoria não alcança. Filtrar por idade some com quem não declarou idade —
-   isso é correto, mas silencioso, e a tela precisa dizer em voz alta quantos sumiram. */
-function infoFiltro(mostrados){
-  const ligado = cNicho || cIdade || cCidade || cNivel || cPasta;
-  document.getElementById('cLimpa').style.display = ligado ? '' : 'none';
-  const el = document.getElementById('cFiltroInfo');
-  if (!ligado) { el.textContent = ''; return; }
-  const vivos = CAD.filter(f => !f.arquivado);
-  const mudos = vivos.filter(f =>
-    (cNicho  && !(f.nichos||[]).length) ||
-    (cIdade  && f.idade == null) ||
-    (cCidade && !f.cidade)).length;
-  el.textContent = mostrados + ' encontrados'
-    + (mudos ? ' · ' + mudos + ' fora por não terem declarado o campo' : '');
-}
+// Os filtros de curadoria sairam em 25/08 junto com os selects. infoFiltro vira no-op:
+// quem chama e o pintaCad, e apagar a chamada em vez da funcao daria mais lugar para errar.
+function infoFiltro(){}
 document.querySelectorAll('th[data-t]').forEach(t => t.addEventListener('click', () => {
   const c = t.dataset.t;
   cOrd = cOrd.c === c ? {c, d:-cOrd.d} : {c, d:(c==='nome'?1:-1)};
@@ -2498,184 +2470,10 @@ document.getElementById('mFechar').addEventListener('click', fechaMidia);
 dM.addEventListener('close', () => { document.getElementById('mplayer').innerHTML = ''; });
 pintaGal();
 
-/* =================================================== 06 LEGADO ================= */
-let lgAba = 'nominal', lgQ = '', lgOrd = {c:'receita', d:-1};
-
-(function topoLegado(){
-  const nom = LEGADO.filter(l => l.classe === 'nominal');
-  const semVenda = nom.filter(l => l.nunca_vendeu).length;
-  const receita = LEGADO.reduce((a,l) => a + Number(l.receita||0), 0);
-  const empilha = LEGADO.filter(l => l.combina_pedido && l.status_shopify === 'ACTIVE').length;
-  document.getElementById('stripLeg').innerHTML = [
-    ['Cupons na loja', n(LEGADO.length), 'varridos da Shopify'],
-    ['De pessoa', n(nom.length), 'cupom nominal de creator'],
-    ['Nunca venderam', n(semVenda), semVenda ? Math.round(semVenda/Math.max(1,nom.length)*100)+'% dos nominais' : ''],
-    ['Receita do legado', nm(receita), 'todos os cupons somados'],
-    ['Empilham desconto', n(empilha), 'somam com outro cupom no carrinho'],
-  ].map(([k,v,nn]) => '<div class="cel"><div class="k">'+k+'</div><div class="v">'+v+'</div>'
-      + '<div class="n">'+nn+'</div></div>').join('');
-})();
-
-function pintaLegado(){
-  const c = {nominal:0, campanha:0, teste:0, zerado:0, todos:LEGADO.length};
-  LEGADO.forEach(l => { if (c[l.classe] != null) c[l.classe]++; if (l.nunca_vendeu) c.zerado++; });
-  for (const k in c) { const e = document.getElementById('l-'+k); if (e) e.textContent = c[k]; }
-
-  let L = LEGADO.filter(l => {
-    if (lgAba === 'zerado') { if (!l.nunca_vendeu) return false; }
-    else if (lgAba !== 'todos' && l.classe !== lgAba) return false;
-    if (lgQ && !((l.codigo+' '+(l.nome||'')+' '+(l.instagram_handle||'')).toLowerCase().includes(lgQ))) return false;
-    return true;
-  });
-  const k = lgOrd.c;
-  L.sort((a,b) => {
-    let x = a[k], y = b[k];
-    if (x == null) return 1; if (y == null) return -1;
-    if (typeof x === 'string') return x.localeCompare(y) * lgOrd.d;
-    return (x - y) * lgOrd.d;
-  });
-  document.getElementById('cntLeg').textContent = L.length + ' de ' + LEGADO.length;
-  document.getElementById('tbLeg').innerHTML = L.map(l =>
-    '<tr><td class="h"><b>'+esc(l.codigo)+'</b></td>'
-    + '<td class="h">'+(l.nome ? esc(l.nome) : '<span class="dim">—</span>')
-      + (l.instagram_handle ? '<span class="sub2">@'+esc(l.instagram_handle)+'</span>' : '')+'</td>'
-    + '<td>'+(l.desconto_pct != null ? l.desconto_pct+'%' : '<span class="dim">valor fixo</span>')+'</td>'
-    + '<td><span class="chip '+(l.status_shopify==='ACTIVE'?'ok':'vo')+'">'
-      + esc(String(l.status_shopify||'—').toLowerCase())+'</span></td>'
-    + '<td'+(l.usos_shopify?'':' class="dim"')+'>'+(l.usos_shopify != null ? n(l.usos_shopify) : '—')+'</td>'
-    + '<td'+(l.pedidos?'':' class="dim"')+'>'+(l.pedidos || '—')+'</td>'
-    + '<td'+(l.receita>0?' style="font-weight:600"':' class="dim"')+'>'+(l.receita>0?nm(l.receita):'—')+'</td>'
-    + '<td'+(l.clientes_novos?'':' class="dim"')+'>'+(l.clientes_novos || '—')+'</td>'
-    + '<td class="dim">'+dt(l.ultima_venda)+'</td>'
-    + '<td>'+(l.combina_pedido ? '<span class="chip wa">empilha</span>' : '<span class="dim">não</span>')+'</td>'
-    + '</tr>').join('')
-    || '<tr><td colspan="10" class="h dim" style="padding:20px 15px">Nada com esse filtro.</td></tr>';
-}
-document.querySelectorAll('[data-lg]').forEach(b => b.addEventListener('click', () => {
-  document.querySelectorAll('[data-lg]').forEach(x => x.setAttribute('aria-pressed','false'));
-  b.setAttribute('aria-pressed','true'); lgAba = b.dataset.lg; pintaLegado();
-}));
-document.getElementById('lq').addEventListener('input', e => {
-  lgQ = e.target.value.trim().toLowerCase(); pintaLegado();
-});
-document.querySelectorAll('th[data-l]').forEach(t => t.addEventListener('click', () => {
-  const c = t.dataset.l;
-  lgOrd = lgOrd.c === c ? {c, d:-lgOrd.d} : {c, d:(c==='codigo'||c==='nome'?1:-1)};
-  document.querySelectorAll('th[data-l]').forEach(x =>
-    x.innerHTML = x.textContent.replace(/[▲▼]\s*$/,'').trim() +
-      (x.dataset.l===lgOrd.c ? ' <span class="ar">'+(lgOrd.d<0?'▼':'▲')+'</span>' : ''));
-  pintaLegado();
-}));
-pintaLegado();
-
-/* =================================================== NAVEGAÇÃO ================= */
-/* ---------------- apuração ---------------- */
-/* Só vai ao servidor quando alguém abre a aba — e recarrega a cada abertura, porque é a única
-   tela do painel onde ler número velho custa dinheiro de verdade. */
-const MESPT = ['janeiro','fevereiro','março','abril','maio','junho',
-               'julho','agosto','setembro','outubro','novembro','dezembro'];
-const rotMes = m => MESPT[+m.slice(5,7)-1] + '/' + m.slice(0,4);
-let AP = { linhas: [], meses: [], mes: null, vigencia: null };
-
-async function carregaApuracao(){
-  const lista = document.getElementById('apLista');
-  lista.innerHTML = '<div class="msg idle">carregando…</div>';
-  try {
-    const j = await (await fetch('/api/apuracao')).json();
-    if (!j.ok) throw new Error(j.erro || 'erro');
-    AP.linhas = j.linhas; AP.meses = j.meses; AP.vigencia = j.vigencia || null;
-    if (!AP.mes || !AP.meses.some(m => m.mes === AP.mes)) AP.mes = (AP.meses[0]||{}).mes || null;
-    const sel = document.getElementById('apMes');
-    sel.innerHTML = AP.meses.map(m =>
-      '<option value="'+m.mes+'"'+(m.mes===AP.mes?' selected':'')+'>'+rotMes(m.mes)
-      + ' · ' + rs(m.comissao) + (m.fechado?' · fechado':'') + '</option>').join('')
-      || '<option>sem competência ainda</option>';
-    pintaApuracao();
-  } catch(e){ lista.innerHTML = '<div class="msg erro">não carregou: '+esc(e.message)+'</div>'; }
-}
-
-function pintaApuracao(){
-  const linhas = AP.linhas.filter(l => (l.competencia||'').slice(0,7) === AP.mes);
-  const total  = linhas.reduce((a,l) => a + Number(l.comissao_devida||0), 0);
-  const fechado = linhas.length && linhas.every(l => l.fechado);
-  const semPix = linhas.filter(l => Number(l.comissao_devida) > 0 && !l.pix_chave);
-
-  // antes da vigência o programa NÃO pagava comissão — só dava cupom. O número continua na
-  // tela porque ele descreve o que a régua de hoje daria, mas NÃO é dívida e não fecha.
-  const antesDaVigencia = !!(AP.vigencia && AP.mes && AP.mes < AP.vigencia);
-
-  document.getElementById('apCnt').textContent =
-    linhas.length + ' com venda · ' + rs(total)
-    + (antesDaVigencia ? ' (referência, não devido)' : ' em comissão');
-  document.getElementById('apFechar').disabled = !linhas.length || fechado || antesDaVigencia;
-  document.getElementById('apFechar').textContent =
-    antesDaVigencia ? 'antes da vigência' : fechado ? 'mês já fechado' : 'fechar o mês';
-
-  /* Quem não tem PIX não recebe, e isso não pode aparecer só no dia do pagamento. */
-  if (antesDaVigencia) {
-    document.getElementById('apAviso').innerHTML =
-      '<div class="msg idle" style="border-left:3px solid var(--wa)">A Cells só paga comissão '
-      + 'a partir de <b>' + rotMes(AP.vigencia) + '</b>. Antes disso o programa só dava <b>cupom '
-      + 'de desconto</b> — nenhum mês anterior foi pago nem deve ser. O valor abaixo é o que a '
-      + 'régua de hoje daria, para referência, e o mês não pode ser fechado.</div>';
-  } else
-  document.getElementById('apAviso').innerHTML = semPix.length
-    ? '<div class="msg err"><b>'+semPix.length+'</b> '
-      + (semPix.length===1?'creator tem comissão e não cadastrou PIX':'creators têm comissão e não cadastraram PIX')
-      + ': ' + semPix.map(l => esc(l.nome||l.cupom)).join(', ')
-      + '. Sem chave, não há para onde mandar — peça pelo portal, aba Financeiro.</div>'
-    : '';
-
-  document.getElementById('apLista').innerHTML = linhas.length ? `
-  <div class="scroll"><table><thead><tr>
-    <th>creator</th><th>cupom</th><th>nível</th><th>pedidos</th>
-    <th>receita</th><th>comissão</th><th>pix</th><th>situação</th><th></th>
-  </tr></thead><tbody>` + linhas.map(l => {
-    const pago = l.status_pagamento === 'paga';
-    return '<tr>'
-      + '<td class="h"><b>'+esc(l.nome||'—')+'</b>'
-        + (l.instagram_handle?'<span class="sub2">@'+esc(l.instagram_handle)+'</span>':'')+'</td>'
-      + '<td>'+esc(l.cupom||'—')+'</td>'
-      + '<td>'+esc(l.nivel||'—')+'</td>'
-      + '<td>'+l.pedidos+'</td>'
-      + '<td>'+rs(l.receita)+'</td>'
-      + '<td><b>'+rs(l.comissao_devida)+'</b></td>'
-      + '<td>'+(l.pix_chave ? '<span class="chip ok">'+esc(l.pix_tipo)+'</span>'
-                            : '<span class="chip cr">falta</span>')+'</td>'
-      + '<td>'+esc(l.situacao)
-        + (l.pago_em?'<span class="sub2">'+String(l.pago_em).slice(0,10).split('-').reverse().join('/')+'</span>':'')+'</td>'
-      + '<td class="acs">'+(l.fechado && !pago
-          ? '<button class="acbt ok" data-pagar="'+l.parceiro_id+'">marcar paga</button>'
-          : (pago ? '<button class="acbt no" data-desfazer="'+l.parceiro_id+'">desfazer</button>' : ''))+'</td>'
-      + '</tr>';
-  }).join('') + '</tbody></table></div>'
-  : '<div class="msg idle">Nenhuma venda válida em '+(AP.mes?rotMes(AP.mes):'—')+'.</div>';
-}
-
-document.getElementById('apMes').addEventListener('change', e => { AP.mes = e.target.value; pintaApuracao(); });
-
-document.getElementById('apFechar').addEventListener('click', async e => {
-  if (!confirm('Fechar '+rotMes(AP.mes)+'? Depois disso a comissão desse mês para de ser recalculada.')) return;
-  e.target.disabled = true;
-  const j = await (await fetch('/api/apuracao/fechar?mes='+AP.mes, {method:'POST'})).json();
-  if (!j.ok) { alert('Não fechou: '+(j.erro||'erro')); e.target.disabled = false; return; }
-  await carregaApuracao();
-});
-
-document.getElementById('apLista').addEventListener('click', async e => {
-  const b = e.target.closest('[data-pagar],[data-desfazer]'); if (!b) return;
-  const pagar = !!b.dataset.pagar, id = b.dataset.pagar || b.dataset.desfazer;
-  let ref = null;
-  if (pagar) {
-    ref = prompt('Comprovante ou id do PIX (opcional, mas é o que resolve dúvida depois):') || '';
-  } else if (!confirm('Desfazer o pagamento? A linha volta para "fechada".')) return;
-  b.disabled = true;
-  const j = await (await fetch('/api/apuracao/status?id='+id+'&mes='+AP.mes
-    + '&status=' + (pagar?'paga':'fechada')
-    + (ref ? '&ref='+encodeURIComponent(ref) : ''), {method:'POST'})).json();
-  if (!j.ok) { alert('Não gravou: '+(j.erro||'erro')); b.disabled = false; return; }
-  await carregaApuracao();
-});
+/* O JS do Legado e da Apuracao saiu junto com as telas (25/08). Ficava rodando no
+   carregamento e procurando elementos que nao existem mais — getElementById devolve null,
+   o addEventListener estoura e o script inteiro morre ali. Foi o que deixou o painel em
+   branco: a pagina era servida certa, e nada era desenhado. As ROTAS continuam no servidor. */
 
 // As CINCO telas que o Gabriel numerou em 25/08. Apuracao e Legado sairam da navegacao —
 // as rotas e as tabelas continuam vivas: a de legado e o que impede criar um cupom com
