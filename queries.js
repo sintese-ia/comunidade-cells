@@ -148,6 +148,11 @@ const painel = {
     -- origem 'fundido' = linha de cupom que virou uma só com um cadastro que já existia.
     -- Cupom e vendas foram movidos; a casca fica como trilha e não aparece em tela nenhuma.
     WHERE p.origem IS DISTINCT FROM 'fundido'
+      -- ⚠️ SO QUEM SE CADASTROU NO FORMULARIO (decisao do Gabriel, 25/08). Quem entrou pelo
+      -- inventario de cupom antigo (31 pessoas, origem cupom_legado) sai DA TELA — o cupom
+      -- continua vivo e vendendo, a venda continua entrando, mas nao polui mais a lista de
+      -- quem e do programa. Foi o que tornava "50 ativas" uma frase sem significado.
+      AND p.lead_id IS NOT NULL
     ORDER BY p.criado_em DESC
   `,
 
@@ -364,6 +369,13 @@ const painel = {
 // ⚠️ publicacao_metrica tem MAIS DE UMA linha por publicação — uma por dia de coleta e uma por
 // fonte. Somar a tabela direto multiplica tudo. O LATERAL colapsa para um valor por publicação
 // ANTES de somar; max() porque contador de rede só cresce.
+// ---- MARCO ZERO DO PROGRAMA: 01/09/2026 ----
+// Decisao do Gabriel em 25/08: "vamos manter so o de setembro para frente, o programa comeca
+// agora". Tudo que aconteceu antes — 77 pedidos do cupom legado, 11 do formulario, as
+// marcacoes de agosto — fica no banco e sai das contas. Ate 31/08 o dashboard mostra zero,
+// e zero e a resposta certa: o programa ainda nao comecou.
+const MARCO_ZERO = process.env.MARCO_ZERO || '2026-09-01';
+
 const CHAVE = `coalesce(lower(p.instagram_handle), 'id:' || p.parceiro_id)`;
 
 const PUB = `
@@ -373,21 +385,45 @@ const PUB = `
   JOIN LATERAL (SELECT max(curtidas) AS curtidas, max(comentarios) AS comentarios,
                        coalesce(max(reproducoes), max(visualizacoes)) AS visualizacoes
                 FROM creator.publicacao_metrica m WHERE m.publicacao_id=u.publicacao_id) x ON true
-  WHERE u.publicado_em::date BETWEEN $1 AND $2
-    AND ($3 = '' OR lower(u.instagram_handle) = $3)`;
+  WHERE u.publicado_em::date BETWEEN greatest($1::date, $4::date) AND $2
+    AND ($3 = '' OR lower(u.instagram_handle) = $3)
+    -- so marcacao de quem esta no programa: 76 perfis marcam a Cells sem nunca ter se
+    -- cadastrado, e contar essa gente aqui faz "marcacoes por criador" dividir por
+    -- gente que nem esta na lista. Elas continuam inteiras na tela de Extracoes.
+    AND EXISTS (SELECT 1 FROM creator.parceiro p2
+                 WHERE lower(p2.instagram_handle) = lower(u.instagram_handle)
+                   AND p2.lead_id IS NOT NULL)`;
 
 const VEN = `
   SELECT ${CHAVE} AS ch, v.pedido_em::date AS dia, v.receita_liquida, v.cliente_novo
   FROM creator.vw_venda_valida v
   JOIN creator.parceiro p ON p.parceiro_id = v.parceiro_id
-  WHERE v.pedido_em::date BETWEEN $1 AND $2
+  -- ⚠️ O DASHBOARD MEDE O PROGRAMA, nao o canal inteiro (decisao 25/08). Sem este filtro o
+  -- faturamento vem R$ 15.685, dos quais R$ 13.794 sao de 27 pessoas que nunca se
+  -- cadastraram — 88% de um numero que deveria falar sobre quem esta no programa hoje.
+  -- O dinheiro deles nao some: aparece na linha do historico, separado, embaixo.
+  WHERE p.lead_id IS NOT NULL
+    AND v.pedido_em::date BETWEEN greatest($1::date, $4::date) AND $2
     AND ($3 = '' OR ${CHAVE} = $3)`;
 
 const CLQ = `
   SELECT ${CHAVE} AS ch, c.dia, c.cliques, c.sessoes
   FROM creator.vw_clique_dia c
   JOIN creator.parceiro p ON p.parceiro_id = c.parceiro_id
-  WHERE c.dia BETWEEN $1 AND $2 AND ($3 = '' OR ${CHAVE} = $3)`;
+  WHERE p.lead_id IS NOT NULL AND c.dia BETWEEN greatest($1::date, $4::date) AND $2 AND ($3 = '' OR ${CHAVE} = $3)`;
+
+// ---- sub-aba Resultados das campanhas (25/08) ----
+// As duas views ja existiam e nunca tinham tela: vw_campanha_resultado diz como a campanha
+// esta indo, vw_placar diz quem esta na frente. Aqui e so juntar.
+const campanhaResultado = {
+  geral: `SELECT * FROM creator.vw_campanha_resultado ORDER BY campanha_id DESC`,
+  // a view ja traz nome e handle; a ordem do ranking e por PONTO, que e o que o placar mede
+  ranking: `
+    SELECT campanha_id, jogo, tipo_jogo, parceiro_id, nome, instagram_handle,
+           pontos, entregas, bateu_tudo, detalhe
+      FROM creator.vw_placar
+     ORDER BY campanha_id DESC, pontos DESC NULLS LAST, nome`,
+};
 
 const analise = {
 
@@ -411,7 +447,24 @@ const analise = {
       (SELECT count(*) FILTER (WHERE cliente_novo)                  FROM ven)::int AS clientes_novos,
       (SELECT count(DISTINCT ch)                                    FROM ven)::int AS creators_que_venderam,
       (SELECT coalesce(sum(cliques),0)                              FROM clq)::int AS cliques,
-      (SELECT coalesce(sum(sessoes),0)                              FROM clq)::int AS sessoes
+      (SELECT coalesce(sum(sessoes),0)                              FROM clq)::int AS sessoes,
+      -- ---- bloco novo do dashboard (25/08) ----
+      -- CUSTO: a tabela existe e esta vazia ("sera colocado"). Some no periodo; enquanto for
+      -- zero o ROAS nao e calculado — dividir por zero e inventar numero, e a tela mostra ~.
+      -- a coluna competencia (sem crase neste comentario: o SQL mora em template literal e
+      -- crase encerra a string) e o MES a que o custo pertence, nao o dia em que alguem
+      -- digitou: kit enviado em 30/07 e custo de julho mesmo que lancado em agosto.
+      (SELECT coalesce(round(sum(cu.valor),2),0) FROM creator.custo cu
+        WHERE cu.competencia BETWEEN greatest(date_trunc('month',$1::date)::date, $4::date) AND $2::date) AS custo,
+      -- COMISSAO: so existe onde alguem definiu percentual. Hoje e 1 cupom de 33 — o numero
+      -- vai sair pequeno de proposito, porque a regra ainda nao foi decidida.
+      (SELECT coalesce(round(sum(v.receita_liquida * c.comissao_pct / 100),2),0)
+         FROM creator.vw_venda_valida v
+         JOIN creator.cupom c ON c.cupom_id = v.cupom_id AND c.comissao_pct IS NOT NULL
+        WHERE v.pedido_em::date BETWEEN greatest($1::date, $4::date) AND $2)  AS comissoes,
+      -- CRIADORES ATIVOS: aprovados de verdade, e so os do formulario
+      (SELECT count(*) FROM creator.parceiro p
+        WHERE p.status='ativo' AND NOT p.arquivado AND p.lead_id IS NOT NULL)::int AS creators_ativos
   `,
 
   // ranking por creator — quem marcou, quem vendeu, quem trouxe clique
@@ -448,6 +501,9 @@ const analise = {
       SELECT seguidores, engajamento_pct FROM creator.perfil_snapshot ps
       WHERE lower(ps.instagram_handle)=hs.ch AND ps.fonte <> 'indisponivel'
       ORDER BY coletado_em DESC LIMIT 1) s ON true
+    -- a tabela do dashboard e SO de aprovado (decisao 25/08). Quem esta em cadastro,
+    -- reprovado ou arquivado nao entra numa tabela que serve para acompanhar quem trabalha.
+    WHERE p.status = 'ativo' AND NOT p.arquivado AND p.lead_id IS NOT NULL
     ORDER BY coalesce(b.receita,0) DESC, coalesce(a.marcacoes,0) DESC
   `,
 
@@ -467,4 +523,4 @@ const analise = {
 
 };
 
-module.exports = { painel, analise };
+module.exports = { painel, analise, campanhaResultado, MARCO_ZERO };

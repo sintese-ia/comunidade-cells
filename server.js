@@ -43,7 +43,7 @@ const DESCONTO_PADRAO = +process.env.DESCONTO_PADRAO || 10;
 const COOKIE  = 'cc_sess';
 // Os únicos status que um cadastro pode ter. A tela oferece exatamente estes, e o servidor
 // recusa qualquer outro — status livre vira dialeto pessoal e quebra todo filtro depois.
-const STATUS  = ['pendente', 'ativo', 'pausado', 'reprovado'];
+const STATUS  = ["pendente", "ativo", "reprovado"];   // pausado saiu em 25/08
 const TOKEN   = require('crypto').createHash('sha256').update('cc|' + SENHA).digest('hex').slice(0, 32);
 
 const pool = new Pool({
@@ -1739,26 +1739,47 @@ http.createServer(async (req, res) => {
     } catch (e) { return json(200, { ok: false, erro: e.message }); }
   }
 
+  // ---- resultados da campanha (sub-aba nova, 25/08) ----
+  // As duas views ja existiam e nunca tinham tela. Sob demanda como a analise: quem abre a
+  // sub-aba paga o custo, quem nao abre nao paga.
+  if (u.pathname === '/api/campanha/resultado') {
+    try {
+      const [g, r] = await Promise.all([
+        pool.query(Q.campanhaResultado.geral),
+        pool.query(Q.campanhaResultado.ranking),
+      ]);
+      return json(200, { ok: true, campanhas: g.rows.map(normaliza), ranking: r.rows.map(normaliza) });
+    } catch (e) { return json(200, { ok: false, erro: e.message }); }
+  }
+
   // ---------------- ANÁLISES ----------------
   // Sob demanda, nunca cacheada: o período e o creator vêm da tela e mudam a cada clique.
   if (u.pathname === '/api/analise') {
     const hoje = new Date().toISOString().slice(0, 10);
     const data = s => /^\d{4}-\d{2}-\d{2}$/.test(s || '') ? s : null;
-    const de   = data(u.searchParams.get('de'))  || '2020-01-01';
+    // o padrao passa a ser o MARCO ZERO, nao 2020: o dashboard e do programa que comeca em
+    // setembro. Quem quiser ver o que veio antes muda a data na mao — o dado continua la.
+    const de   = data(u.searchParams.get('de'))  || Q.MARCO_ZERO;
     const ate  = data(u.searchParams.get('ate')) || hoje;
     // a chave é handle OU `id:<n>` — ver o comentário do bloco ANALISE em queries.js
     const c = (u.searchParams.get('c') || '').trim().toLowerCase().slice(0, 60);
     if (c && !/^[a-z0-9._]+$|^id:\d+$/.test(c)) return json(400, { erro: 'creator inválido' });
+    // ⚠️ ENQUANTO O PROGRAMA NAO COMECOU o padrao e um periodo invalido: o piso e 01/09 e
+    // hoje ainda e agosto. Isso nao e erro do usuario — e a resposta honesta "ainda nao
+    // comecou". Devolver 400 aqui deixava o Dashboard sem conseguir abrir.
+    if (de > ate && !u.searchParams.get('de') && !u.searchParams.get('ate'))
+      return json(200, { ok: true, de, ate, creator: c || null, marco_zero: Q.MARCO_ZERO,
+                         nao_comecou: true, geral: {}, porCreator: [], serie: [] });
     if (de > ate) return json(400, { erro: 'a data inicial é depois da final' });
     try {
-      const p = [de, ate, c];
+      const p = [de, ate, c, Q.MARCO_ZERO];   // $4 = piso do programa
       const [g, pc, se] = await Promise.all([
         pool.query(Q.analise.geral, p),
         pool.query(Q.analise.porCreator, p),
         pool.query(Q.analise.serie, p),
       ]);
       return json(200, {
-        ok: true, de, ate, creator: c || null,
+        ok: true, de, ate, creator: c || null, marco_zero: Q.MARCO_ZERO,
         geral: normaliza(g.rows[0] || {}),
         porCreator: pc.rows.map(normaliza),
         serie: se.rows.map(normaliza),
@@ -1979,6 +2000,51 @@ http.createServer(async (req, res) => {
   // A ORDEM é do mais reversível para o menos, igual à aprovação: banco primeiro (dá rollback),
   // loja depois. Se a loja falhar, o banco volta atrás e o cupom antigo continua valendo —
   // o contrário deixaria o código vivo na loja e órfão aqui.
+  // ---- trocar o LINK do creator (25/08) ----
+  // ⚠️ O LINK ANTIGO CONTINUA VALENDO, para sempre. Se a creator ja publicou
+  // cells.com.br/r/FULANA num post, mudar o slug sem manter o antigo mata o link dentro
+  // de um post que esta no ar — e ninguem consegue editar um post do Instagram depois.
+  // Criar um redirect novo custa uma chamada; link morto na internet custa a venda inteira.
+  if (u.pathname === '/api/link/trocar' && req.method === 'POST') {
+    let d; try { d = await corpoJSON(req, 2048); } catch (e) { return json(e.grande ? 413 : 400, { erro: e.message }); }
+    const id = +d.parceiro_id;
+    const slug = String(d.slug || '').trim().toLowerCase().replace(/^\/+|\/+$/g, '');
+    if (!id) return json(400, { erro: 'parceiro ausente' });
+    if (!/^[a-z0-9._-]{2,40}$/.test(slug))
+      return json(400, { erro: 'use de 2 a 40 letras, números, ponto, hífen ou _' });
+    const cli = await pool.connect();
+    try {
+      const [pa] = (await cli.query(
+        `SELECT parceiro_id, nome, utm_slug FROM creator.parceiro WHERE parceiro_id=$1`, [id])).rows;
+      if (!pa) return json(404, { erro: 'parceiro não encontrado' });
+      if (pa.utm_slug === slug) return json(200, { ok: true, slug, link: linkCreator(slug), igual: true });
+      const [ocupado] = (await cli.query(
+        `SELECT parceiro_id FROM creator.parceiro WHERE utm_slug=$1 AND parceiro_id<>$2`, [slug, id])).rows;
+      if (ocupado) return json(409, { erro: 'esse link já é de outra pessoa' });
+
+      const [cup] = (await cli.query(
+        `SELECT codigo FROM creator.cupom WHERE parceiro_id=$1 AND ativo ORDER BY cupom_id LIMIT 1`, [id])).rows;
+      let redirectId = null, redirectPath = null, aviso = null;
+      if (cup) {
+        try { const rd = await criarLinkCurtoShopify({ codigo: cup.codigo, slug });
+              redirectId = rd.id; redirectPath = rd.path; }
+        catch (e) { aviso = 'o link curto não foi criado na loja: ' + e.message; }
+      }
+      await cli.query(`UPDATE creator.parceiro SET utm_slug=$2, atualizado_em=now() WHERE parceiro_id=$1`,
+        [id, slug]);
+      if (redirectPath) await cli.query(
+        `UPDATE creator.cupom SET link_redirect_id=$2, link_path=$3
+          WHERE parceiro_id=$1 AND ativo`, [id, redirectId, redirectPath]);
+      await cli.query(
+        `INSERT INTO creator.parceiro_edicao (parceiro_id,campo,valor_antigo,valor_novo,por)
+         VALUES ($1,'utm_slug',$2,$3,'painel')`, [id, pa.utm_slug, slug]);
+      invalida();
+      return json(200, { ok: true, slug, link: redirectPath ? SITE + redirectPath : linkCreator(slug),
+                         antigo: pa.utm_slug, aviso });
+    } catch (e) { return json(200, { ok: false, erro: e.message }); }
+    finally { cli.release(); }
+  }
+
   if (u.pathname === '/api/cupom/renomear' && req.method === 'POST') {
     let b = ''; req.on('data', c => { b += c; if (b.length > 20000) req.destroy(); });
     return req.on('end', async () => {

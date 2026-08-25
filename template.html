@@ -319,56 +319,19 @@
   <!-- ============ 02 CADASTROS ============ -->
   <section class="mod" data-mod="cadastros">
     <div class="topo">
-      <div><h1>Cadastros</h1>
-        <p class="lede">Quem se cadastrou e quem já vende por cupom, com os números do perfil na mesma linha. <b>Trocar o status grava no Postgres na hora</b> — o valor que volta para a tela é o que o banco tem depois do UPDATE.</p></div>
+      <div><h1>Criadores</h1>
+        <p class="lede">Só quem se cadastrou no formulário. Quem entrou pelo cupom antigo continua vendendo e não aparece aqui. <b>Trocar o status grava na hora.</b></p></div>
       <div class="stamp" id="stampCad"></div>
     </div>
     <div class="panel">
       <div class="barra">
         <button class="aba" data-fl="todos" aria-pressed="true">todos <b id="c-todos">0</b></button>
-        <button class="aba" data-fl="pendente" aria-pressed="false">pendentes <b id="c-pendente">0</b></button>
-        <button class="aba" data-fl="ativo" aria-pressed="false">ativos <b id="c-ativo">0</b></button>
-        <button class="aba" data-fl="pausado" aria-pressed="false">pausados <b id="c-pausado">0</b></button>
+        <button class="aba" data-fl="pendente" aria-pressed="false">cadastros <b id="c-pendente">0</b></button>
+        <button class="aba" data-fl="ativo" aria-pressed="false">aprovados <b id="c-ativo">0</b></button>
         <button class="aba" data-fl="reprovado" aria-pressed="false">reprovados <b id="c-reprovado">0</b></button>
         <button class="aba" data-fl="arquivado" aria-pressed="false">arquivados <b id="c-arquivado">0</b></button>
-        <button class="aba" data-fl="semig" aria-pressed="false">sem instagram <b id="c-semig">0</b></button>
-        <button class="aba" data-fl="naoavisado" aria-pressed="false">nunca avisados <b id="c-naoavisado">0</b></button>
-        <button class="aba" data-fl="reaprovar" aria-pressed="false">re-aprovar <b id="c-reaprovar">0</b></button>
-        <button class="aba" data-fl="semcupom" aria-pressed="false">sem cupom <b id="c-semcupom">0</b></button>
-        <button class="aba" data-fl="sememail" aria-pressed="false">sem e-mail <b id="c-sememail">0</b></button>
         <input id="cq" class="busca" placeholder="nome, @ ou cupom" aria-label="Filtrar cadastros">
         <span class="cnt" id="cntCad"></span>
-      </div>
-      <!-- Filtros de curadoria. Tudo aqui é o que a PESSOA declarou no formulário —
-           nada é inferido de foto ou de nome. Quem não respondeu não aparece no filtro
-           e some da lista quando o filtro está ligado; por isso cada select diz quantos. -->
-      <div class="barra sub">
-        <select id="cNicho" class="busca" style="max-width:180px" aria-label="Filtrar por nicho">
-          <option value="">todos os nichos</option>
-        </select>
-        <select id="cIdade" class="busca" style="max-width:150px" aria-label="Filtrar por faixa de idade">
-          <option value="">qualquer idade</option>
-          <option value="18-24">18 a 24</option>
-          <option value="25-34">25 a 34</option>
-          <option value="35-44">35 a 44</option>
-          <option value="45-99">45+</option>
-        </select>
-        <select id="cCidade" class="busca" style="max-width:190px" aria-label="Filtrar por cidade">
-          <option value="">qualquer cidade</option>
-        </select>
-        <select id="cNivel" class="busca" style="max-width:150px" aria-label="Filtrar por nível">
-          <option value="">qualquer nível</option>
-          <option value="ouro">🥇 ouro</option>
-          <option value="prata">🥈 prata</option>
-          <option value="bronze">🥉 bronze</option>
-        </select>
-        <select id="cPasta" class="busca" style="max-width:180px" aria-label="Filtrar por pasta">
-          <option value="">qualquer pasta</option>
-          <option value="__sem__">sem pasta</option>
-        </select>
-        <button class="acbt" id="cPastas">gerenciar pastas</button>
-        <button class="acbt" id="cLimpa" style="display:none">limpar filtros</button>
-        <span class="cnt dim" id="cFiltroInfo"></span>
       </div>
       <div class="scroll"><table>
         <thead><tr>
@@ -405,7 +368,25 @@
         <p class="lede">Uma campanha paga <b>comissão</b> (% sobre o que o cupom vendeu) ou dá <b>pontos</b> por ação publicada. Escolha uma das duas na criação — as duas mecânicas não se misturam na mesma campanha.</p></div>
       <div class="stamp" id="stampCamp"></div>
     </div>
-    <div class="panel">
+    <!-- sub-abas: a gestao que ja existia, e RESULTADOS, que e novo -->
+    <div class="barra" style="margin-bottom:12px">
+      <button class="aba" data-cw="gestao" aria-pressed="true">gestão</button>
+      <button class="aba" data-cw="result" aria-pressed="false">resultados</button>
+    </div>
+    <div id="cwResult" style="display:none">
+      <div class="panel"><div id="resCamp"></div></div>
+      <div class="panel">
+        <div class="barra"><span class="rot">ranking de criadores</span>
+          <span class="cnt" id="resCnt"></span></div>
+        <div class="scroll"><table>
+          <thead><tr><th>Campanha</th><th>Criador</th><th>Jogo</th>
+            <th style="text-align:right">Pontos</th><th style="text-align:right">Entregas</th>
+            <th>Bateu tudo</th></tr></thead>
+          <tbody id="tbRes"></tbody>
+        </table></div>
+      </div>
+    </div>
+    <div class="panel" id="cwGestao">
       <div class="barra">
         <button class="bt" id="novaCamp">nova campanha</button>
         <button class="aba" data-cs="vivas"     aria-pressed="true">em uso <b id="k-vivas">0</b></button>
@@ -425,31 +406,9 @@
   </section>
 
   <!-- ============ 04 APURAÇÃO ============ -->
-  <section class="mod" data-mod="apuracao">
-    <div class="topo">
-      <div><h1>Apuração</h1>
-        <p class="lede">Quanto pagar a cada creator, por mês. Sai de <b>venda paga, não cancelada, de cupom que conta</b> — e a comissão vem da régua do nível, não do cupom. Fechar o mês <b>congela</b> o valor: depois disso mudar de nível não reescreve o passado.</p></div>
-      <div class="stamp" id="stampAp"></div>
-    </div>
-    <div class="panel">
-      <div class="barra">
-        <select id="apMes" aria-label="mês de competência"></select>
-        <button class="bt" id="apFechar">fechar o mês</button>
-        <span class="cnt" id="apCnt"></span>
-      </div>
-      <div id="apAviso"></div>
-      <div id="apLista"></div>
-      <div class="empty">
-        <span class="tg">o que NÃO entra</span>
-        <p>Pedido <b>cancelado</b> ou <b>reembolsado</b>, pedido ainda <b>pending</b> (dinheiro que não entrou) e cupom marcado como <b>fora da apuração</b> — hoje só o <code>DRCARLOS</code>, que não é pessoa. Em 15/08 esses três filtros tiraram <b>R$ 4.048,23</b> do que a tela antiga chamava de receita de creator.</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ 05 ANÁLISES ============ -->
   <section class="mod" data-mod="analises">
     <div class="topo">
-      <div><h1>Análises</h1>
+      <div><h1>Dashboard</h1>
         <p class="lede">O canal inteiro no período escolhido — e depois, se quiser, um creator de cada vez.</p></div>
       <div class="stamp" id="stampAn"></div>
     </div>
@@ -511,7 +470,7 @@
   <!-- ============ 05 MENÇÕES ============ -->
   <section class="mod" data-mod="mencoes">
     <div class="topo">
-      <div><h1>Menções</h1>
+      <div><h1>Extrações</h1>
         <p class="lede">Todo conteúdo que marcou a Cells e teve mídia coletada. <b>Clique para assistir aqui</b> — o vídeo toca no painel, sem abrir o Instagram.</p></div>
       <div class="stamp" id="stampMen"></div>
     </div>
@@ -544,41 +503,7 @@
   </section>
 
   <!-- ============ 06 LEGADO ============ -->
-  <section class="mod" data-mod="legado">
-    <div class="topo">
-      <div><h1>Legado</h1>
-        <p class="lede">Todo cupom que já existiu na loja, do jeito que a Shopify tem — <b>inclusive os que nunca venderam</b>. Isto é histórico: o programa novo mora em Cadastros.</p></div>
-      <div class="stamp" id="stampLeg"></div>
-    </div>
-    <div class="strip" id="stripLeg"></div>
-    <div class="panel">
-      <div class="barra">
-        <button class="aba" data-lg="nominal" aria-pressed="true">de pessoa <b id="l-nominal">0</b></button>
-        <button class="aba" data-lg="campanha" aria-pressed="false">de campanha <b id="l-campanha">0</b></button>
-        <button class="aba" data-lg="teste" aria-pressed="false">de teste <b id="l-teste">0</b></button>
-        <button class="aba" data-lg="zerado" aria-pressed="false">nunca vendeu <b id="l-zerado">0</b></button>
-        <button class="aba" data-lg="todos" aria-pressed="false">todos <b id="l-todos">0</b></button>
-        <input id="lq" class="busca" placeholder="filtrar por código ou nome" aria-label="Filtrar legado">
-        <span class="cnt" id="cntLeg"></span>
-      </div>
-      <div class="scroll"><table>
-        <thead><tr>
-          <th data-l="codigo">Cupom</th><th data-l="nome">Quem é</th>
-          <th data-l="desconto_pct">Desconto</th><th data-l="status_shopify">Na loja</th>
-          <th data-l="usos_shopify">Usos</th><th data-l="pedidos">Pedidos</th>
-          <th data-l="receita">Receita</th><th data-l="clientes_novos">Novos</th>
-          <th data-l="ultima_venda">Última venda</th><th>Empilha</th>
-        </tr></thead>
-        <tbody id="tbLeg"></tbody>
-      </table></div>
-      <div class="empty">
-        <span class="tg">o que é "usos" e o que é "pedidos"</span>
-        <p><b>Usos</b> é o contador da própria Shopify. <b>Pedidos</b> é o que casou com um pedido real no nosso banco. Quando os dois divergem, confie em Pedidos — é ele que tem receita atrás.<br><b>Empilha</b> mostra se o cupom soma com outro desconto de pedido no mesmo carrinho.</p>
-      </div>
-    </div>
-  </section>
-
-</div></main>
+  </main>
 </div>
 
 <!-- ---------------- ficha do cadastro ---------------- -->
@@ -668,21 +593,23 @@
       <div class="hh" id="apSub"></div></div>
   </div>
   <div class="fbody">
+    <!-- A FICHA VEM PRIMEIRO, antes dos campos. Decidir sobre alguem sem ler o que a pessoa
+         escreveu e decidir no escuro — e a permuta, que ela declarou no formulario, nunca
+         tinha chegado a esta tela: 56 disseram que fazem, 9 que nao, e voce aprovava sem ver. -->
+    <div class="fsec" id="apFicha"></div>
     <div class="fsec"><h4>Cupom</h4>
       <div class="frm">
         <input id="apCupom" style="width:190px;text-transform:uppercase" maxlength="24"
                placeholder="CODIGO" aria-label="código do cupom">
         <span class="obs">desconto</span>
         <input id="apDesc" style="width:70px" inputmode="decimal" aria-label="desconto">
-        <span class="obs">% · comissão</span>
-        <input id="apCom" style="width:70px" inputmode="decimal" placeholder="—" aria-label="comissão">
         <span class="obs">%</span>
       </div>
       <label class="obs" style="display:flex;gap:7px;align-items:center;margin-top:9px;cursor:pointer">
         <input type="checkbox" id="apComb">
         deixar empilhar com outro desconto de pedido
       </label>
-      <p class="obs" style="margin-top:7px">Cupom de creator é <b>10%</b> (decisão de 24/08). Os cupons antigos ficam com o percentual que já têm — o de 8% só muda um a um. <b>Comissão em branco</b> significa que ainda não há regra combinada, e a apuração não vai inventar uma.</p>
+      <p class="obs" style="margin-top:7px">Cupom de creator é <b>10%</b> (decisão de 24/08). Os cupons antigos ficam com o percentual que já têm — o de 8% só muda um a um. A <b>comissão</b> não se decide aqui: é padrão, pela régua de nível.</p>
       <p class="obs" id="apAvisoComb" style="margin-top:7px;color:var(--wa)"></p>
     </div>
     <div class="fsec"><h4>Link do creator</h4>
@@ -884,7 +811,7 @@ const esc = s => String(s==null?'':s).replace(/[<>&"]/g, m => ({'<':'&lt;','>':'
 const hoje = new Date().toISOString().slice(0,10);
 const R = (D.resumo||[])[0] || {};
 
-const STATUS = ['pendente','ativo','pausado','reprovado'];
+const STATUS = ['pendente','ativo','reprovado'];   // pausado saiu em 25/08: ninguem estava nele
 const ACOES = [['reels','reel'],['carrossel','carrossel'],['feed_imagem','post de feed'],
                ['story','story'],['venda','venda pelo cupom']];
 const rotAcao = k => (ACOES.find(a=>a[0]===k)||[,k])[1];
@@ -947,9 +874,9 @@ let cAba = 'todos', cBusca = '', cOrd = {c:'cadastro', d:-1};
 // algumas pessoas, mas queremos mesmo e acompanhar SO A COMUNIDADE". Abrir em todos misturava
 // as 27 do cupom legado — que vendem, mas nao sao o programa — com as 23 que se inscreveram, e
 // qualquer numero lido de relance saia errado. O filtro continua ali para ver o resto.
-let cNicho = '', cIdade = '', cCidade = '', cNivel = '';
-let cPasta = (PASTAS.find(p => p.nome === 'comunidade') || {}).pasta_id || '';
-cPasta = cPasta ? String(cPasta) : '';
+// Os filtros de nicho, idade, cidade, nivel e pasta sairam em 25/08: "tudo o que eu nao
+// citei, nao precisa colocar". A lista ja e so quem se cadastrou, entao o cluster tambem
+// perdeu a funcao — ele existia para separar o historico, que agora nem aparece.
 
 /* Popula os selects a partir do que EXISTE na base — não de uma lista fixa. Se amanhã
    entrar um nicho novo no formulário, ele aparece aqui sozinho. */
@@ -965,25 +892,14 @@ cPasta = cPasta ? String(cPasta) : '';
       [...m.entries()].sort((a,b) => b[1]-a[1] || a[0].localeCompare(b[0]))
         .map(([k,v]) => '<option value="'+esc(k)+'">'+esc(k)+' ('+v+')</option>').join(''));
   };
-  opt(nichos, 'cNicho'); opt(cidades, 'cCidade');
-  document.getElementById('cPasta').insertAdjacentHTML('beforeend',
-    PASTAS.map(p => '<option value="'+p.pasta_id+'"'+(String(p.pasta_id)===cPasta?' selected':'')
-      +'>'+esc(p.nome)+' ('+p.creators+')</option>').join(''));
-  document.getElementById('cPasta').value = cPasta;
 })();
 
 function contaCad(){
-  const c = {todos:0, pendente:0, ativo:0, pausado:0, reprovado:0, arquivado:0,
-             semig:0, naoavisado:0, reaprovar:0, semcupom:0, sememail:0};
+  const c = {todos:0, pendente:0, ativo:0, reprovado:0, arquivado:0};
   CAD.forEach(f => {
     if (f.arquivado) { c.arquivado++; return; }
     c.todos++;
     if (c[f.status] != null) c[f.status]++;
-    if (!f.instagram_handle) c.semig++;
-    if (f.status === 'ativo' && !f.avisado) c.naoavisado++;
-    if (f.reaprovar) c.reaprovar++;
-    if (f.falta_cupom) c.semcupom++;
-    if (!f.email) c.sememail++;
   });
   for (const k in c) { const e = document.getElementById('c-'+k); if (e) e.textContent = c[k]; }
 }
@@ -991,27 +907,11 @@ function contaCad(){
 function filtraCad(){
   let L = CAD.filter(f => {
     if (cAba === 'arquivado') { if (!f.arquivado) return false; }
-    else if (cAba === 'semig') { if (f.arquivado || f.instagram_handle) return false; }
-    else if (cAba === 'naoavisado') { if (f.arquivado || f.status !== 'ativo' || f.avisado) return false; }
-    else if (cAba === 'reaprovar') { if (f.arquivado || !f.reaprovar) return false; }
-    else if (cAba === 'semcupom') { if (f.arquivado || !f.falta_cupom) return false; }
-    else if (cAba === 'sememail') { if (f.arquivado || f.email) return false; }
     else if (cAba !== 'todos') { if (f.arquivado || f.status !== cAba) return false; }
     else if (f.arquivado) return false;
     if (cBusca) {
       const alvo = ((f.nome||'')+' '+(f.instagram_handle||'')+' '+(f.cupom||'')+' '+(f.tags||[]).join(' ')).toLowerCase();
       if (!alvo.includes(cBusca)) return false;
-    }
-    /* Curadoria. Quem não declarou o campo NÃO passa no filtro — é ausência de dado,
-       não um "não". Nunca chutar para preencher: ver a regra de dado pessoal. */
-    if (cNicho  && !(f.nichos || []).includes(cNicho)) return false;
-    if (cCidade && f.cidade !== cCidade) return false;
-    if (cNivel  && f.nivel !== cNivel) return false;
-    if (cPasta === '__sem__') { if ((f.pastas || []).length) return false; }
-    else if (cPasta && !(f.pastas || []).some(p => String(p.pasta_id) === cPasta)) return false;
-    if (cIdade) {
-      const [lo, hi] = cIdade.split('-').map(Number);
-      if (f.idade == null || f.idade < lo || f.idade > hi) return false;
     }
     return true;
   });
@@ -1270,6 +1170,10 @@ function pintaCad(){
             // pendente, e o de avisar exige cupom que ela não tem. Nenhum botão, nenhuma
             // saída. /api/aprovar nunca exigiu status pendente: rodar aqui é legítimo.
             if (f.falta_cupom) return '<button class="acbt ok" data-aprovar="'+f.parceiro_id+'">criar cupom</button>';
+            // aprovado COM cupom: dá para trocar o código e o link sem refazer a aprovação
+            if (f.status === 'ativo' && cupomDe(f.parceiro_id))
+              return '<button class="acbt" data-rencup="'+f.parceiro_id+'">trocar cupom</button>'
+                   + '<button class="acbt" data-trlink="'+f.parceiro_id+'">trocar link</button>';
             // já ativo e com cupom, mas NUNCA avisado: é o caso dos 28 do cupom legado, que
             // nasceram ativos sem ninguém nunca ter mandado o link para eles
             const cp = cupomDe(f.parceiro_id);
@@ -1379,6 +1283,25 @@ document.getElementById('tbCad').addEventListener('click', async e => {
   }
   const ab = e.target.closest('[data-aprovar]');
   if (ab) { abreAprovar(+ab.dataset.aprovar); return; }
+
+  const rc = e.target.closest('[data-rencup]');
+  if (rc) {
+    const f = CAD.find(x => x.parceiro_id === +rc.dataset.rencup);
+    const c = cupomDe(f.parceiro_id); if (!c) return;
+    const novoCod = prompt('Novo código para ' + (f.nome||'') + ':\n\nO código muda na Shopify junto.\nQuem já usou o antigo continua contando.', c.codigo);
+    if (!novoCod || novoCod.toUpperCase() === c.codigo.toUpperCase()) return;
+    enviarSimples('/api/cupom/renomear', { cupom_id: c.cupom_id, novo: novoCod });
+    return;
+  }
+
+  const tl = e.target.closest('[data-trlink]');
+  if (tl) {
+    const f = CAD.find(x => x.parceiro_id === +tl.dataset.trlink);
+    const novoSlug = prompt('Novo link de ' + (f.nome||'') + ':\n\ncells.com.br/r/____\n\nO link antigo continua funcionando — post já publicado não quebra.', f.utm_slug||'');
+    if (!novoSlug || novoSlug === f.utm_slug) return;
+    enviarSimples('/api/link/trocar', { parceiro_id: f.parceiro_id, slug: novoSlug });
+    return;
+  }
   const av1 = e.target.closest('[data-avisarum]');
   if (av1) {
     const f = CAD.find(x => x.parceiro_id === +av1.dataset.avisarum);
@@ -1435,6 +1358,17 @@ let aprovarId = null;
 
 const cupomDe = id => CUPONS.find(c => c.parceiro_id === id) || null;
 
+// POST simples que recarrega a tela com o que o banco devolveu — nunca com o que a tela achou
+async function enviarSimples(rota, corpo){
+  try {
+    const j = await (await fetch(rota, {method:'POST',headers:{'content-type':'application/json'},
+                                        body: JSON.stringify(corpo)})).json();
+    if (!j.ok) { alert(j.erro || 'não consegui'); return; }
+    if (j.aviso) alert('Feito, com uma ressalva:\n\n' + j.aviso);
+    location.reload();
+  } catch(e) { alert('sem conexão com o servidor'); }
+}
+
 // Sugere o código a partir do primeiro nome. Quando ele já existe, a segunda opção é
 // NOME + 10 — decisão do Gabriel em 24/08, e também o que a loja já faz sozinha: 38 dos
 // 187 códigos terminam em 10 (GABRIEL10, JESSICA10, CAMILA10...). RACHEL2 não é nome de
@@ -1468,6 +1402,36 @@ function slugDe(f){
 // A regra aparece no segundo em que ela importa: na frente de quem esta criando o cupom.
 // Doc que mora longe do momento da decisao nao e lido — foi o que o Gabriel disse em 24/08
 // ao pedir que isso ficasse escrito "no banco ou como skill".
+// A ficha: dados, o texto que a pessoa escreveu e a permuta. Tudo declarado por ela no
+// formulario — nada inferido de foto nem de nome.
+function pintaFicha(f){
+  const el = document.getElementById('apFicha');
+  const linha = (rot, val) => val
+    ? '<div style="display:flex;gap:8px;font-size:13px;margin-bottom:3px">'
+      + '<span class="dim" style="min-width:96px">' + rot + '</span><span>' + esc(val) + '</span></div>'
+    : '';
+  const permuta = f.modelo_trabalho === 'sim'
+      ? '<span class="chip ok">faz permuta</span>'
+    : f.modelo_trabalho === 'nao'
+      ? '<span class="chip cr">NÃO faz permuta</span>'
+      : '<span class="chip wa" title="a pessoa não respondeu no formulário">não respondeu sobre permuta</span>';
+  el.innerHTML = '<h4>A ficha</h4>'
+    + '<div style="margin-bottom:9px">' + permuta + '</div>'
+    + linha('nome', f.nome)
+    + linha('@', f.instagram_handle ? '@' + f.instagram_handle : null)
+    + linha('seguidores', f.seguidores ? n(f.seguidores) : null)
+    + linha('engajamento', f.engajamento_pct ? pc(f.engajamento_pct) : null)
+    + linha('cidade', f.cidade)
+    + linha('idade', f.idade)
+    + linha('nicho', (f.nichos || []).join(', '))
+    + linha('vende por mês', f.vendas_mes)
+    + (f.motivacao
+        ? '<div class="empty" style="margin-top:10px;border-top:0;padding:12px 13px">'
+          + '<span class="tg">por que ela quer fazer Cells</span>'
+          + '<p style="white-space:pre-wrap">' + esc(f.motivacao) + '</p></div>'
+        : '<p class="obs" style="margin-top:9px">Não escreveu por que quer fazer Cells.</p>');
+}
+
 function pintaRegras(){
   const el = document.getElementById('apRegras'); if (!el) return;
   const mostra = REGRAS.filter(r => r.categoria !== 'combinacao').slice(0, 6);
@@ -1516,7 +1480,6 @@ function abreAprovar(id){
     + (f.engajamento_pct ? ' · ' + pc(f.engajamento_pct) + ' de engajamento' : '');
   document.getElementById('apCupom').value = sugereCupom(f);
   document.getElementById('apDesc').value = DESCONTO;
-  document.getElementById('apCom').value = '';
   document.getElementById('apComb').checked = false;
   document.getElementById('apEmail').value = f.email || '';
   document.getElementById('apEnviar').checked = true;
@@ -1525,6 +1488,7 @@ function abreAprovar(id){
   document.getElementById('apLink').value =
     'https://cells.com.br/?utm_source=creator&utm_medium=influencer&utm_campaign=' + slugDe(f);
   document.getElementById('apErro').textContent = '';
+  pintaFicha(f);
   pintaRegras();
   pintaPreviewAp();
   dlgAp.showModal();
@@ -1541,7 +1505,6 @@ document.getElementById('apSalvar').addEventListener('click', async () => {
     parceiro_id: aprovarId,
     cupom: document.getElementById('apCupom').value.trim().toUpperCase(),
     desconto_pct: document.getElementById('apDesc').value,
-    comissao_pct: document.getElementById('apCom').value,
     combinavel: document.getElementById('apComb').checked,
     email: document.getElementById('apEmail').value.trim(),
     enviar_email: document.getElementById('apEnviar').checked,
@@ -1694,7 +1657,7 @@ function abreFicha(id){
     + ' · cadastro '+dt(f.cadastro) + (f.decidido_por ? ' · decidido por '+esc(f.decidido_por) : '');
   document.getElementById('fbio').textContent = f.bio || '';
   document.getElementById('fstatus').innerHTML =
-    '<span class="chip '+(f.arquivado?'vo':f.status==='ativo'?'ok':f.status==='reprovado'?'cr':f.status==='pausado'?'wa':'wa')+'">'
+    '<span class="chip '+(f.arquivado?'vo':f.status==='ativo'?'ok':f.status==='reprovado'?'cr':'wa')+'">'
     + (f.arquivado?'arquivado':esc(f.status)) + '</span>'
     + (f.reprovado_motivo ? '<div class="obs" style="margin-top:6px;max-width:32ch">'+esc(f.reprovado_motivo)+'</div>' : '');
   const sel = document.getElementById('fstatusSel');
@@ -2273,29 +2236,66 @@ async function carregaAnalise(){
 
 function pintaAnalise(){
   const g = AN.geral || {};
+  // Antes de 01/09 a tela nao mostra zeros mudos: diz que o programa ainda nao comecou.
+  // Zero sem explicacao faz quem olha concluir "nao esta funcionando".
+  if (AN.nao_comecou) {
+    document.getElementById('anTopo').innerHTML =
+      '<div class="empty" style="padding:26px 20px"><span class="tg">o programa começa em '
+      + dt(AN.marco_zero) + '</span>'
+      + '<p>O Dashboard conta de <b>' + dt(AN.marco_zero) + '</b> em diante. Nada do que veio antes '
+      + 'entra — nem os 77 pedidos do cupom antigo, nem as marcações de agosto. Está tudo no banco, '
+      + 'fora da conta. Para ver o passado, mude a data acima.</p></div>';
+    document.getElementById('anBars').innerHTML = '';
+    document.getElementById('anBlab').innerHTML = '';
+    document.getElementById('tbAn').innerHTML =
+      '<tr><td colspan="11" class="dim" style="padding:22px">Nenhum criador com resultado ainda.</td></tr>';
+    document.getElementById('anCnt').textContent = '';
+    return;
+  }
   const quem = AN.creator
     ? (OPC.find(o => o.chave === AN.creator) || {})
     : null;
+  // ---- OS QUATRO BLOCOS (desenho do Gabriel, 25/08) ----
+  // ROAS so aparece quando ha custo. Sem custo, sai "~" — dividir por zero e inventar
+  // numero, e numero inventado num dashboard vira decisao errada semana que vem.
+  const roas = (g.custo > 0 && g.receita > 0) ? (g.receita / g.custo) : null;
+  const ativos = g.creators_ativos || 0;
+  const bloco = (titulo, cels) =>
+    '<div class="ph" style="margin-top:14px">' + titulo + '</div>'
+    + '<div class="strip" style="margin:0;border:0;border-radius:0">'
+    + cels.map(([k,v,nn]) => '<div class="cel"><div class="k">'+k+'</div><div class="v'
+        + (/^(sem dado|—|~|R\$ 0,00|0)$/.test(String(v))?' z':'')+'">'+v+'</div>'
+        + '<div class="n">'+(nn||'')+'</div></div>').join('')
+    + '</div>';
+
   document.getElementById('anTopo').innerHTML =
     (quem ? '<div class="ph">só <b>'+esc(quem.nome || '@'+quem.handle)+'</b> · '
             + dt(AN.de)+' a '+dt(AN.ate)+'</div>'
-          : '<div class="ph">canal inteiro · '+dt(AN.de)+' a '+dt(AN.ate)+'</div>')
-    + '<div class="strip" style="margin:0;border:0;border-radius:0">'
-    + [
-      ['Pedidos', n(g.pedidos), g.creators_que_venderam + ' creators venderam'],
-      ['Receita', g.receita?nm(g.receita):'—', 'ticket '+(g.ticket?rs(g.ticket):'—')],
-      ['Clientes novos', n(g.clientes_novos), 'na primeira compra'],
-      ['Marcações', n(g.marcacoes), (g.perfis||0)+' perfis distintos'],
-      ['Feed', n(g.feed), 'imagem e vídeo de feed'],
-      ['Reels', n(g.reels), (g.reels_medidos||0)+' com views medidas'],
-      ['Carrossel', n(g.carrossel), 'sem contador de views'],
-      ['Stories', g.stories ? n(g.stories) : 'sem dado', g.stories ? 'capturados' : 'webhook não ligado'],
-      ['Views', g.views?n(g.views):'—', 'só em reels · plays, com replay'],
-      ['Curtidas', n(g.curtidas), n(g.comentarios)+' comentários'],
-      ['Cliques no link', g.cliques ? n(g.cliques) : 'sem dado', g.cliques ? n(g.sessoes)+' sessões' : 'nenhum link usado ainda'],
-    ].map(([k,v,nn]) => '<div class="cel"><div class="k">'+k+'</div><div class="v'
-        + (/^(sem dado|—)$/.test(v)?' z':'')+'">'+v+'</div><div class="n">'+nn+'</div></div>').join('')
-    + '</div>';
+          : '<div class="ph">programa de creators · '+dt(AN.de)+' a '+dt(AN.ate)+'</div>')
+    + bloco('visão geral', [
+        ['Faturamento', g.receita ? nm(g.receita) : 'R$ 0,00', n(g.pedidos)+' pedidos'],
+        ['Custo',       g.custo   ? nm(g.custo)   : '—', g.custo ? '' : 'ainda não lançado'],
+        ['ROAS',        roas ? roas.toFixed(2)+'x' : '~', roas ? '' : 'precisa do custo'],
+        ['Comissões',   g.comissoes ? nm(g.comissoes) : 'R$ 0,00',
+                        g.comissoes ? 'a pagar' : 'sem percentual definido'],
+      ])
+    + bloco('interações', [
+        ['Views',        g.views   ? n(g.views)   : '—', 'reels · plays com replay'],
+        ['Cliques link', g.cliques ? n(g.cliques) : '0', ''],
+        ['Sessões link', g.sessoes ? n(g.sessoes) : '0', ''],
+      ])
+    + bloco('marcações', [
+        ['Total',     n(g.marcacoes), (g.perfis||0)+' perfis'],
+        ['Feed',      n(g.feed),      'imagem e vídeo'],
+        ['Story',     n(g.stories),   g.stories ? '' : 'depende do App Review'],
+        ['Reels',     n(g.reels),     (g.reels_medidos||0)+' com views'],
+        ['Carrossel', n(g.carrossel), 'sem contador'],
+      ])
+    + bloco('criadores', [
+        ['Ativos', n(ativos), 'aprovados'],
+        ['Venda por criador', ativos && g.receita ? nm(g.receita/ativos) : 'R$ 0,00', 'média'],
+        ['Marcações por criador', ativos ? (g.marcacoes/ativos).toFixed(1) : '0', 'média'],
+      ]);
 
   /* barras: marcações (azul) e pedidos (verde), cada série na própria escala */
   const S = AN.serie || [];
@@ -2677,14 +2677,57 @@ document.getElementById('apLista').addEventListener('click', async e => {
   await carregaApuracao();
 });
 
+// As CINCO telas que o Gabriel numerou em 25/08. Apuracao e Legado sairam da navegacao —
+// as rotas e as tabelas continuam vivas: a de legado e o que impede criar um cupom com
+// codigo que ja existe na loja, e sem ela da para roubar o codigo de outra creator sem querer.
+/* ---- sub-aba RESULTADOS das campanhas (25/08) --------------------------------
+   Le /api/campanha/resultado sob demanda: quem nao abre a aba nao paga a consulta. */
+let resJaLeu = false;
+async function pintaResultados(){
+  const box = document.getElementById('resCamp');
+  box.innerHTML = '<p class="obs">lendo…</p>';
+  try {
+    const j = await (await fetch('/api/campanha/resultado')).json();
+    if (!j.ok) { box.innerHTML = '<p class="obs" style="color:var(--cr)">'+esc(j.erro||'não consegui ler')+'</p>'; return; }
+    box.innerHTML = (j.campanhas || []).map(c =>
+        '<div class="ph">'+esc(c.nome)+' <span class="dim">· '+esc(c.status)+'</span></div>'
+      + '<div class="strip" style="margin:0;border:0;border-radius:0">'
+      + [['Creators', n(c.creators)], ['Publicações', n(c.publicacoes)],
+         ['Pedidos', n(c.pedidos)], ['Receita', c.receita?nm(c.receita):'R$ 0,00'],
+         ['Clientes novos', n(c.clientes_novos)], ['Cliques', n(c.cliques)],
+         ['Pontos', n(c.pontos)], ['Comissão a pagar', c.comissao_a_pagar?nm(c.comissao_a_pagar):'—']]
+        .map(([k,v]) => '<div class="cel"><div class="k">'+k+'</div><div class="v'
+          + (/^(—|0|R\$ 0,00)$/.test(String(v))?' z':'')+'">'+v+'</div></div>').join('')
+      + '</div>').join('') || '<p class="obs">Nenhuma campanha ainda.</p>';
+    const R = j.ranking || [];
+    document.getElementById('resCnt').textContent = R.length + (R.length===1?' creator':' creators');
+    document.getElementById('tbRes').innerHTML = R.map(r =>
+      '<tr><td class="dim">'+esc(nomeCamp(r.campanha_id))+'</td>'
+      + '<td class="h"><b>'+esc(r.nome||'—')+'</b>'
+        + (r.instagram_handle?'<span class="sub2 dim">@'+esc(r.instagram_handle)+'</span>':'')+'</td>'
+      + '<td class="dim">'+esc(r.jogo||'—')+'</td>'
+      + '<td style="text-align:right;font-weight:600">'+n(r.pontos)+'</td>'
+      + '<td style="text-align:right">'+n(r.entregas)+'</td>'
+      + '<td>'+(r.bateu_tudo?'<span class="chip ok">sim</span>':'<span class="dim">—</span>')+'</td></tr>'
+    ).join('') || '<tr><td colspan="6" class="dim" style="padding:18px">Ninguém pontuou ainda.</td></tr>';
+  } catch(e) { box.innerHTML = '<p class="obs" style="color:var(--cr)">sem conexão</p>'; }
+}
+const nomeCamp = id => (CAMP.find(c => c.campanha_id === id) || {}).nome || '#'+id;
+
+document.querySelectorAll('[data-cw]').forEach(b => b.addEventListener('click', () => {
+  const alvo = b.dataset.cw;
+  document.querySelectorAll('[data-cw]').forEach(x => x.setAttribute('aria-pressed', String(x===b)));
+  document.getElementById('cwGestao').style.display = alvo==='gestao' ? '' : 'none';
+  document.getElementById('cwResult').style.display = alvo==='result' ? '' : 'none';
+  if (alvo === 'result' && !resJaLeu) { resJaLeu = true; pintaResultados(); }
+}));
+
 const MODULOS = [
   ['busca',     'Buscar creator', () => null],
-  ['cadastros', 'Cadastros',      () => CAD.filter(f => !f.arquivado && f.status==='pendente').length || null],
+  ['cadastros', 'Criadores',      () => CAD.filter(f => !f.arquivado && f.status==='pendente').length || null],
+  ['analises',  'Dashboard',      () => null],
   ['campanhas', 'Campanhas',      () => CAMP.filter(c => c.status==='ativa').length || null],
-  ['apuracao',  'Apuração',       () => null],
-  ['analises',  'Análises',       () => null],
-  ['mencoes',   'Menções',        () => GAL.length || null],
-  ['legado',    'Legado',         () => (D.legado||[]).filter(l => l.nunca_vendeu).length || null],
+  ['mencoes',   'Extrações',      () => GAL.length || null],
 ];
 
 document.getElementById('navLista').innerHTML = MODULOS.map(([k,rot,cont],i) => {
