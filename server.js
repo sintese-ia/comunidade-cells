@@ -93,10 +93,27 @@ async function carregar() {
   const out = {};
   const cli = await pool.connect();
   try {
+    // ⚠️ UMA QUERY QUEBRADA NAO PODE DERRUBAR AS CINCO TELAS. Foi o que aconteceu em 24/08:
+    // adicionei a query das regras de cupom, esqueci o GRANT USAGE no schema core, e o painel
+    // inteiro passou a responder "permission denied for schema core" — cadastros, campanhas,
+    // analises e mencoes, todos mortos por causa de um bloco decorativo num dialogo.
+    // Agora cada query cai sozinha: a tela dela fica vazia, o resto continua de pe, e a falha
+    // vai para `out.falhas` para aparecer em vez de sumir. Degradar > apagar.
+    const falhas = [];
     for (const [k, sql] of Object.entries(Q.painel)) {
-      const r = await cli.query(sql);
-      out[k] = r.rows.map(normaliza);
+      try {
+        const r = await cli.query(sql);
+        out[k] = r.rows.map(normaliza);
+      } catch (e) {
+        // conexao morta ou banco fora derruba TODAS: nesse caso a falha e real e tem que subir,
+        // senao o painel mostra cinco telas vazias fingindo que esta tudo bem
+        if (/terminat|ECONNREFUSED|timeout|too many clients/i.test(e.message)) throw e;
+        console.error('[carga:' + k + ']', e.message);
+        out[k] = [];
+        falhas.push({ bloco: k, erro: e.message });
+      }
     }
+    if (falhas.length) out.falhas = falhas;
   } finally { cli.release(); }
   out.ger = new Date().toISOString().slice(0, 16).replace('T', ' ');
   return out;

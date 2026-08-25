@@ -1414,6 +1414,20 @@ const DESCONTO = D.desconto_padrao ?? 10;
 // As regras NAO estao escritas neste arquivo de proposito: vem de core.regra_cupom, no banco.
 // Mudar a regra e um UPDATE numa linha, nao um deploy — e ninguem precisa lembrar de vir aqui.
 const REGRAS = D.regrasCupom || [];
+// Bloco que falhou na carga aparece como aviso no topo. Tela vazia sem explicacao e pior que
+// erro: quem olha conclui "nao tem nada", quando o certo e "nao consegui ler".
+if ((D.falhas || []).length) {
+  document.addEventListener('DOMContentLoaded', () => {
+    const d = document.createElement('div');
+    d.className = 'aviso cr';
+    d.style.cssText = 'margin:12px 15px;padding:10px 13px;border-radius:4px;'
+      + 'background:var(--cr-s,#FBE9E6);color:var(--cr,#B23A2B);font-size:13px;font-weight:600';
+    d.textContent = 'Parte do painel não carregou: '
+      + D.falhas.map(f => f.bloco + ' (' + f.erro + ')').join(' · ')
+      + '. O resto da tela está correto.';
+    document.body.prepend(d);
+  });
+}
 const CUPONS = D.cupons || [], EMAILS = D.emails || [];
 const LEGADO = D.legado || [];
 const dlgAp = document.getElementById('dlgAprovar');
