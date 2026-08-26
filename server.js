@@ -40,6 +40,10 @@ const COMUNIDADE_WPP = process.env.COMUNIDADE_WHATSAPP
 // Isto muda so o SUGERIDO: os cupons que ja existem continuam com o percentual que tem, e o
 // campo do dialogo continua editavel para a excecao.
 const DESCONTO_PADRAO = +process.env.DESCONTO_PADRAO || 10;
+// A collection que define o escopo do cupom de creator. Mora em core.regra_cupom como
+// verdade escrita; aqui como o valor que a Shopify entende.
+const COLLECTION_CUPONS = process.env.COLLECTION_CUPONS
+  || 'gid://shopify/Collection/300418695302';
 const COOKIE  = 'cc_sess';
 // Os únicos status que um cadastro pode ter. A tela oferece exatamente estes, e o servidor
 // recusa qualquer outro — status livre vira dialeto pessoal e quebra todo filtro depois.
@@ -303,7 +307,13 @@ async function criarCupomShopify({ codigo, pct, combinavel }) {
     customerSelection: { all: true },
     customerGets: {
       value: { percentage: pct / 100 },
-      items: { all: true },
+      // ⚠️ NUNCA `all: true` AQUI. Escopo "todos os produtos" faz o desconto nascer na classe
+      // PEDIDO, e cupom de creator tem que ser classe PRODUTO — foi o que a reforma de 14/08
+      // acertou e o que `core.regra_cupom` manda. Provado em carrinho real em 26/08: os 35
+      // cupons criados com all:true NAO somavam com a escada (3cx: R$ 315,66 com e sem o
+      // cupom da creator), enquanto SUZZY, do padrao antigo, somava e levava a R$ 298,14.
+      // A venda com kit simplesmente nao era atribuida a ela.
+      items: { collections: { add: [COLLECTION_CUPONS] } },
       // O cupom precisa valer TAMBÉM na assinatura, senão quem entra no CellsClub pelo link
       // da creator não recebe desconto nenhum e o cupom parece quebrado. Nascia `false`.
       appliesOnOneTimePurchase: true,
@@ -312,10 +322,11 @@ async function criarCupomShopify({ codigo, pct, combinavel }) {
     // ...mas só na PRIMEIRA cobrança (decisão do Gabriel, 12/08). Sem isto o desconto se
     // repetiria em toda renovação e a margem da assinatura ia junto.
     recurringCycleLimit: 1,
-    // combinar com outro desconto de PEDIDO é como o cupom de creator vira 8% + 20% de
-    // campanha no mesmo carrinho. Todos os ~180 cupons da loja hoje estão com isso LIGADO;
-    // os novos nascem desligados, salvo escolha explícita na tela.
-    combinesWith: { orderDiscounts: !!combinavel, productDiscounts: false, shippingDiscounts: true },
+    // NASCE COMBINAVEL, como manda core.regra_cupom. O que impede dois cupons de creator de
+    // somarem e a CLASSE (os dois sao produto), nao o cadeado — testado em carrinho real:
+    // TAUFNER + BIAELBERT juntos deram um desconto so. Deixar o cadeado fechado nao protege
+    // nada e quebra a soma legitima com a escada dos kits e com o Pix.
+    combinesWith: { orderDiscounts: true, productDiscounts: true, shippingDiscounts: true },
     appliesOncePerCustomer: false,
   };
   const r = await postJSON(`https://${SHOP}/admin/api/2025-01/graphql.json`,

@@ -1350,7 +1350,13 @@ async function enviarSimples(rota, corpo){
 // cupom que nunca vendeu, + creator.cupom = os do programa). Conferir só contra o programa
 // deixaria reaproveitar sem querer um código que já existe na Shopify.
 function sugereCupom(f){
-  const partes = norml((f.nome || f.instagram_handle || 'creator').trim())
+  // ⚠️ norml() APAGA ESPACO. Usar ele aqui fazia "Karol Rocha Noronha" virar uma palavra so,
+  // cortada em 16: KAROLROCHANORONH. Nove cupons de 25/08 sairam assim, picados no meio do
+  // nome. A regra do primeiro nome nunca chegou a funcionar — e o meu teste de 24/08 nao
+  // pegou porque eu reimplementei norml no teste em vez de usar a do arquivo.
+  const semAcento = x => String(x||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+                          .replace(/[^a-zA-Z0-9 ]/g,'');
+  const partes = semAcento((f.nome || f.instagram_handle || 'creator').trim())
     .toUpperCase().split(/\s+/).filter(Boolean);
   const base = (partes[0] || 'CREATOR').slice(0, 16);
   const sobren = (partes[1] || '').slice(0, 10);
