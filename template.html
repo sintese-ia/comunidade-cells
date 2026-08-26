@@ -1177,8 +1177,11 @@ function pintaCad(){
             if (f.falta_cupom) return '<button class="acbt ok" data-aprovar="'+f.parceiro_id+'">criar cupom</button>';
             // aprovado COM cupom: dá para trocar o código e o link sem refazer a aprovação
             if (f.status === 'ativo' && cupomDe(f.parceiro_id))
-              return '<button class="acbt" data-rencup="'+f.parceiro_id+'">trocar cupom</button>'
-                   + '<button class="acbt" data-trlink="'+f.parceiro_id+'">trocar link</button>';
+              // So "trocar cupom". O link NAO precisa de botao proprio: o /r/ vem do codigo,
+              // entao renomear o cupom ja move o link e o destino junto. O botao separado
+              // mexia no utm_campaign — outra coisa, raramente necessaria, e um jeito a mais
+              // de deixar cupom e link fora de sincronia.
+              return '<button class="acbt" data-rencup="'+f.parceiro_id+'">trocar cupom</button>';
             // já ativo e com cupom, mas NUNCA avisado: é o caso dos 28 do cupom legado, que
             // nasceram ativos sem ninguém nunca ter mandado o link para eles
             const cp = cupomDe(f.parceiro_id);
@@ -1283,14 +1286,6 @@ document.getElementById('tbCad').addEventListener('click', async e => {
     return;
   }
 
-  const tl = e.target.closest('[data-trlink]');
-  if (tl) {
-    const f = CAD.find(x => x.parceiro_id === +tl.dataset.trlink);
-    const novoSlug = prompt('Novo link de ' + (f.nome||'') + ':\n\ncells.com.br/r/____\n\nO link antigo continua funcionando — post já publicado não quebra.', f.utm_slug||'');
-    if (!novoSlug || novoSlug === f.utm_slug) return;
-    enviarSimples('/api/link/trocar', { parceiro_id: f.parceiro_id, slug: novoSlug });
-    return;
-  }
   const av1 = e.target.closest('[data-avisarum]');
   if (av1) {
     const f = CAD.find(x => x.parceiro_id === +av1.dataset.avisarum);
