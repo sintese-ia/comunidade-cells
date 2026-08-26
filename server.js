@@ -554,7 +554,15 @@ async function criarLinkCurtoShopify({ codigo, slug }) {
       path: '/r/' + String(codigo).toLowerCase(),
       // mesma convenção do linkCreator() — se divergir, o link curto e o longo passam a
       // classificar em lugares diferentes no dash
-      target: '/?' + new URLSearchParams({
+      // ⚠️ O LINK TEM QUE APLICAR O CUPOM, nao so carregar a UTM. Ate 26/08 o destino era
+      // '/?utm_...': quem clicava caia na home, era rastreado e NAO ganhava desconto nenhum —
+      // tinha que digitar o codigo na mao no checkout. Do lado de quem clica, o link da
+      // creator simplesmente nao fazia nada.
+      // A rota /discount/<codigo> guarda o cupom na sessao e redireciona; a query string
+      // passa inteira, entao a UTM continua igual e a atribuicao nao muda.
+      // Provado em carrinho real 26/08: R$ 129,90 -> R$ 116,91 so de abrir o link.
+      target: '/discount/' + encodeURIComponent(codigo) + '?' + new URLSearchParams({
+        redirect: '/',
         utm_source: 'creator', utm_medium: 'influencer', utm_campaign: slug,
       }).toString(),
     } } });
