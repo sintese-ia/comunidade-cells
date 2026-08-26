@@ -345,6 +345,7 @@
           <th data-t="receita">Receita</th>
           <th data-t="receita_3m">Nível</th>
           <th>Cupom</th>
+          <th>Link</th>
           <th>Status</th>
           <th>Ações</th>
         </tr></thead>
@@ -1155,6 +1156,14 @@ function pintaCad(){
                 + 'title="ativo e vendendo, mas nunca passou pela aprovação">falta aprovar</span></span>' : '')
             + (f.mantido ? '<span class="sub2"><span class="chip ok" '
                 + 'title="vendeu em 2026: mantido sem re-aprovação, decisão de 13/08">mantido</span></span>' : ''); })()+'</td>'
+      // O LINK na propria linha. Antes so aparecia abrindo a ficha, um clique por pessoa —
+      // e e justamente o que precisa ser mandado para a creator.
+      + '<td>'+(() => { const c = cupomDe(f.parceiro_id);
+          if (!c || !c.link) return '<span class="dim">—</span>';
+          const curto = c.link.replace(/^https?:\/\//,'');
+          return '<a href="'+esc(c.link)+'" target="_blank" rel="noopener" class="lnk" '
+               + 'style="font-family:var(--mono);font-size:11.5px">'+esc(curto)+'</a>'
+               + ' <button class="acbt" data-copia="'+esc(c.link)+'" title="copiar">copiar</button>'; })()+'</td>'
       + '<td>'+selStatus(f)+'</td>'
       + '<td><div class="acs">'
         + (() => {
@@ -1182,7 +1191,7 @@ function pintaCad(){
         + '<button class="acbt no" data-ac="'+(f.arquivado?'desarquivar':'arquivar')+'" data-id="'+f.parceiro_id+'">'
         + (f.arquivado?'desarquivar':'arquivar')+'</button>'
       + '</div></td></tr>';
-  }).join('') || '<tr><td colspan="11" class="h dim" style="padding:20px 15px">Nada com esse filtro.</td></tr>';
+  }).join('') || '<tr><td colspan="12" class="h dim" style="padding:20px 15px">Nada com esse filtro.</td></tr>';
 }
 
 (function avisoAtivoSemEmail(){
@@ -1253,6 +1262,14 @@ document.getElementById('tbCad').addEventListener('click', async e => {
     pintaCad();
     return;
   }
+  const cp = e.target.closest('[data-copia]');
+  if (cp) {
+    navigator.clipboard.writeText(cp.dataset.copia).then(() => {
+      const t0 = cp.textContent; cp.textContent = 'copiado'; setTimeout(() => cp.textContent = t0, 1200);
+    });
+    return;
+  }
+
   const ab = e.target.closest('[data-aprovar]');
   if (ab) { abreAprovar(+ab.dataset.aprovar); return; }
 
@@ -2226,7 +2243,7 @@ function pintaAnalise(){
     document.getElementById('anBars').innerHTML = '';
     document.getElementById('anBlab').innerHTML = '';
     document.getElementById('tbAn').innerHTML =
-      '<tr><td colspan="11" class="dim" style="padding:22px">Nenhum criador com resultado ainda.</td></tr>';
+      '<tr><td colspan="12" class="dim" style="padding:22px">Nenhum criador com resultado ainda.</td></tr>';
     document.getElementById('anCnt').textContent = '';
     return;
   }
@@ -2314,7 +2331,7 @@ function pintaAnTabela(){
     + '<td'+(x.pedidos?'':' class="dim"')+'>'+(x.pedidos||'—')+'</td>'
     + '<td'+(x.receita?' style="font-weight:600"':' class="dim"')+'>'+(x.receita?nm(x.receita):'—')+'</td>'
     + '<td class="dim">'+dt(x.ultima)+'</td></tr>').join('')
-    || '<tr><td colspan="11" class="h dim" style="padding:20px 15px">Ninguém publicou nem vendeu nesse período.</td></tr>';
+    || '<tr><td colspan="12" class="h dim" style="padding:20px 15px">Ninguém publicou nem vendeu nesse período.</td></tr>';
 }
 
 document.querySelectorAll('th[data-a]').forEach(t => t.addEventListener('click', () => {

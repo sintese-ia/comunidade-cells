@@ -323,8 +323,15 @@ const painel = {
   cupons: `
     SELECT c.cupom_id, c.parceiro_id, c.codigo, c.desconto_pct, c.comissao_pct, c.combinavel,
            c.shopify_discount_id, c.shopify_erro, c.link_redirect_id, c.ativo,
-           c.criado_em::date AS criado
-    FROM creator.cupom c WHERE c.ativo ORDER BY c.cupom_id
+           c.criado_em::date AS criado,
+           -- o LINK montado aqui, para a tabela mostrar sem abrir a ficha. Vem de link_path
+           -- (o curto, /r/<cupom>) e cai no longo quando o redirect nao foi criado.
+           coalesce('https://cells.com.br' || c.link_path,
+                    'https://cells.com.br/?utm_source=creator&utm_medium=influencer&utm_campaign='
+                    || coalesce(p.utm_slug,'')) AS link
+    FROM creator.cupom c
+    JOIN creator.parceiro p USING (parceiro_id)
+   WHERE c.ativo ORDER BY c.cupom_id
   `,
 
   // ---- faixas e comissão, para a tela mostrar a régua ----
