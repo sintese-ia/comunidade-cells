@@ -582,7 +582,11 @@ async function criarLinkCurtoShopify({ codigo, slug }) {
 // O link curto é `/r/<cupom>`, então renomear o cupom SEM mexer aqui deixaria a creator com um
 // link que não bate mais com o código que ela fala. Este é o quarto lado do rename — os outros
 // três são a loja, `creator.cupom` e `creator.legado`.
-async function renomearLinkCurtoShopify({ redirectId, novo }) {
+// ⚠️ Renomear o cupom tem que mover o CAMINHO e o DESTINO. Mover so o caminho deixa
+// /r/<novo> apontando para /discount/<VELHO>, e o codigo velho nao existe mais depois do
+// rename — o link fica vivo, redireciona e nao aplica desconto nenhum. Aconteceu com os 9
+// renomeados em 26/08 e so apareceu porque testei o redirect depois.
+async function renomearLinkCurtoShopify({ redirectId, novo, slug }) {
   if (!SHOP_TOKEN) throw new Error('SHOPIFY_TOKEN não configurado');
   const mut = `
     mutation mover($id: ID!, $r: UrlRedirectInput!) {
@@ -594,7 +598,11 @@ async function renomearLinkCurtoShopify({ redirectId, novo }) {
   const r = await postJSON(`https://${SHOP}/admin/api/2025-01/graphql.json`,
     { 'X-Shopify-Access-Token': SHOP_TOKEN },
     { query: mut, variables: { id: redirectId,
-      r: { path: '/r/' + String(novo).toLowerCase() } } });
+      r: { path: '/r/' + String(novo).toLowerCase(),
+           target: '/discount/' + encodeURIComponent(novo) + '?' + new URLSearchParams({
+             redirect: '/', utm_source: 'creator', utm_medium: 'influencer',
+             utm_campaign: slug || '',
+           }).toString() } } });
   if (r.status !== 200) throw new Error('Shopify HTTP ' + r.status + ' ' + String(r.txt).slice(0, 160));
   const erroApi = r.json?.errors?.[0]?.message;
   if (erroApi) throw new Error(erroApi);
@@ -2078,7 +2086,7 @@ http.createServer(async (req, res) => {
           return json(400, { erro: 'use de 3 a 24 letras ou números, sem espaço nem acento' });
 
         const [cup] = (await cli.query(
-          `SELECT c.*, p.nome FROM creator.cupom c
+          `SELECT c.*, p.nome, p.utm_slug FROM creator.cupom c
              JOIN creator.parceiro p ON p.parceiro_id = c.parceiro_id
             WHERE c.cupom_id = $1`, [cupomId])).rows;
         if (!cup) return json(404, { erro: 'cupom não encontrado' });
@@ -2109,7 +2117,8 @@ http.createServer(async (req, res) => {
         if (cup.link_redirect_id) {
           etapa = 'movendo o link curto';
           try {
-            linkNovo = await renomearLinkCurtoShopify({ redirectId: cup.link_redirect_id, novo });
+            linkNovo = await renomearLinkCurtoShopify({ redirectId: cup.link_redirect_id, novo,
+                                                           slug: cup.utm_slug });
             // grava o caminho SÓ depois que a loja confirmou. Se a chamada falhar, link_path
             // continua o antigo e a creator segue com um link que FUNCIONA até alguém consertar.
             await cli.query('UPDATE creator.cupom SET link_path=$2 WHERE cupom_id=$1',
