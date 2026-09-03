@@ -814,7 +814,7 @@ const R = (D.resumo||[])[0] || {};
 
 const STATUS = ['pendente','ativo','reprovado'];   // pausado saiu em 25/08: ninguem estava nele
 const ACOES = [['reels','reel'],['carrossel','carrossel'],['feed_imagem','post de feed'],
-               ['story','story'],['venda','venda pelo cupom']];
+               ['story','story'],['venda','venda pelo cupom'],['venda_assinatura','assinatura vendida']];
 const rotAcao = k => (ACOES.find(a=>a[0]===k)||[,k])[1];
 
 /* carimbo do topo, repetido em cada módulo */
