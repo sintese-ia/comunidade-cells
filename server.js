@@ -1041,6 +1041,14 @@ http.createServer(async (req, res) => {
 
   if (u.pathname === '/healthz') { res.writeHead(200, {'content-type':'text/plain'}); return res.end('ok'); }
 
+  // No domínio público da comunidade, a raiz é da CREATOR — sem isto ela digita o endereço
+  // e cai na senha do painel interno, que não é para ela.
+  if (u.pathname === '/' && req.method === 'GET' &&
+      String(req.headers.host || '').startsWith('comunidade.cells.com.br')) {
+    res.writeHead(303, { Location: '/creator', 'cache-control': 'no-store' });
+    return res.end();
+  }
+
   // ---- webhook da Meta (story mention) — ANTES da parede de senha, é a Meta que chama ----
   if (u.pathname === '/webhook/meta') {
     // handshake de verificação da assinatura
