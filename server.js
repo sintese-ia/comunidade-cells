@@ -1041,10 +1041,16 @@ http.createServer(async (req, res) => {
 
   if (u.pathname === '/healthz') { res.writeHead(200, {'content-type':'text/plain'}); return res.end('ok'); }
 
-  // No domínio público da comunidade, a raiz é da CREATOR — sem isto ela digita o endereço
-  // e cai na senha do painel interno, que não é para ela.
+  // /admin é o endereço do painel interno no domínio público — internamente é a mesma
+  // raiz de sempre, então basta reescrever o caminho (GET e o POST da senha).
+  if (u.pathname === '/admin') u.pathname = '/';
+
+  // No domínio público da comunidade, a raiz é da CREATOR — a menos que seja o admin já
+  // logado: o POST de senha responde Location:'/', e sem esta exceção o admin recém-logado
+  // quicaria para a tela de entrar da creator.
   if (u.pathname === '/' && req.method === 'GET' &&
-      String(req.headers.host || '').startsWith('comunidade.cells.com.br')) {
+      String(req.headers.host || '').startsWith('comunidade.cells.com.br') &&
+      !(req.headers.cookie || '').includes(`${COOKIE}=${TOKEN}`)) {
     res.writeHead(303, { Location: '/creator', 'cache-control': 'no-store' });
     return res.end();
   }
