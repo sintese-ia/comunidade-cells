@@ -604,8 +604,10 @@ function telaAcesso(){
   const entra = p.email || ('@' + (p.instagram_handle||''));
   return `<h1 class="tt">Acesso<small>Como você entra neste painel.</small></h1>
 <section>
-  <div class="sh"><h2>${p.tem_senha ? 'Trocar sua senha' : 'Criar sua senha'}</h2>
-    <p>${p.tem_senha
+  <div class="sh"><h2>${p.senha_provisoria ? 'Crie sua senha definitiva' : p.tem_senha ? 'Trocar sua senha' : 'Criar sua senha'}</h2>
+    <p>${p.senha_provisoria
+      ? 'Sua senha atual é provisória — é a parte do seu e-mail antes do @. Crie uma senha nova, só sua, para liberar o resto do painel.'
+      : p.tem_senha
       ? 'Você já tem senha. Trocar aqui vale para o próximo login.'
       : 'Hoje você só entra pelo link pessoal que a Cells te manda. Com senha, você entra quando quiser, mesmo depois de o link expirar.'}</p></div>
   <div class="sb">
@@ -642,6 +644,8 @@ const APELIDO = {financeiro:'perfil'};
 
 function desenhar(){
   if (APELIDO[aba]) aba = APELIDO[aba];
+  // senha provisória: nada abre antes de ela criar a senha definitiva
+  if (p.senha_provisoria && aba !== 'acesso') aba = 'acesso';
   if (!TELAS[aba]) aba = 'inicio';
   document.getElementById('menu').innerHTML = menu();
   document.getElementById('tela').innerHTML = TELAS[aba]();
@@ -738,7 +742,7 @@ function ligarFormularios(){
       m.className = 'msg er'; m.textContent = 'as duas senhas não são iguais'; return;
     }
     enviar('/creator/senha', {atual: val('sAtual'), nova: val('sNova')}, 'svSen', 'msgSen', () => {
-      p.tem_senha = true; desenhar();
+      p.tem_senha = true; p.senha_provisoria = false; desenhar();
       const m2 = document.getElementById('msgSen');
       if (m2){ m2.className = 'msg ok'; m2.textContent = 'senha salva'; }
     });

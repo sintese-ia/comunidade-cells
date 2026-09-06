@@ -792,6 +792,7 @@ async function dadosDoCreator(parceiroId) {
            p.end_cep, p.end_logradouro, p.end_numero, p.end_complemento,
            p.end_bairro, p.end_cidade, p.end_uf, p.end_aos_cuidados,
            (p.senha_hash IS NOT NULL) AS tem_senha,
+           coalesce(p.senha_provisoria, false) AS senha_provisoria,
            to_char(p.criado_em AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD') AS desde,
            c.codigo AS cupom, c.link_redirect_id, c.link_path,
            l.idade AS idade_declarada
@@ -1503,8 +1504,8 @@ http.createServer(async (req, res) => {
         if (!p.email && !p.instagram_handle)
           return json(400, { erro: 'preencha seu e-mail em Perfil antes — é ele que você usa para entrar' });
         await pool.query(
-          `UPDATE creator.parceiro SET senha_hash=$2, senha_em=now(), login_falhas=0,
-                  login_travado_ate=NULL WHERE parceiro_id=$1`, [pid, hashSenha(nova)]);
+          `UPDATE creator.parceiro SET senha_hash=$2, senha_em=now(), senha_provisoria=false,
+                  login_falhas=0, login_travado_ate=NULL WHERE parceiro_id=$1`, [pid, hashSenha(nova)]);
         // no rastro entra só o FATO, nunca o hash e muito menos a senha
         await pool.query(
           `INSERT INTO creator.parceiro_edicao (parceiro_id,campo,valor_antigo,valor_novo,por)
