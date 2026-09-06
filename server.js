@@ -1042,13 +1042,15 @@ http.createServer(async (req, res) => {
   if (u.pathname === '/healthz') { res.writeHead(200, {'content-type':'text/plain'}); return res.end('ok'); }
 
   // /admin é o endereço do painel interno no domínio público — internamente é a mesma
-  // raiz de sempre, então basta reescrever o caminho (GET e o POST da senha).
-  if (u.pathname === '/admin') u.pathname = '/';
+  // raiz de sempre, então basta reescrever o caminho (GET e o POST da senha). Quem chega
+  // por /admin NUNCA é mandado para /creator: é ali que a parede de senha aparece.
+  const veioPorAdmin = u.pathname === '/admin';
+  if (veioPorAdmin) u.pathname = '/';
 
   // No domínio público da comunidade, a raiz é da CREATOR — a menos que seja o admin já
   // logado: o POST de senha responde Location:'/', e sem esta exceção o admin recém-logado
   // quicaria para a tela de entrar da creator.
-  if (u.pathname === '/' && req.method === 'GET' &&
+  if (u.pathname === '/' && req.method === 'GET' && !veioPorAdmin &&
       String(req.headers.host || '').startsWith('comunidade.cells.com.br') &&
       !(req.headers.cookie || '').includes(`${COOKIE}=${TOKEN}`)) {
     res.writeHead(303, { Location: '/creator', 'cache-control': 'no-store' });
