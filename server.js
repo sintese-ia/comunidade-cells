@@ -905,7 +905,9 @@ async function dadosDoCreator(parceiroId) {
       FROM creator.campanha c
       JOIN creator.campanha_parceiro cp ON cp.campanha_id = c.campanha_id
                                         AND cp.parceiro_id = $1 AND cp.saiu_em IS NULL
-     WHERE c.status <> 'cancelada'
+     -- so campanha ATIVA aparece para a creator (08/09): arquivada e cancelada sao
+     -- historia interna — na tela dela viravam entulho e pareciam metas em dobro.
+     WHERE c.status = 'ativa'
      ORDER BY c.inicio DESC NULLS LAST`, [parceiroId]);
 
   // ---- cliques no link (pedido do Gabriel, 14/08) ----
