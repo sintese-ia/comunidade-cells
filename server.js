@@ -1047,12 +1047,11 @@ http.createServer(async (req, res) => {
   const veioPorAdmin = u.pathname === '/admin';
   if (veioPorAdmin) u.pathname = '/';
 
-  // No domínio público da comunidade, a raiz é da CREATOR — a menos que seja o admin já
-  // logado: o POST de senha responde Location:'/', e sem esta exceção o admin recém-logado
-  // quicaria para a tela de entrar da creator.
+  // No domínio público da comunidade, a raiz é da CREATOR — SEMPRE, cookie de admin ou não
+  // (testado em 08/09: o Gabriel digitava o domínio e caía no painel interno por causa da
+  // sessão salva). Admin entra por /admin; o POST de login vindo de lá volta para /admin.
   if (u.pathname === '/' && req.method === 'GET' && !veioPorAdmin &&
-      String(req.headers.host || '').startsWith('comunidade.cells.com.br') &&
-      !(req.headers.cookie || '').includes(`${COOKIE}=${TOKEN}`)) {
+      String(req.headers.host || '').startsWith('comunidade.cells.com.br')) {
     res.writeHead(303, { Location: '/creator', 'cache-control': 'no-store' });
     return res.end();
   }
@@ -1601,7 +1600,7 @@ http.createServer(async (req, res) => {
     let b = ''; req.on('data', c => { b += c; if (b.length > 4096) req.destroy(); });
     return req.on('end', () => {
       if (new URLSearchParams(b).get('senha') === SENHA) {
-        res.writeHead(303, { Location: '/', 'Set-Cookie':
+        res.writeHead(303, { Location: veioPorAdmin ? '/admin' : '/', 'Set-Cookie':
           `${COOKIE}=${TOKEN}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000` });
         return res.end();
       }
