@@ -343,7 +343,7 @@
           <th data-t="marcacoes">Marcações</th>
           <th data-t="pedidos">Pedidos</th>
           <th data-t="receita">Receita</th>
-          <th data-t="receita_3m">Nível</th>
+          <th data-t="receita_mes">Nível</th>
           <th>Cupom</th>
           <th>Link</th>
           <th>Status</th>
@@ -1078,9 +1078,9 @@ function celNivel(f){
   if (!f.nivel) return '<td class="dim">—</td>';
   const t = MEDALHA[f.nivel] + ' ' + f.nivel
     + (f.nivel_forcado ? ' <span class="chip wa" title="nível fixado na mão, ignora o cálculo">fixo</span>' : '');
-  const sub = (f.receita_3m > 0)
-    ? nm(f.receita_3m) + ' em 3m'
-    : '<span title="sem venda na janela de 3 meses">sem venda em 3m</span>';
+  const sub = (f.receita_mes > 0)
+    ? nm(f.receita_mes) + ' no mês'
+    : '<span title="sem venda no mês corrente">sem venda no mês</span>';
   return '<td><span class="chip'+(f.nivel==='bronze'?'':' ok')+'">'+t+'</span>'
     + '<span class="sub2 dim">'+sub+'</span></td>';
 }

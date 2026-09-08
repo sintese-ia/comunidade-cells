@@ -116,7 +116,7 @@ const painel = {
                     CASE WHEN p.instagram_handle IS NOT NULL
                          THEN 'https://instagram.com/' || p.instagram_handle END) AS instagram_url,
            -- ---- nível e comissão (item 9) ----
-           nv.nivel, nv.nivel_forcado, nv.receita_3m, nv.pedidos_3m,
+           nv.nivel, nv.nivel_forcado, nv.receita_mes, nv.pedidos_mes,
            nv.comissao_unica_pct, nv.comissao_assinatura_pct,
            nv.proximo_nivel, nv.falta_para_proximo,
            -- pastas (item 7): lista fechada e montável, ao contrário de tags, que é texto

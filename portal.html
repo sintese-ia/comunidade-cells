@@ -283,7 +283,6 @@ const campo = (id, rot, val, extra) => `<div class="cp2${extra&&extra.full?' ful
 // ================================================================ abas
 const ABAS = [
   {id:'inicio',     ic:'▦', rot:'Resultados'},
-  {id:'nivel',      ic:'◆', rot:'Nível e metas'},
   {id:'campanhas',  ic:'✦', rot:'Campanhas'},
   {id:'conteudos',  ic:'▶', rot:'Conteúdos'},
   {id:'perfil',     ic:'●', rot:'Meus dados'},
@@ -404,34 +403,35 @@ ${m.receita || m.cliquesTot ? `<section>
 </section>
 
 <footer>Na vida inteira: <b>${rs(vida.receita)}</b> em ${n(vida.pedidos)}
-  ${vida.pedidos===1?'pedido':'pedidos'} · seus números atualizam sozinhos</footer>`;
+  ${vida.pedidos===1?'pedido':'pedidos'} · seus números atualizam sozinhos</footer>
+${blocoNivel()}`;
 }
 
 // ---------------------------------------------------------------- Nível e metas
-function telaNivel(){
+function blocoNivel(){
   const nomes = {reels:'Reels',carrossel:'Carrossel',feed_imagem:'Foto',story:'Stories',venda:'Vendas',venda_assinatura:'Assinaturas vendidas'};
-  return `<h1 class="tt">Nível e metas
-    <small>Nada aqui segue o mês escolhido em Resultados — cada coisa tem a própria janela.</small></h1>
+  return `<h1 class="tt" style="margin-top:34px">Nível e metas
+    <small>Aqui é sempre o mês corrente — não segue o mês escolhido acima.</small></h1>
 ${nv ? `<section>
   <div class="sh"><h2>Seu nível e sua comissão</h2>
-    <p>Vem do que você vendeu nos <b>últimos 3 meses</b>, e sobe e desce sozinho.</p></div>
+    <p>Vem do seu <b>GMV do mês</b> — a apuração fecha todo fim de mês, e você recebe a taxa da faixa em que fechar.</p></div>
   <div class="sb">
     <div class="niv">
       <span class="medalha">${MEDALHA[nv.nivel]||'🥉'}</span>
       <span class="nm">${esc(nv.nivel||'bronze')}</span>
       <span style="margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--mut)">
-        ${rs(nv.receita_3m)} em 3 meses</span>
+        ${rs(nv.receita_mes)} no mês</span>
     </div>
     <div class="taxas">
       <div><div class="k">Compra única</div><div class="v">${pc(nv.comissao_unica_pct)}</div></div>
       <div><div class="k">Assinatura</div><div class="v">${pc(nv.comissao_assinatura_pct)}</div></div>
-      <div><div class="k">Comissão · 3 meses</div><div class="v">${rs(P.comissao_3m)}</div></div>
+      <div><div class="k">Comissão · este mês</div><div class="v">${rs(P.comissao_mes)}</div></div>
     </div>
     ${nv.proximo_nivel ? `<div class="escada">
       <div class="et"><span>Para <b>${esc(nv.proximo_nivel)}</b> ${MEDALHA[nv.proximo_nivel]||''}</span>
         <span>faltam <b>${rs(nv.falta_para_proximo)}</b></span></div>
       <div class="bar"><span style="width:${
-        Math.max(2, Math.min(100, Math.round(Number(nv.receita_3m)/Number(nv.proximo_piso)*100)))}%"></span></div>
+        Math.max(2, Math.min(100, Math.round(Number(nv.receita_mes)/Number(nv.proximo_piso)*100)))}%"></span></div>
     </div>` : `<p style="margin:14px 0 0;font-size:13px;color:var(--ok)">Você está no nível mais alto. 👏</p>`}
     <div style="margin-top:15px;border-top:1px solid var(--line2);padding-top:12px">
       ${faixas.map(f => `<div class="lin" style="border:0;padding:5px 0">
@@ -442,9 +442,10 @@ ${nv ? `<section>
           Number(f.piso)>0 ? 'a partir de '+rs(f.piso) : 'de entrada'}</span></div>`).join('')}
     </div>
     <p class="nota" style="margin:13px 0 0">A comissão é calculada sobre a <b>receita líquida</b>
-      — o que sobra depois do desconto do seu cupom — na taxa do seu nível <b>de hoje</b>.</p>
+      — o que sobra depois do desconto do seu cupom. Abaixo de <b>R$ 350</b> no mês não há
+      comissão; a partir daí, a taxa é a da faixa em que você <b>fechar o mês</b>.</p>
   </div>
-</section>` : '<section><div class="sb"><div class="vazio">Seu nível ainda não foi calculado.</div></div></section>'}
+</section>` : '<section><div class="sh"><h2>Seu nível e sua comissão</h2></div><div class="sb"><div class="vazio">Você ainda não entrou na faixa do mês. A partir de <b>R$ 350</b> em vendas no mês você vira <b>Bronze</b> e passa a comissionar <b>10%</b> — depois Prata (R$ 900, 12%) e Ouro (R$ 2.500, 15%).</div></div></section>'}
 
 ${jg.length ? `<section>
   <div class="sh"><h2>Suas metas</h2><p>Cada jogo tem o próprio prazo. Atualiza sozinho conforme
@@ -635,12 +636,12 @@ function telaAcesso(){
 }
 
 // ================================================================ render
-const TELAS = {inicio:telaInicio, nivel:telaNivel, campanhas:telaCampanhas,
+const TELAS = {inicio:telaInicio, campanhas:telaCampanhas,
                conteudos:telaConteudos, perfil:telaPerfil, acesso:telaAcesso};
 
 // `#financeiro` virou seção de "Meus dados" em 16/08, mas o hash já saiu em conversa e em
 // aviso — quem clicar no link antigo cai na aba certa, não numa tela em branco.
-const APELIDO = {financeiro:'perfil'};
+const APELIDO = {financeiro:'perfil', nivel:'inicio'};
 
 function desenhar(){
   if (APELIDO[aba]) aba = APELIDO[aba];

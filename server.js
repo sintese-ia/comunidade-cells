@@ -924,11 +924,11 @@ async function dadosDoCreator(parceiroId) {
   // ---- nível e comissão ----
   // ⚠️ A comissão é CALCULADA a partir da régua de hoje (creator.nivel_regra), não lida de
   // `creator.venda.comissao_valor` — essa coluna nunca foi preenchida.
-  // Por isso a tela só mostra a comissão da JANELA DE 3 MESES, que é a mesma janela que
-  // define o nível. Somar a vida inteira aplicaria uma regra de 12/08/2026 a pedido de
-  // janeiro/2025 e daria a entender que a Cells deve isso — o que não é verdade.
+  // A apuração é MENSAL (régua de 08/09/2026): o nível vem do GMV do mês corrente e a
+  // comissão mostrada é só a do mês — somar a vida inteira aplicaria a régua de hoje a
+  // pedidos antigos e daria a entender que a Cells deve isso, o que não é verdade.
   const [nv] = await q(`
-    SELECT nivel, receita_3m, pedidos_3m, receita_vida, pedidos_vida,
+    SELECT nivel, receita_mes, pedidos_mes, receita_vida, pedidos_vida,
            comissao_unica_pct, comissao_assinatura_pct,
            proximo_nivel, proximo_piso, falta_para_proximo
       FROM creator.vw_nivel WHERE parceiro_id = $1`, [parceiroId]);
@@ -947,7 +947,7 @@ async function dadosDoCreator(parceiroId) {
       FROM creator.vw_venda_valida
      WHERE parceiro_id=$1
        AND (pedido_em AT TIME ZONE 'America/Sao_Paulo')::date
-           >= ((now() AT TIME ZONE 'America/Sao_Paulo')::date - interval '3 months')::date`,
+           >= date_trunc('month', (now() AT TIME ZONE 'America/Sao_Paulo'))::date`,
     [parceiroId]);
   const comissao3m = Math.round(Number(c3.unica) * pctU + Number(c3.assin) * pctA) / 100;
 
@@ -980,7 +980,7 @@ async function dadosDoCreator(parceiroId) {
   meses.reverse();
 
   return { parceiro: pa, cupons, vendas: v, extrato: extratoCom, publicacoes, envios, jogos, campanhas,
-           cliques: { ...cl, serie }, nivel: nv || null, faixas, comissao_3m: comissao3m,
+           cliques: { ...cl, serie }, nivel: nv || null, faixas, comissao_mes: comissao3m,
            taxas: { unica: pctU, assinatura: pctA }, hoje, meses };
 }
 
