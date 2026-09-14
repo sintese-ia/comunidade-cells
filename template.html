@@ -503,7 +503,32 @@
     </div>
   </section>
 
-  <!-- ============ 06 LEGADO ============ -->
+  <!-- ============ 06 GESTÃO ============ -->
+  <section class="mod" data-mod="gestao">
+    <div class="topo">
+      <div><h1>Gestão</h1>
+        <p class="lede">Um membro por linha: kit, produção do mês e o histórico de contato. <b>Anote cada cobrança aqui</b> — quem falou, quando e o que foi combinado fica registrado pra equipe toda.</p></div>
+      <div class="stamp" id="stampGes"></div>
+    </div>
+    <div class="panel">
+      <div class="barra">
+        <button class="aba" data-gf="todos" aria-pressed="true">todos <b id="g-todos">0</b></button>
+        <button class="aba" data-gf="zerados" aria-pressed="false">sem publicação <b id="g-zerados">0</b></button>
+        <button class="aba" data-gf="semcobranca" aria-pressed="false">nunca cobrados <b id="g-semcobranca">0</b></button>
+        <button class="aba" data-gf="kit" aria-pressed="false">kit com problema <b id="g-kit">0</b></button>
+      </div>
+      <div class="scroll"><table>
+        <thead><tr><th>membro</th><th>kit</th><th>publicações no mês</th><th>última publi</th>
+          <th>ação sugerida</th><th>última cobrança</th><th></th></tr></thead>
+        <tbody id="gesCorpo"></tbody>
+      </table></div>
+      <div class="empty">
+        <span class="tg">de onde vêm os números</span>
+        <p>Kit é o rastreio do Bling. Reels/post entram sozinhos pela coleta de marcações; <b>story é lançado manualmente</b> (conferência nas DMs da @cellsoficial) enquanto a Meta não aprova a coleta automática — ou seja, story recém-postado pode demorar até a próxima conferência pra aparecer.</p>
+      </div>
+    </div>
+  </section>
+
   </main>
 </div>
 
@@ -798,6 +823,26 @@
       <button class="acbt" id="mAnuncio">virou anúncio</button>
     </span>
     <button class="acbt" id="mFechar">fechar</button>
+  </div>
+</dialog>
+
+<!-- histórico de contato de um membro (aba Gestão) -->
+<dialog id="dlgGes" style="max-width:560px;width:92vw;border:1px solid var(--line);border-radius:12px;padding:0">
+  <div style="padding:18px 20px">
+    <h2 id="gesNome" style="margin:0 0 2px;font-size:16px"></h2>
+    <p id="gesSub" style="margin:0 0 14px;color:var(--mut);font-size:12px"></p>
+    <div id="gesNotas" style="max-height:260px;overflow:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:14px"></div>
+    <form id="gesForm" style="display:flex;flex-direction:column;gap:8px">
+      <textarea id="gesTexto" rows="3" placeholder="o que foi falado / combinado…"
+        style="width:100%;box-sizing:border-box;font:inherit;font-size:13px;padding:8px;border:1px solid var(--line);border-radius:8px"></textarea>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <input id="gesAutor" placeholder="quem anota (ex.: Rafa)" style="font:inherit;font-size:12.5px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;width:150px">
+        <label style="font-size:12.5px;display:flex;gap:5px;align-items:center;cursor:pointer">
+          <input type="checkbox" id="gesCobranca" checked> marcar como <b>cobrança feita</b></label>
+        <button class="bt" type="submit" style="margin-left:auto">Salvar</button>
+        <button class="acbt" type="button" id="gesFechar">fechar</button>
+      </div>
+    </form>
   </div>
 </dialog>
 
@@ -2538,12 +2583,114 @@ document.querySelectorAll('[data-cw]').forEach(b => b.addEventListener('click', 
   if (alvo === 'result' && !resJaLeu) { resJaLeu = true; pintaResultados(); }
 }));
 
+/* ============ GESTÃO: acompanhamento da Comunidade ============ */
+const GES = D.gestao || [];
+let GNOTAS = D.gestao_notas || [];
+const dth = s => s ? dt(String(s)) + ' ' + String(s).slice(11,16) : '—';
+
+function gesAcao(g){
+  const entregue = g.envio_status === 'entregue';
+  const publicou = (g.stories_mes + g.reels_mes + g.outros_mes) > 0;
+  if (!g.envio_status)             return ['wa', 'despachar kit'];
+  if (!entregue)                   return ['wa', 'rastrear kit parado'];
+  if (!publicou)                   return ['',   'pedir 1ª publicação'];
+  if (!g.reels_mes)                return ['vo', 'pedir o reels obrigatório'];
+  return ['ok', 'no ritmo — reforçar metas'];
+}
+function gesKit(g){
+  if (!g.envio_status)              return '<span class="chip wa">sem envio</span>';
+  if (g.envio_status === 'entregue')return '<span class="chip ok">entregue ' + dt(g.entregue_em) + '</span>';
+  return '<span class="chip wa">' + esc(g.envio_status) + (g.envio_em ? ' ' + dt(g.envio_em) : '') + '</span>';
+}
+let gesFiltro = 'todos';
+function gesPassa(g){
+  const publicou = (g.stories_mes + g.reels_mes + g.outros_mes) > 0;
+  if (gesFiltro === 'zerados')     return !publicou;
+  if (gesFiltro === 'semcobranca') return !g.cobrado_em;
+  if (gesFiltro === 'kit')         return g.envio_status !== 'entregue';
+  return true;
+}
+function pintaGestao(){
+  const linhas = GES.filter(gesPassa).map(g => {
+    const [cls, acao] = gesAcao(g);
+    const pubs = [];
+    if (g.reels_mes)   pubs.push('<b>' + g.reels_mes + ' reels</b>');
+    if (g.outros_mes)  pubs.push(g.outros_mes + ' post' + (g.outros_mes>1?'s':''));
+    if (g.stories_mes) pubs.push(g.stories_mes + ' stor' + (g.stories_mes>1?'ies':'y'));
+    const notas = GNOTAS.filter(x => x.parceiro_id === g.parceiro_id).length;
+    return '<tr>'
+      + '<td><b>' + esc(g.nome) + '</b><br><span style="color:var(--fnt);font-size:11px">@' + esc(g.instagram_handle||'') + '</span></td>'
+      + '<td>' + gesKit(g) + '</td>'
+      + '<td>' + (pubs.length ? pubs.join(' · ') : '<span style="color:var(--fnt)">nada em setembro</span>') + '</td>'
+      + '<td>' + dt(g.ultima_pub) + '</td>'
+      + '<td><span class="chip ' + cls + '">' + acao + '</span></td>'
+      + '<td>' + (g.cobrado_em ? dth(g.cobrado_em) + '<br><span style="color:var(--fnt);font-size:11px">' + esc(g.cobrado_por||'') + '</span>'
+                               : '<span style="color:var(--fnt)">nunca</span>') + '</td>'
+      + '<td><button class="acbt" data-gnota="' + g.parceiro_id + '">notas' + (notas ? ' <b>' + notas + '</b>' : '') + '</button></td>'
+      + '</tr>';
+  }).join('');
+  document.getElementById('gesCorpo').innerHTML =
+    linhas || '<tr><td colspan="7" style="color:var(--fnt);padding:18px">ninguém neste filtro</td></tr>';
+  const publicaram = GES.filter(g => (g.stories_mes + g.reels_mes + g.outros_mes) > 0).length;
+  document.getElementById('g-todos').textContent = GES.length;
+  document.getElementById('g-zerados').textContent = GES.length - publicaram;
+  document.getElementById('g-semcobranca').textContent = GES.filter(g => !g.cobrado_em).length;
+  document.getElementById('g-kit').textContent = GES.filter(g => g.envio_status !== 'entregue').length;
+  document.getElementById('stampGes').textContent = publicaram + '/' + GES.length + ' publicaram no mês';
+}
+document.querySelectorAll('[data-gf]').forEach(b => b.addEventListener('click', () => {
+  gesFiltro = b.dataset.gf;
+  document.querySelectorAll('[data-gf]').forEach(x => x.setAttribute('aria-pressed', String(x===b)));
+  pintaGestao();
+}));
+
+let gesPid = null;
+function abreGesNotas(pid){
+  gesPid = pid;
+  const g = GES.find(x => x.parceiro_id === pid) || {};
+  document.getElementById('gesNome').textContent = g.nome || '';
+  document.getElementById('gesSub').textContent = '@' + (g.instagram_handle||'') + ' — histórico de contato';
+  const ns = GNOTAS.filter(x => x.parceiro_id === pid);
+  document.getElementById('gesNotas').innerHTML = ns.length ? ns.map(x =>
+    '<div style="border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12.5px">'
+    + '<span class="chip ' + (x.tipo==='cobranca'?'ok':'vo') + '">' + (x.tipo==='cobranca'?'cobrança':'nota') + '</span> '
+    + '<b>' + esc(x.autor) + '</b> <span style="color:var(--fnt)">' + dth(x.criado_em) + '</span>'
+    + (x.texto ? '<br>' + esc(x.texto) : '') + '</div>').join('')
+    : '<div style="color:var(--fnt);font-size:12.5px">nenhum contato registrado ainda.</div>';
+  document.getElementById('gesAutor').value = localStorage.getItem('ges_autor') || '';
+  document.getElementById('dlgGes').showModal();
+}
+document.getElementById('gesCorpo').addEventListener('click', e => {
+  const b = e.target.closest('[data-gnota]'); if (!b) return;
+  abreGesNotas(+b.dataset.gnota);
+});
+document.getElementById('gesFechar').addEventListener('click', () => document.getElementById('dlgGes').close());
+document.getElementById('gesForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const autor = document.getElementById('gesAutor').value.trim();
+  if (!autor) { document.getElementById('gesAutor').focus(); return; }
+  localStorage.setItem('ges_autor', autor);
+  const corpo = { parceiro_id: gesPid, autor,
+    tipo: document.getElementById('gesCobranca').checked ? 'cobranca' : 'nota',
+    texto: document.getElementById('gesTexto').value.trim() };
+  const j = await (await fetch('/api/gestao/nota', {method:'POST',
+    headers:{'content-type':'application/json'}, body: JSON.stringify(corpo)})).json();
+  if (!j.ok) { alert(j.erro || 'não salvou'); return; }
+  GNOTAS.unshift(j.nota);
+  const g = GES.find(x => x.parceiro_id === gesPid);
+  if (g && j.nota.tipo === 'cobranca') { g.cobrado_em = j.nota.criado_em; g.cobrado_por = j.nota.autor; }
+  document.getElementById('gesTexto').value = '';
+  abreGesNotas(gesPid); pintaGestao();
+});
+pintaGestao();
+
 const MODULOS = [
   ['busca',     'Buscar creator', () => null],
   ['cadastros', 'Criadores',      () => CAD.filter(f => !f.arquivado && f.status==='pendente').length || null],
   ['analises',  'Dashboard',      () => null],
   ['campanhas', 'Campanhas',      () => CAMP.filter(c => c.status==='ativa').length || null],
   ['mencoes',   'Extrações',      () => GAL.length || null],
+  ['gestao',    'Gestão',         () => GES.filter(g => !g.cobrado_em).length || null],
 ];
 
 document.getElementById('navLista').innerHTML = MODULOS.map(([k,rot,cont],i) => {

@@ -361,6 +361,48 @@ const painel = {
     SELECT DISTINCT ON (job) job, sucesso, itens, rodou_em
     FROM creator.job_log WHERE job <> 'boot' ORDER BY job, rodou_em DESC
   `,
+
+  // ---- GESTÃO: uma linha por membro da Comunidade (tem login no portal) ----
+  // (alimenta a aba Gestão do admin: kit + publicações do mês + última cobrança)
+  gestao: `
+    SELECT p.parceiro_id::int, p.nome, p.instagram_handle,
+           e.status       AS envio_status,
+           e.enviado_em::date  AS envio_em,
+           e.entregue_em::date AS entregue_em,
+           e.rastreio,
+           coalesce(pb.stories,0)::int AS stories_mes,
+           coalesce(pb.reels,0)::int   AS reels_mes,
+           coalesce(pb.outros,0)::int  AS outros_mes,
+           pb.ultima::date          AS ultima_pub,
+           gn.criado_em             AS cobrado_em,
+           gn.autor                 AS cobrado_por
+    FROM creator.parceiro p
+    LEFT JOIN LATERAL (
+      SELECT e2.status, e2.enviado_em, e2.entregue_em, e2.rastreio
+      FROM creator.envio e2 WHERE e2.parceiro_id = p.parceiro_id
+      ORDER BY e2.solicitado_em DESC NULLS LAST LIMIT 1) e ON true
+    LEFT JOIN LATERAL (
+      SELECT count(*) FILTER (WHERE pub.tipo='story')                       AS stories,
+             count(*) FILTER (WHERE pub.tipo='reels')                       AS reels,
+             count(*) FILTER (WHERE pub.tipo NOT IN ('story','reels'))      AS outros,
+             max(pub.publicado_em)                                          AS ultima
+      FROM creator.publicacao pub
+      WHERE pub.parceiro_id = p.parceiro_id
+        AND pub.publicado_em >= date_trunc('month',(now() AT TIME ZONE 'America/Sao_Paulo'))::date) pb ON true
+    LEFT JOIN LATERAL (
+      SELECT n.criado_em, n.autor FROM creator.gestao_nota n
+      WHERE n.parceiro_id = p.parceiro_id AND n.tipo = 'cobranca'
+      ORDER BY n.criado_em DESC LIMIT 1) gn ON true
+    WHERE p.senha_hash IS NOT NULL AND p.status = 'ativo'
+      AND p.email IS DISTINCT FROM 'gabriel@cells.com.br'
+    ORDER BY p.nome
+  `,
+
+  // ---- notas da gestão (histórico de contato por membro) ----
+  gestao_notas: `
+    SELECT n.nota_id::int, n.parceiro_id::int, n.autor, n.tipo, n.texto, n.criado_em
+    FROM creator.gestao_nota n ORDER BY n.criado_em DESC LIMIT 500
+  `,
 };
 
 // ------------------------------------------------------------------ ANÁLISE

@@ -1846,6 +1846,25 @@ http.createServer(async (req, res) => {
     } catch (e) { return json(200, { ok: false, erro: e.message }); }
   }
 
+  // aba Gestão: a Rafa registra contato ("cobranca") ou observação ("nota") por membro
+  if (u.pathname === '/api/gestao/nota' && req.method === 'POST') {
+    let d; try { d = await corpoJSON(req, 4096); } catch (e) { return json(e.grande ? 413 : 400, { erro: e.message }); }
+    const pid = +d.parceiro_id, autor = String(d.autor || '').trim().slice(0, 40);
+    const tipo = d.tipo === 'cobranca' ? 'cobranca' : 'nota';
+    const texto = String(d.texto || '').trim().slice(0, 2000) || null;
+    if (!pid)   return json(400, { erro: 'parceiro_id ausente' });
+    if (!autor) return json(400, { erro: 'diga quem está anotando (autor)' });
+    try {
+      const r = await pool.query(
+        `INSERT INTO creator.gestao_nota (parceiro_id, autor, tipo, texto)
+         VALUES ($1,$2,$3,$4)
+         RETURNING nota_id::int, parceiro_id::int, autor, tipo, texto, criado_em`,
+        [pid, autor, tipo, texto]);
+      invalida();
+      return json(200, { ok: true, nota: r.rows[0] });
+    } catch (e) { return json(200, { ok: false, erro: e.message }); }
+  }
+
   // gera link de acesso do creator (o admin copia e envia — não disparo mensagem sozinho)
   if (u.pathname === '/api/acesso' && req.method === 'POST') {
     const id = +u.searchParams.get('id');
