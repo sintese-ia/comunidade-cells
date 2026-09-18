@@ -518,8 +518,8 @@
         <button class="aba" data-gf="kit" aria-pressed="false">kit com problema <b id="g-kit">0</b></button>
       </div>
       <div class="scroll"><table>
-        <thead><tr><th>membro</th><th>kit</th><th>publicações no mês</th><th>última publi</th>
-          <th>ação sugerida</th><th>última cobrança</th><th></th></tr></thead>
+        <thead><tr><th>membro</th><th>envio</th><th>vendas no cupom</th><th>publicações</th>
+          <th>última publi</th><th>último contato</th><th></th></tr></thead>
         <tbody id="gesCorpo"></tbody>
       </table></div>
       <div class="empty">
@@ -2612,7 +2612,6 @@ function gesPassa(g){
 }
 function pintaGestao(){
   const linhas = GES.filter(gesPassa).map(g => {
-    const [cls, acao] = gesAcao(g);
     const pubs = [];
     if (g.reels_mes)   pubs.push('<b>' + g.reels_mes + ' reels</b>');
     if (g.outros_mes)  pubs.push(g.outros_mes + ' post' + (g.outros_mes>1?'s':''));
@@ -2621,12 +2620,14 @@ function pintaGestao(){
     return '<tr>'
       + '<td><b>' + esc(g.nome) + '</b><br><span style="color:var(--fnt);font-size:11px">@' + esc(g.instagram_handle||'') + '</span></td>'
       + '<td>' + gesKit(g) + '</td>'
-      + '<td>' + (pubs.length ? pubs.join(' · ') : '<span style="color:var(--fnt)">nada em setembro</span>') + '</td>'
+      + '<td>' + (g.vendas_mes ? '<b>' + g.vendas_mes + '</b> · ' + rs(g.receita_mes)
+                               : '<span style="color:var(--fnt)">nenhuma</span>') + '</td>'
+      + '<td>' + (pubs.length ? pubs.join(' · ') : '<span style="color:var(--fnt)">nada no mês</span>') + '</td>'
       + '<td>' + dt(g.ultima_pub) + '</td>'
-      + '<td><span class="chip ' + cls + '">' + acao + '</span></td>'
       + '<td>' + (g.cobrado_em ? dth(g.cobrado_em) + '<br><span style="color:var(--fnt);font-size:11px">' + esc(g.cobrado_por||'') + '</span>'
                                : '<span style="color:var(--fnt)">nunca</span>') + '</td>'
-      + '<td><button class="acbt" data-gnota="' + g.parceiro_id + '">notas' + (notas ? ' <b>' + notas + '</b>' : '') + '</button></td>'
+      + '<td style="white-space:nowrap"><button class="acbt" data-gctt="' + g.parceiro_id + '" title="registra contato feito agora">✓ contato</button> '
+      + '<button class="acbt" data-gnota="' + g.parceiro_id + '">notas' + (notas ? ' <b>' + notas + '</b>' : '') + '</button></td>'
       + '</tr>';
   }).join('');
   document.getElementById('gesCorpo').innerHTML =
@@ -2660,7 +2661,25 @@ function abreGesNotas(pid){
   document.getElementById('gesAutor').value = localStorage.getItem('ges_autor') || '';
   document.getElementById('dlgGes').showModal();
 }
-document.getElementById('gesCorpo').addEventListener('click', e => {
+document.getElementById('gesCorpo').addEventListener('click', async e => {
+  const c = e.target.closest('[data-gctt]');
+  if (c) {                                   // "✓ contato": registra a cobrança na hora, sem abrir nada
+    let autor = localStorage.getItem('ges_autor') || '';
+    if (!autor) { autor = (prompt('Quem está registrando o contato? (ex.: Rafa)') || '').trim(); }
+    if (!autor) return;
+    localStorage.setItem('ges_autor', autor);
+    c.disabled = true;
+    const j = await (await fetch('/api/gestao/nota', {method:'POST',
+      headers:{'content-type':'application/json'},
+      body: JSON.stringify({ parceiro_id: +c.dataset.gctt, autor, tipo: 'cobranca', texto: '' })})).json();
+    c.disabled = false;
+    if (!j.ok) { alert(j.erro || 'não salvou'); return; }
+    GNOTAS.unshift(j.nota);
+    const g = GES.find(x => x.parceiro_id === +c.dataset.gctt);
+    if (g) { g.cobrado_em = j.nota.criado_em; g.cobrado_por = j.nota.autor; }
+    pintaGestao();
+    return;
+  }
   const b = e.target.closest('[data-gnota]'); if (!b) return;
   abreGesNotas(+b.dataset.gnota);
 });

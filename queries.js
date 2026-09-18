@@ -370,6 +370,8 @@ const painel = {
            e.enviado_em::date  AS envio_em,
            e.entregue_em::date AS entregue_em,
            e.rastreio,
+           coalesce(vd.pedidos,0)::int      AS vendas_mes,
+           round(coalesce(vd.receita,0),2)  AS receita_mes,
            coalesce(pb.stories,0)::int AS stories_mes,
            coalesce(pb.reels,0)::int   AS reels_mes,
            coalesce(pb.outros,0)::int  AS outros_mes,
@@ -382,6 +384,11 @@ const painel = {
       FROM creator.envio e2 WHERE e2.parceiro_id = p.parceiro_id
       ORDER BY e2.solicitado_em DESC NULLS LAST LIMIT 1) e ON true
     LEFT JOIN LATERAL (
+      SELECT count(*) AS pedidos, sum(v.receita_liquida) AS receita
+      FROM creator.vw_venda_valida v
+      WHERE v.parceiro_id = p.parceiro_id
+        AND v.pedido_em >= date_trunc('month',(now() AT TIME ZONE 'America/Sao_Paulo'))::date) vd ON true
+    LEFT JOIN LATERAL (
       SELECT count(*) FILTER (WHERE pub.tipo='story')                       AS stories,
              count(*) FILTER (WHERE pub.tipo='reels')                       AS reels,
              count(*) FILTER (WHERE pub.tipo NOT IN ('story','reels'))      AS outros,
@@ -393,8 +400,11 @@ const painel = {
       SELECT n.criado_em, n.autor FROM creator.gestao_nota n
       WHERE n.parceiro_id = p.parceiro_id AND n.tipo = 'cobranca'
       ORDER BY n.criado_em DESC LIMIT 1) gn ON true
-    WHERE p.senha_hash IS NOT NULL AND p.status = 'ativo'
+    -- so APROVADO de verdade: status ativo, fora o admin e fora os cadastros-fantasma
+    -- de seeding antigo (email placeholder compartilhado e sem acesso ao portal)
+    WHERE p.status = 'ativo'
       AND p.email IS DISTINCT FROM 'gabriel@cells.com.br'
+      AND NOT (coalesce(p.email,'') = 'giovanac.sjesus@gmail.com' AND p.senha_hash IS NULL)
     ORDER BY p.nome
   `,
 

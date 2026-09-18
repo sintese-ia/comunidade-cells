@@ -1,0 +1,49 @@
+10:08:18 fila: 12 pessoas
+10:08:25 Karol Noronha [1/3] -> PENDING
+10:08:44 Karol Noronha [2/3] -> PENDING
+10:08:57 Karol Noronha [3/3] -> PENDING
+10:09:02 ... aguardando 115s
+10:11:03 Larissa Grecco [1/3] -> PENDING
+10:11:17 Larissa Grecco [2/3] -> PENDING
+10:11:31 Larissa Grecco [3/3] -> PENDING
+10:11:35 ... aguardando 64s
+10:12:50 Laura Madeira [1/3] -> PENDING
+10:13:00 Laura Madeira [2/3] -> PENDING
+10:13:14 Laura Madeira [3/3] -> PENDING
+10:13:18 ... aguardando 89s
+10:14:58 Laura Vitória [1/3] -> PENDING
+10:15:11 Laura Vitória [2/3] -> PENDING
+10:15:27 Laura Vitória [3/3] -> PENDING
+10:15:34 ... aguardando 118s
+10:17:43 Livia Virginia [1/3] -> PENDING
+10:18:00 Livia Virginia [2/3] -> PENDING
+10:18:18 Livia Virginia [3/3] -> PENDING
+10:18:26 ... aguardando 64s
+10:19:39 Luccas Ramon [1/3] -> PENDING
+10:19:55 Luccas Ramon [2/3] -> PENDING
+10:20:11 Luccas Ramon [3/3] -> PENDING
+10:20:16 ... aguardando 130s
+10:22:34 Marcella Carvalho [1/3] -> PENDING
+10:22:50 Marcella Carvalho [2/3] -> PENDING
+10:23:05 Marcella Carvalho [3/3] -> PENDING
+10:23:10 ... aguardando 106s
+10:25:04 Rachel Carvalho [1/3] -> PENDING
+10:25:18 Rachel Carvalho [2/3] -> PENDING
+10:25:35 Rachel Carvalho [3/3] -> PENDING
+10:25:42 ... aguardando 144s
+10:28:17 Ronaldo Moura [1/3] -> PENDING
+10:28:28 Ronaldo Moura [2/3] -> PENDING
+10:28:42 Ronaldo Moura [3/3] -> PENDING
+10:28:47 ... aguardando 144s
+10:31:18 Thaís Stachewski [1/3] -> PENDING
+10:31:30 Thaís Stachewski [2/3] -> PENDING
+10:31:45 Thaís Stachewski [3/3] -> PENDING
+10:31:50 ... aguardando 116s
+10:33:56 Thiago Braga [1/3] -> PENDING
+10:34:11 Thiago Braga [2/3] -> PENDING
+10:34:23 Thiago Braga [3/3] -> PENDING
+10:34:29 ... aguardando 86s
+10:36:04 Valentina Villela [1/3] -> PENDING
+10:36:17 Valentina Villela [2/3] -> PENDING
+10:36:28 Valentina Villela [3/3] -> PENDING
+10:36:37 === DISPARO CONCLUIDO ===
