@@ -400,11 +400,10 @@ const painel = {
       SELECT n.criado_em, n.autor FROM creator.gestao_nota n
       WHERE n.parceiro_id = p.parceiro_id AND n.tipo = 'cobranca'
       ORDER BY n.criado_em DESC LIMIT 1) gn ON true
-    -- so APROVADO de verdade: status ativo, fora o admin e fora os cadastros-fantasma
-    -- de seeding antigo (email placeholder compartilhado e sem acesso ao portal)
-    WHERE p.status = 'ativo'
-      AND p.email IS DISTINCT FROM 'gabriel@cells.com.br'
-      AND NOT (coalesce(p.email,'') = 'giovanac.sjesus@gmail.com' AND p.senha_hash IS NULL)
+    -- so quem e da COMUNIDADE: cadastrou no formulario e foi aprovado, ou entrou por pedido
+    -- explicito do Gabriel. A marca vive em parceiro.comunidade (18/09) — seeding legado,
+    -- nutris e time Turbo ficam fora desta tela.
+    WHERE p.comunidade AND p.status = 'ativo'
     ORDER BY p.nome
   `,
 
