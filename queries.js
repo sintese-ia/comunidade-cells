@@ -365,7 +365,7 @@ const painel = {
   // ---- GESTÃO: uma linha por membro da Comunidade (tem login no portal) ----
   // (alimenta a aba Gestão do admin: kit + publicações do mês + última cobrança)
   gestao: `
-    SELECT p.parceiro_id::int, p.nome, p.instagram_handle,
+    SELECT p.parceiro_id::int, p.nome, p.instagram_handle, p.telefone_e164,
            e.status       AS envio_status,
            e.enviado_em::date  AS envio_em,
            e.entregue_em::date AS entregue_em,

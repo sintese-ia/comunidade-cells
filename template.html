@@ -1100,6 +1100,21 @@ function ig(f){
     : at;
 }
 
+/* o telefone existe no cadastro desde sempre, mas só vivia no banco: quem cobra a creator
+   cobra pelo WhatsApp e tinha que ir na planilha procurar o número. Guardamos em E.164
+   (+5527999887766); aqui vira "(27) 99988-7766" clicável, que abre a conversa. */
+function fone(e164){
+  if (!e164) return '';
+  const d = String(e164).replace(/\D/g, '');
+  const br = (d.length >= 12 && d.slice(0,2) === '55') ? d.slice(2) : d;
+  const ddd = br.slice(0,2), num = br.slice(2);
+  const bonito = num.length === 9 ? '(' + ddd + ') ' + num.slice(0,5) + '-' + num.slice(5)
+               : num.length === 8 ? '(' + ddd + ') ' + num.slice(0,4) + '-' + num.slice(4)
+               : esc(e164);
+  return '<a class="lnk" href="https://wa.me/' + esc(d) + '" target="_blank" rel="noopener noreferrer" '
+       + 'title="abrir conversa no WhatsApp">' + bonito + '</a>';
+}
+
 /* o que a pessoa declarou, curto, ao lado do @ — é o que decide a curadoria sem
    precisar abrir a ficha de cada uma das 62 pendentes */
 function perfilResumo(f){
@@ -1445,6 +1460,10 @@ function pintaFicha(f){
     ? '<div style="display:flex;gap:8px;font-size:13px;margin-bottom:3px">'
       + '<span class="dim" style="min-width:96px">' + rot + '</span><span>' + esc(val) + '</span></div>'
     : '';
+  const linhaCrua = (rot, html) => html
+    ? '<div style="display:flex;gap:8px;font-size:13px;margin-bottom:3px">'
+      + '<span class="dim" style="min-width:96px">' + rot + '</span><span>' + html + '</span></div>'
+    : '';
   const permuta = f.modelo_trabalho === 'sim'
       ? '<span class="chip ok">faz permuta</span>'
     : f.modelo_trabalho === 'nao'
@@ -1454,6 +1473,8 @@ function pintaFicha(f){
     + '<div style="margin-bottom:9px">' + permuta + '</div>'
     + linha('nome', f.nome)
     + linha('@', f.instagram_handle ? '@' + f.instagram_handle : null)
+    + linhaCrua('telefone', fone(f.telefone_e164))
+    + linha('e-mail', f.email)
     + linha('seguidores', f.seguidores ? n(f.seguidores) : null)
     + linha('engajamento', f.engajamento_pct ? pc(f.engajamento_pct) : null)
     + linha('cidade', f.cidade)
@@ -2618,7 +2639,8 @@ function pintaGestao(){
     if (g.stories_mes) pubs.push(g.stories_mes + ' stor' + (g.stories_mes>1?'ies':'y'));
     const notas = GNOTAS.filter(x => x.parceiro_id === g.parceiro_id).length;
     return '<tr>'
-      + '<td><b>' + esc(g.nome) + '</b><br><span style="color:var(--fnt);font-size:11px">@' + esc(g.instagram_handle||'') + '</span></td>'
+      + '<td><b>' + esc(g.nome) + '</b><br><span style="color:var(--fnt);font-size:11px">@' + esc(g.instagram_handle||'')
+        + (g.telefone_e164 ? ' · ' + fone(g.telefone_e164) : '') + '</span></td>'
       + '<td>' + gesKit(g) + '</td>'
       + '<td>' + (g.vendas_mes ? '<b>' + g.vendas_mes + '</b> · ' + rs(g.receita_mes)
                                : '<span style="color:var(--fnt)">nenhuma</span>') + '</td>'

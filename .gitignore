@@ -10,3 +10,6 @@ package-lock.json
 # uma creator na tela de perfil: nome completo, CPF, celular, endereço, nascimento.
 # Servem de referência de tela para a gente, não vão para o GitHub.
 ref-visao-influenciador/
+
+# Estado operacional (telefones, hashes, disparos). NUNCA no GitHub - este repo e publico.
+ops/
