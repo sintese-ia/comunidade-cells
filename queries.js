@@ -110,6 +110,22 @@ const painel = {
            ld.nichos, ld.idade, ld.sexo, ld.cidade, ld.cor_etnia,
            ld.seguidores_instagram AS seg_declarado, ld.modelo_trabalho, ld.vendas_mes,
            left(coalesce(ld.motivacao,''), 400) AS motivacao,
+           ld.estado, ld.nicho_outro, ld.modelo_trabalho_outro, ld.bio AS bio_declarada,
+           ld.tiktok_handle, ld.tiktok_url, ld.tiktok_nao_tem,
+           ld.preenchido_em::date AS form_em, ld.formulario, ld.origem AS form_origem,
+           -- entrega e pagamento: o parceiro manda (foi conferido na aprovacao); o lead
+           -- cobre quem ainda nao foi aprovado e so existe no formulario.
+           coalesce(p.cpf, ld.cpf)                         AS cpf,
+           coalesce(p.pix_tipo, ld.pix_tipo)               AS pix_tipo,
+           coalesce(p.pix_chave, ld.pix_chave)             AS pix_chave,
+           coalesce(p.end_cep, ld.end_cep)                 AS end_cep,
+           coalesce(p.end_logradouro, ld.end_logradouro)   AS end_logradouro,
+           coalesce(p.end_numero, ld.end_numero)           AS end_numero,
+           coalesce(p.end_complemento, ld.end_complemento) AS end_complemento,
+           coalesce(p.end_bairro, ld.end_bairro)           AS end_bairro,
+           coalesce(p.end_cidade, ld.end_cidade)           AS end_cidade,
+           coalesce(p.end_uf, ld.end_uf)                   AS end_uf,
+           coalesce(p.end_aos_cuidados, ld.end_aos_cuidados) AS end_aos_cuidados,
            -- item 3: o @ vira link. A URL vem do formulário; quando não veio (cupom legado),
            -- monta a partir do handle — que é o mesmo caminho que o Instagram usa.
            coalesce(ld.instagram_url,
@@ -365,7 +381,7 @@ const painel = {
   // ---- GESTÃO: uma linha por membro da Comunidade (tem login no portal) ----
   // (alimenta a aba Gestão do admin: kit + publicações do mês + última cobrança)
   gestao: `
-    SELECT p.parceiro_id::int, p.nome, p.instagram_handle, p.telefone_e164,
+    SELECT p.parceiro_id::int, p.nome, p.instagram_handle, p.telefone_e164, p.email,
            e.status       AS envio_status,
            e.enviado_em::date  AS envio_em,
            e.entregue_em::date AS entregue_em,

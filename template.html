@@ -1485,7 +1485,63 @@ function pintaFicha(f){
         ? '<div class="empty" style="margin-top:10px;border-top:0;padding:12px 13px">'
           + '<span class="tg">por que ela quer fazer Cells</span>'
           + '<p style="white-space:pre-wrap">' + esc(f.motivacao) + '</p></div>'
-        : '<p class="obs" style="margin-top:9px">Não escreveu por que quer fazer Cells.</p>');
+        : '<p class="obs" style="margin-top:9px">Não escreveu por que quer fazer Cells.</p>')
+    + formResto(f);
+}
+
+/* Tudo que a pessoa respondeu no formulário e que antes só existia no banco. O admin precisa
+   ver o cadastro inteiro sem abrir psql — endereço para despachar kit, PIX para pagar
+   comissão. Cada bloco some inteiro quando não há nada dentro, para a ficha de quem
+   respondeu pouco não virar uma lista de traços. */
+function formResto(f){
+  const bloco = (titulo, itens) => {
+    const vivos = itens.filter(([, v]) => v !== null && v !== undefined && v !== '');
+    if (!vivos.length) return '';
+    return '<div style="margin-top:12px;border-top:1px solid var(--bd);padding-top:10px">'
+      + '<span class="tg">' + titulo + '</span>'
+      + vivos.map(([rot, v, cru]) => '<div style="display:flex;gap:8px;font-size:13px;margin:3px 0">'
+          + '<span class="dim" style="min-width:96px">' + rot + '</span>'
+          + '<span>' + (cru ? v : esc(v)) + '</span></div>').join('')
+      + '</div>';
+  };
+  const endereco = [f.end_logradouro, f.end_numero].filter(Boolean).join(', ');
+  const bairroCidade = [f.end_bairro, [f.end_cidade, f.end_uf].filter(Boolean).join('/')]
+      .filter(Boolean).join(' — ');
+  const tt = f.tiktok_nao_tem ? 'não tem'
+           : f.tiktok_handle ? (f.tiktok_url
+               ? '<a class="lnk" href="' + esc(f.tiktok_url) + '" target="_blank" rel="noopener noreferrer">@'
+                 + esc(f.tiktok_handle) + ' ↗</a>' : '@' + esc(f.tiktok_handle))
+           : null;
+
+  return bloco('contato', [
+      ['e-mail', f.email ? '<a class="lnk" href="mailto:' + esc(f.email) + '">' + esc(f.email) + '</a>' : null, true],
+      ['whatsapp', fone(f.telefone_e164) || null, true],
+      ['tiktok', tt, true],
+    ])
+   + bloco('quem é', [
+      ['gênero', f.sexo],
+      ['cor/etnia', f.cor_etnia],
+      ['estado', f.estado],
+      ['nicho (outro)', f.nicho_outro],
+      ['como trabalha', f.modelo_trabalho_outro],
+      ['bio do formulário', f.bio_declarada],
+    ])
+   + bloco('para onde vai o kit', [
+      ['endereço', endereco],
+      ['complemento', f.end_complemento],
+      ['bairro/cidade', bairroCidade],
+      ['CEP', f.end_cep],
+      ['aos cuidados de', f.end_aos_cuidados],
+    ])
+   + bloco('para pagar a comissão', [
+      ['CPF', f.cpf],
+      ['PIX', [f.pix_tipo, f.pix_chave].filter(Boolean).join(': ')],
+    ])
+   + bloco('o cadastro', [
+      ['preencheu em', f.form_em ? dt(f.form_em) : null],
+      ['formulário', f.formulario],
+      ['veio de', f.form_origem],
+    ]);
 }
 
 function pintaRegras(){
@@ -2640,7 +2696,9 @@ function pintaGestao(){
     const notas = GNOTAS.filter(x => x.parceiro_id === g.parceiro_id).length;
     return '<tr>'
       + '<td><b>' + esc(g.nome) + '</b><br><span style="color:var(--fnt);font-size:11px">@' + esc(g.instagram_handle||'')
-        + (g.telefone_e164 ? ' · ' + fone(g.telefone_e164) : '') + '</span></td>'
+        + (g.telefone_e164 ? ' · ' + fone(g.telefone_e164) : '') + '</span>'
+        + (g.email ? '<br><a class="lnk" style="font-size:11px" href="mailto:' + esc(g.email) + '">' + esc(g.email) + '</a>'
+                   : '<br><span class="chip cr" style="font-size:10px">sem e-mail</span>') + '</td>'
       + '<td>' + gesKit(g) + '</td>'
       + '<td>' + (g.vendas_mes ? '<b>' + g.vendas_mes + '</b> · ' + rs(g.receita_mes)
                                : '<span style="color:var(--fnt)">nenhuma</span>') + '</td>'
