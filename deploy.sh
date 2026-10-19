@@ -60,7 +60,14 @@ for i in $(seq 1 40); do
   rodando=$(curl -s -m 15 "$BASE/services.app.inspectService?input=$INPUT" \
               -H "Authorization: Bearer $EASYPANEL_API_TOKEN" 2>/dev/null \
             | python3 -c 'import sys,json
-try: print(json.load(sys.stdin)["result"]["data"]["json"]["commit"]["hash"])
+# A resposta do Easypanel ja veio nos dois formatos: antes {"result":{"data":{"json":...}}},
+# hoje {"json":...} direto. Lendo so o caminho antigo, o commit voltava vazio, nunca batia
+# com o HEAD e o script terminava com "nao subiu" mesmo depois de um deploy que funcionou
+# (19/10). Tenta os dois e so desiste se nenhum existir.
+try:
+    d = json.load(sys.stdin)
+    o = d.get("result", {}).get("data", {}).get("json") or d.get("json") or {}
+    print((o.get("commit") or {}).get("hash", ""))
 except Exception: print("")' 2>/dev/null)
 
   if [ "$rodando" = "$ESPERADO" ] && [ "$vivo" = "401" ]; then
