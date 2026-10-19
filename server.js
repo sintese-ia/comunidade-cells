@@ -97,6 +97,12 @@ async function carregar() {
   const out = {};
   const cli = await pool.connect();
   try {
+    // ⚠️ TETO DE TEMPO POR QUERY. O Postgres daqui vem com statement_timeout = 0, ou seja,
+    // sem limite: uma query lenta nao da erro, ela so NUNCA volta. Em 19/10 a view das
+    // campanhas passou de 60s, a promessa de recarga ficou pendurada e o painel serviu o
+    // mundo de 18/10 por um dia inteiro, sem avisar ninguem. Com teto, o bloco lento falha,
+    // cai no catch de baixo e some sozinho — as outras telas continuam atualizando.
+    await cli.query("SET statement_timeout = '25s'");
     // ⚠️ UMA QUERY QUEBRADA NAO PODE DERRUBAR AS CINCO TELAS. Foi o que aconteceu em 24/08:
     // adicionei a query das regras de cupom, esqueci o GRANT USAGE no schema core, e o painel
     // inteiro passou a responder "permission denied for schema core" — cadastros, campanhas,
@@ -111,14 +117,22 @@ async function carregar() {
       } catch (e) {
         // conexao morta ou banco fora derruba TODAS: nesse caso a falha e real e tem que subir,
         // senao o painel mostra cinco telas vazias fingindo que esta tudo bem
-        if (/terminat|ECONNREFUSED|timeout|too many clients/i.test(e.message)) throw e;
+        // "canceling statement due to statement timeout" e UMA query lenta, nao o banco fora:
+        // tem que degradar como qualquer outra falha. Antes casava com /timeout/ aqui e
+        // derrubava a recarga inteira — era o segundo motivo do painel congelar em 19/10.
+        const lenta = /statement timeout/i.test(e.message);
+        if (!lenta && /terminat|ECONNREFUSED|timeout|too many clients/i.test(e.message)) throw e;
         console.error('[carga:' + k + ']', e.message);
         out[k] = [];
         falhas.push({ bloco: k, erro: e.message });
       }
     }
     if (falhas.length) out.falhas = falhas;
-  } finally { cli.release(); }
+  } finally {
+    // o cliente volta pro pool com o SET ainda valendo; desfazer antes de soltar
+    try { await cli.query('SET statement_timeout = DEFAULT'); } catch (e) {}
+    cli.release();
+  }
   out.ger = new Date().toISOString().slice(0, 16).replace('T', ' ');
   return out;
 }
