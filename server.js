@@ -64,6 +64,13 @@ const pool = new Pool({
 // o que faltava era só alguém escutar.
 pool.on('error', e => console.error('[pg] conexão ociosa caiu (o pool se recupera):', e.message));
 
+// ⚠️ O banco vem com `jit = on` e isso NAO e detalhe de tuning: medido em 19/10, a query de
+// cadastros leva 46s com JIT e 4,8s sem — o planejador gasta compilando muito mais do que a
+// query custa. Era isso que fazia a tela de Criadores estourar o teto de tempo em producao
+// enquanto rodava em 4s daqui. Todo cliente novo do pool nasce com JIT desligado: vale para
+// o painel, para o portal da creator e para os jobs, que compartilham este pool.
+pool.on('connect', cli => { cli.query('SET jit = off').catch(() => {}); });
+
 const TPL = fs.readFileSync(path.join(__dirname, 'template.html'), 'utf8');
 const TPL_CREATOR = fs.readFileSync(path.join(__dirname, 'portal.html'), 'utf8');
 const TPL_ENTRAR  = fs.readFileSync(path.join(__dirname, 'entrar.html'), 'utf8');
