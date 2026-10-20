@@ -1172,6 +1172,11 @@ function pintaCad(){
         // perceber que metade e historico do cupom legado e nao gente do programa de hoje.
         + (f.pastas || []).map(pa => '<span class="chip" style="margin-left:6px;opacity:.75">'
             + esc(pa.nome) + '</span>').join('')
+        // A tag ja filtrava na busca, mas nao aparecia em lugar nenhum: so achava quem ja
+        // sabia que ela existia. Agora ela e visivel na linha — e clicar joga a tag na busca,
+        // que e como alguem descobre "quem mais tem isso?" sem precisar perguntar.
+        + (f.tags || []).map(tg => '<span class="chip" data-tag="' + esc(tg) + '" title="ver todos com esta tag"'
+            + ' style="margin-left:6px;opacity:.9;cursor:pointer">' + esc(tg) + '</span>').join('')
         + ''
         + (f.instagram_handle
              // item 3: o @ abre o perfil. target=_blank porque o painel não pode perder o
@@ -2719,6 +2724,12 @@ function pintaGestao(){
   document.getElementById('g-kit').textContent = GES.filter(g => g.envio_status !== 'entregue').length;
   document.getElementById('stampGes').textContent = publicaram + '/' + GES.length + ' publicaram no mês';
 }
+document.getElementById('tbCad').addEventListener('click', e => {
+  const t = e.target.closest('[data-tag]'); if (!t) return;
+  const cx = document.getElementById('cq');   // a busca DESTA tela e o #cq, nao o #crBusca
+  cx.value = t.dataset.tag; cx.dispatchEvent(new Event('input', {bubbles:true})); cx.focus();
+});
+
 document.querySelectorAll('[data-gf]').forEach(b => b.addEventListener('click', () => {
   gesFiltro = b.dataset.gf;
   document.querySelectorAll('[data-gf]').forEach(x => x.setAttribute('aria-pressed', String(x===b)));
