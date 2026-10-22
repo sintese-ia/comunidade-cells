@@ -393,7 +393,14 @@ const painel = {
            coalesce(pb.outros,0)::int  AS outros_mes,
            pb.ultima::date          AS ultima_pub,
            gn.criado_em             AS cobrado_em,
-           gn.autor                 AS cobrado_por
+           gn.autor                 AS cobrado_por,
+           -- ATIVO x INATIVO do ciclo (20/10): ativo e quem recebeu produto no ultimo mes.
+           -- Sai do registro de envio, nao de tag escrita na mao — tag vira mentira no mes
+           -- seguinte se alguem esquecer de atualizar; isto se corrige sozinho quando o
+           -- despacho do mes entra. Inativo = nao recebeu e ainda nao saiu da plataforma.
+           EXISTS (SELECT 1 FROM creator.envio e3
+                    WHERE e3.parceiro_id = p.parceiro_id
+                      AND e3.solicitado_em >= now() - interval '30 days') AS ativo_ciclo
     FROM creator.parceiro p
     LEFT JOIN LATERAL (
       SELECT e2.status, e2.enviado_em, e2.entregue_em, e2.rastreio

@@ -513,18 +513,20 @@
     <div class="panel">
       <div class="barra">
         <button class="aba" data-gf="todos" aria-pressed="true">todos <b id="g-todos">0</b></button>
+        <button class="aba" data-gf="ativos" aria-pressed="false">ativos <b id="g-ativos">0</b></button>
+        <button class="aba" data-gf="inativos" aria-pressed="false">inativos <b id="g-inativos">0</b></button>
         <button class="aba" data-gf="zerados" aria-pressed="false">sem publicação <b id="g-zerados">0</b></button>
         <button class="aba" data-gf="semcobranca" aria-pressed="false">nunca cobrados <b id="g-semcobranca">0</b></button>
         <button class="aba" data-gf="kit" aria-pressed="false">kit com problema <b id="g-kit">0</b></button>
       </div>
       <div class="scroll"><table>
-        <thead><tr><th>membro</th><th>envio</th><th>vendas no cupom</th><th>publicações</th>
+        <thead><tr><th>membro</th><th>ciclo</th><th>envio</th><th>vendas no cupom</th><th>publicações</th>
           <th>última publi</th><th>último contato</th><th></th></tr></thead>
         <tbody id="gesCorpo"></tbody>
       </table></div>
       <div class="empty">
         <span class="tg">de onde vêm os números</span>
-        <p>Kit é o rastreio do Bling. Reels/post entram sozinhos pela coleta de marcações; <b>story é lançado manualmente</b> (conferência nas DMs da @cellsoficial) enquanto a Meta não aprova a coleta automática — ou seja, story recém-postado pode demorar até a próxima conferência pra aparecer.</p>
+        <p><b>Ativo</b> é quem recebeu produto nos últimos 30 dias; <b>inativo</b> é quem não recebeu neste ciclo mas continua na plataforma. Sai do registro de envio, então se corrige sozinho quando o despacho do mês entra. Kit é o rastreio do Bling. Story, reels e post entram sozinhos pela coleta de marcações da @cellsoficial, aprovada pela Meta em outubro — o que a pessoa postar aparece aqui em minutos.</p>
       </div>
     </div>
   </section>
@@ -2690,6 +2692,8 @@ function gesPassa(g){
   if (gesFiltro === 'zerados')     return !publicou;
   if (gesFiltro === 'semcobranca') return !g.cobrado_em;
   if (gesFiltro === 'kit')         return g.envio_status !== 'entregue';
+  if (gesFiltro === 'ativos')      return !!g.ativo_ciclo;
+  if (gesFiltro === 'inativos')    return !g.ativo_ciclo;
   return true;
 }
 function pintaGestao(){
@@ -2704,6 +2708,9 @@ function pintaGestao(){
         + (g.telefone_e164 ? ' · ' + fone(g.telefone_e164) : '') + '</span>'
         + (g.email ? '<br><a class="lnk" style="font-size:11px" href="mailto:' + esc(g.email) + '">' + esc(g.email) + '</a>'
                    : '<br><span class="chip cr" style="font-size:10px">sem e-mail</span>') + '</td>'
+      + '<td>' + (g.ativo_ciclo
+            ? '<span class="chip ok" title="recebeu produto nos ultimos 30 dias">ativo</span>'
+            : '<span class="chip wa" title="nao recebeu no ultimo ciclo, mas continua na plataforma">inativo</span>') + '</td>'
       + '<td>' + gesKit(g) + '</td>'
       + '<td>' + (g.vendas_mes ? '<b>' + g.vendas_mes + '</b> · ' + rs(g.receita_mes)
                                : '<span style="color:var(--fnt)">nenhuma</span>') + '</td>'
@@ -2716,9 +2723,11 @@ function pintaGestao(){
       + '</tr>';
   }).join('');
   document.getElementById('gesCorpo').innerHTML =
-    linhas || '<tr><td colspan="7" style="color:var(--fnt);padding:18px">ninguém neste filtro</td></tr>';
+    linhas || '<tr><td colspan="8" style="color:var(--fnt);padding:18px">ninguém neste filtro</td></tr>';
   const publicaram = GES.filter(g => (g.stories_mes + g.reels_mes + g.outros_mes) > 0).length;
   document.getElementById('g-todos').textContent = GES.length;
+  document.getElementById('g-ativos').textContent = GES.filter(g => g.ativo_ciclo).length;
+  document.getElementById('g-inativos').textContent = GES.filter(g => !g.ativo_ciclo).length;
   document.getElementById('g-zerados').textContent = GES.length - publicaram;
   document.getElementById('g-semcobranca').textContent = GES.filter(g => !g.cobrado_em).length;
   document.getElementById('g-kit').textContent = GES.filter(g => g.envio_status !== 'entregue').length;
