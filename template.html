@@ -1125,11 +1125,15 @@ function perfilResumo(f){
   if (f.cidade) p.push(f.cidade);
   if (f.nichos && f.nichos.length) p.push(f.nichos.slice(0,2).join(', '));
   const txt = p.length ? ' <span class="dim">· '+esc(p.join(' · '))+'</span>' : '';
+  // telefone na LINHA (pedido do Gabriel, 30/10): quem cobra cobra pelo WhatsApp, e o número
+  // só aparecia abrindo a ficha. fone() já devolve clicável (wa.me) e escapado — fica fora
+  // do p.join porque o join passa por esc() e mataria o <a>.
+  const tel = f.telefone_e164 ? ' <span class="dim">·</span> ' + fone(f.telefone_e164) : '';
   // pasta aparece na linha porque é o que a curadoria acabou de decidir — ter que abrir a
   // ficha para lembrar em que pasta a pessoa está anula o motivo de existir a pasta
   const pastas = (f.pastas || []).map(x =>
     ' <span class="chip vo" style="font-size:10px">'+esc(x.nome)+'</span>').join('');
-  return txt + pastas;
+  return txt + tel + pastas;
 }
 
 const MEDALHA = {ouro:'🥇', prata:'🥈', bronze:'🥉'};
