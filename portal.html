@@ -159,6 +159,19 @@
   .msg{font-size:13px;font-weight:600}
   .msg.ok{color:var(--ok)} .msg.er{color:var(--ng)}
 
+  .aceite{background:var(--bg);border:1px solid var(--line);border-left:3px solid var(--ok);
+    border-radius:4px;margin-top:14px;padding:20px 18px}
+  .aceite h2{margin:0 0 6px;font-size:17px;letter-spacing:-.01em}
+  .aceite p{margin:0 0 14px;font-size:13.5px;color:var(--ink2);line-height:1.55;max-width:56ch}
+  .aceite button{appearance:none;border:0;background:var(--ok);color:#fff;border-radius:4px;
+    padding:12px 22px;font-size:14.5px;font-weight:640;cursor:pointer;font-family:var(--sans)}
+  .aceite button:disabled{opacity:.6;cursor:default}
+  .aceite .err{margin-top:10px;font-size:12.5px;color:var(--ng)}
+  .passo{display:grid;grid-template-columns:26px 1fr;gap:10px;padding:10px 0;
+    border-bottom:1px solid var(--line2);font-size:13.5px;line-height:1.5;align-items:start}
+  .passo:last-child{border-bottom:none}
+  .passo .pn{font-family:var(--mono);font-size:11px;color:var(--fnt);padding-top:2px}
+  .passo a{color:var(--ac)}
   .aviso{background:var(--wa-s);border-left:3px solid var(--wa);border-radius:3px;
          padding:11px 13px;font-size:12.5px;color:#5B3B00;line-height:1.55;margin-bottom:14px}
   .aviso.info{background:var(--ac-s);border-left-color:var(--ac);color:#0A3D9E}
@@ -182,6 +195,7 @@ const esc = s => String(s==null?'':s).replace(/[<>&"']/g,
   m=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[m]));
 const pc = x => Number(x||0).toLocaleString('pt-BR',{maximumFractionDigits:1}) + '%';
 
+let aceiteEm = (P.parceiro||{}).aceite_em || null, grupoLink = P.grupo || null;
 const p = P.parceiro, vida = P.vendas||{}, ex = P.extrato||[], pubs = P.publicacoes||[],
       env = P.envios||[], jg = P.jogos||[],
       cl = P.cliques||{}, nv = P.nivel||null, faixas = P.faixas||[], camps = P.campanhas||[],
@@ -307,9 +321,50 @@ function menu(){
 }
 
 // ---------------------------------------------------------------- Resultados
+// O OK do creator (fluxo B passo 5): só aparece pra quem está na comunidade e ainda não
+// confirmou. Depois do OK vira o "Comece aqui" do onboarding — a visão simples do programa.
+function cardAceite(){
+  if (!p.comunidade || aceiteEm) return '';
+  return `<div class="aceite">
+    <h2>Você foi aprovado na Comunidade Cells 🎉</h2>
+    <p>Falta um passo: confirma que você topa participar. Com o seu OK, a sua amostra entra
+       na fila de envio e o link da comunidade do WhatsApp aparece aqui.</p>
+    <button id="btnAceite">OK, quero participar</button>
+    <div class="err" id="aceiteErr"></div>
+  </div>`;
+}
+function cardComece(){
+  if (!p.comunidade || !aceiteEm) return '';
+  const amostra = env.find(e => e.tipo === 'amostra');
+  const jaPostou = pubs.length > 0;
+  if (jaPostou && p.estagio !== 'onboarding') return '';
+  return `<section>
+  <div class="sh"><h2>Comece aqui</h2><p>A Comunidade Cells em 1 minuto.</p></div>
+  <div class="sb">
+    <div class="passo"><span class="pn">01</span><span><b>O produto.</b> Cells é um suco
+      energético com liberação gradual da cafeína, 15 bioativos, zero açúcar e sem corantes
+      artificiais ou conservantes.</span></div>
+    <div class="passo"><span class="pn">02</span><span><b>Seu cupom é ${p.cupom
+      ? '<b style="font-family:var(--mono)">'+esc(p.cupom)+'</b>' : 'o seu nome'} .</b>
+      Cada venda com ele rende comissão de 15%, que sobe conforme a sua performance —
+      o extrato fica na aba Resultados.</span></div>
+    <div class="passo"><span class="pn">03</span><span><b>A comunidade no WhatsApp.</b> ${grupoLink
+      ? '<a href="'+esc(grupoLink)+'" target="_blank" rel="noopener">Entra por este link</a> — a gente te espera lá.'
+      : 'O link do grupo chega aqui em instantes.'}</span></div>
+    <div class="passo"><span class="pn">04</span><span><b>A meta do mês: 1 Reels + 4 Stories</b>
+      marcando a @cellsoficial. Story marcado conta sozinho, em segundos; reels conta no dia
+      seguinte. A barra fica em Nível e metas.</span></div>
+    <div class="passo"><span class="pn">05</span><span><b>Sua amostra.</b> ${amostra
+      ? (amostra.rastreio ? 'Despachada — rastreio na aba Envios.' : 'Está na fila de envio; o rastreio aparece na aba Envios.')
+      : 'Entra na fila de envio com o seu OK.'} Chegou? Prova, conta pra gente e marca a @cellsoficial.</span></div>
+  </div>
+</section>`;
+}
+
 function telaInicio(){
   const m = doMes(sel), ant = doMes(ymAntes(sel)), i = meses.indexOf(sel);
   return `
+${cardAceite()}${cardComece()}
 <div class="per">
   <span class="k">Mês</span>
   <button id="ant" ${i >= meses.length-1 ? 'disabled' : ''} aria-label="mês anterior">‹</button>
@@ -666,6 +721,19 @@ document.addEventListener('click', async ev => {
   const a = ev.target.closest('[data-aba]');
   if (a){ ev.preventDefault(); aba = a.dataset.aba; location.hash = aba;
           window.scrollTo(0,0); return desenhar(); }
+  const ok = ev.target.closest('#btnAceite');
+  if (ok){
+    ok.disabled = true; ok.textContent = 'registrando…';
+    try {
+      const r = await fetch('/creator/aceite', {method:'POST',
+        headers:{'content-type':'application/json'}, body:'{}'});
+      const j = await r.json().catch(() => ({}));
+      if (r.ok && j.ok){ aceiteEm = P.hoje; grupoLink = j.grupo || grupoLink; return desenhar(); }
+      document.getElementById('aceiteErr').textContent = j.erro || 'não deu certo — tenta de novo';
+    } catch(e){ document.getElementById('aceiteErr').textContent = 'sem conexão — tenta de novo'; }
+    ok.disabled = false; ok.textContent = 'OK, quero participar';
+    return;
+  }
   const b = ev.target.closest('.cp'); if (!b) return;
   const el = document.getElementById(b.dataset.c);
   try { await navigator.clipboard.writeText(el.value); }

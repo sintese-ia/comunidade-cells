@@ -510,6 +510,23 @@
         <p class="lede">Um membro por linha: kit, produção do mês e o histórico de contato. <b>Anote cada cobrança aqui</b> — quem falou, quando e o que foi combinado fica registrado pra equipe toda.</p></div>
       <div class="stamp" id="stampGes"></div>
     </div>
+
+    <!-- régua do kit (Gabriel, 07/11): a fila do dia, com o texto pronto pro WhatsApp.
+         Ninguém manda nada sozinho — o botão abre o wa.me com a mensagem, e quem envia é gente. -->
+    <div class="panel" id="reguaPanel" style="margin-bottom:14px">
+      <div class="barra" style="justify-content:space-between">
+        <b style="font-size:13px">Régua do kit — mensagens de hoje <span class="chip ac" id="reguaHoje">0</span></b>
+        <button class="lnk" id="reguaVerTodos" style="border:0;background:none;cursor:pointer">ver todos os envios recentes</button>
+      </div>
+      <div style="padding:7px 14px;font-size:11.5px;color:var(--fnt);border-bottom:1px solid var(--line2)">
+        trava de segurança: <b>nada é enviado automaticamente</b> — o botão só abre o SEU WhatsApp
+        com o texto pronto; você confere o nome e o número antes de mandar. Quem postou sai da fila sozinho.</div>
+      <div class="scroll"><table>
+        <thead><tr><th>membro</th><th>envio</th><th>degrau</th><th>mensagem</th><th></th></tr></thead>
+        <tbody id="reguaCorpo"></tbody>
+      </table></div>
+    </div>
+
     <div class="panel">
       <div class="barra">
         <button class="aba" data-gf="todos" aria-pressed="true">todos <b id="g-todos">0</b></button>
@@ -2673,6 +2690,7 @@ document.querySelectorAll('[data-cw]').forEach(b => b.addEventListener('click', 
 
 /* ============ GESTÃO: acompanhamento da Comunidade ============ */
 const GES = D.gestao || [];
+const REGUA = D.regua || [];
 let GNOTAS = D.gestao_notas || [];
 const dth = s => s ? dt(String(s)) + ' ' + String(s).slice(11,16) : '—';
 
@@ -2737,6 +2755,64 @@ function pintaGestao(){
   document.getElementById('g-kit').textContent = GES.filter(g => g.envio_status !== 'entregue').length;
   document.getElementById('stampGes').textContent = publicaram + '/' + GES.length + ' publicaram no mês';
 }
+// ---- régua do kit: degrau + texto pronto (regras duras: sem travessão, frases curtas) ----
+function reguaDegrau(r){
+  const nome = (r.nome||'').split(' ')[0];
+  const coisa = r.tipo === 'amostra' ? 'sua amostra' : 'seu kit';
+  const Coisa = r.tipo === 'amostra' ? 'Sua amostra' : 'Seu kit';
+  if (r.status === 'solicitado')
+    return { chip:'<span class="chip wa">aguardando despacho</span>', hoje:false, msg:null };
+  if (r.postou)
+    return { chip:'<span class="chip ok">postou ✓ régua parada</span>', hoje:false, msg:null };
+  if (r.enviado && !r.entregue)
+    return { chip:'<span class="chip ac">despachou</span>', hoje: !!r.enviado_hoje,
+      msg:'Oi ' + nome + '! ' + Coisa + ' da Cells foi despachado 🚀' + (r.rastreio ? ' Rastreio: ' + r.rastreio : '') };
+  if (r.entregue == null)
+    return { chip:'<span class="chip vo">sem data</span>', hoje:false, msg:null };
+  const d = r.dias;
+  if (d >= 16) return { chip:'<span class="chip cr">fim da régua · candidato a sair</span>', hoje:false, msg:null };
+  if (d >= 15) return { chip:'<span class="chip cr">D+15 · última</span>', hoje:true,
+    msg:'Oi ' + nome + '! Passando pra saber se deu tudo certo com o Cells. A gente adoraria te ver postando. Qualquer coisa que precisar, chama!' };
+  if (d >= 7)  return { chip:'<span class="chip wa">D+7</span>', hoje: d === 7,
+    msg:'Oi ' + nome + '! Como está sendo com o Cells? Se quiser ideias de conteúdo, a gente tem referências ótimas pra te mandar!' };
+  if (d >= 3)  return { chip:'<span class="chip wa">D+3</span>', hoje: d === 3,
+    msg:'Oi ' + nome + '! Já provou o Cells? Conta pra gente o que achou. Estamos ansiosos pelo seu feedback :)' };
+  if (d >= 0)  return { chip:'<span class="chip ok">chegou</span>', hoje: d === 0,
+    msg:'Oi ' + nome + '! Vimos que ' + coisa + ' chegou! Estamos ansiosos para saber o que você achou. Marca a gente quando provar 💛' };
+  return { chip:'<span class="chip vo">?</span>', hoje:false, msg:null };
+}
+let reguaTodos = false;
+function pintaRegua(){
+  const linhas = REGUA.map(r => ({ r, d: reguaDegrau(r) }));
+  const doDia = linhas.filter(x => x.d.hoje || x.r.status === 'solicitado');
+  const mostra = reguaTodos ? linhas : doDia;
+  document.getElementById('reguaHoje').textContent = doDia.length;
+  document.getElementById('reguaVerTodos').textContent =
+    reguaTodos ? 'ver só as de hoje' : 'ver todos os envios recentes (' + linhas.length + ')';
+  document.getElementById('reguaCorpo').innerHTML = mostra.map(({r, d}) =>
+    '<tr' + (d.hoje ? ' style="background:var(--ac-s,#f6f2ec)"' : '') + '>'
+    + '<td><b>' + esc(r.nome) + '</b><br><span style="color:var(--fnt);font-size:11px">@'
+      + esc(r.instagram_handle||'') + (r.telefone_e164 ? ' · ' + fone(r.telefone_e164) : '') + '</span></td>'
+    + '<td style="font-size:12px">' + esc(r.tipo||'') + (r.itens ? ' · ' + esc(r.itens) : '')
+      + '<br><span style="color:var(--fnt);font-size:11px">'
+      + (r.entregue ? 'entregue ' + dt(r.entregue) : r.enviado ? 'despachado ' + dt(r.enviado)
+                    : 'solicitado ' + dt(r.solicitado)) + '</span></td>'
+    + '<td>' + d.chip + '</td>'
+    + '<td style="font-size:12px;max-width:380px">' + (d.msg ? esc(d.msg)
+        : '<span style="color:var(--fnt)">' + (r.status === 'solicitado' ? 'entra na régua no despacho' : 'sem mensagem hoje') + '</span>') + '</td>'
+    + '<td style="white-space:nowrap">' + (function(){
+        if (!d.msg) return '';
+        const tel = String(r.telefone_e164||'').replace(/\D/g,'');
+        if (!/^55\d{10,11}$/.test(tel)) return '<span class="chip cr" style="font-size:10px">sem telefone válido</span>';
+        return '<a class="acbt" target="_blank" rel="noopener" href="https://wa.me/' + tel
+          + '?text=' + encodeURIComponent(d.msg) + '">abrir no WhatsApp</a>';
+      })() + '</td>'
+    + '</tr>').join('')
+    || '<tr><td colspan="5" style="color:var(--fnt);padding:14px">ninguém pra hoje — a régua está em dia</td></tr>';
+}
+document.getElementById('reguaVerTodos').addEventListener('click', () => { reguaTodos = !reguaTodos; pintaRegua(); });
+pintaRegua();
+
 document.getElementById('tbCad').addEventListener('click', e => {
   const t = e.target.closest('[data-tag]'); if (!t) return;
   const cx = document.getElementById('cq');   // a busca DESTA tela e o #cq, nao o #crBusca

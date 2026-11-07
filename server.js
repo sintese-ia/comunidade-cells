@@ -814,6 +814,8 @@ async function dadosDoCreator(parceiroId) {
            p.end_bairro, p.end_cidade, p.end_uf, p.end_aos_cuidados,
            (p.senha_hash IS NOT NULL) AS tem_senha,
            coalesce(p.senha_provisoria, false) AS senha_provisoria,
+           coalesce(p.comunidade, false) AS comunidade, p.estagio,
+           to_char(p.aceite_em AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD') AS aceite_em,
            to_char(p.criado_em AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD') AS desde,
            c.codigo AS cupom, c.link_redirect_id, c.link_path,
            l.idade AS idade_declarada
@@ -1002,9 +1004,18 @@ async function dadosDoCreator(parceiroId) {
   }
   meses.reverse();
 
+  // Link do grupo de WhatsApp: mora em creator.config (chave grupo_whatsapp) e SÓ vai pro
+  // navegador de quem já deu o aceite — antes do OK o link não existe pra pessoa (fluxo B
+  // passo 6, 04/11). Config ausente = portal mostra "link chega em instantes", sem quebrar.
+  let grupo = null;
+  if (pa.aceite_em) {
+    const [g] = await q(`SELECT valor FROM creator.config WHERE chave='grupo_whatsapp'`);
+    grupo = g?.valor || null;
+  }
+
   return { parceiro: pa, cupons, vendas: v, extrato: extratoCom, publicacoes, envios, jogos, campanhas,
            cliques: { ...cl, serie }, nivel: nv || null, faixas, comissao_mes: comissao3m,
-           taxas: { unica: pctU, assinatura: pctA }, hoje, meses };
+           taxas: { unica: pctU, assinatura: pctA }, hoje, meses, grupo };
 }
 
 const portalErro = (titulo, msg) => `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
@@ -1442,6 +1453,38 @@ http.createServer(async (req, res) => {
       // a tela precisa saber se a porta do codigo esta ligada — se nao estiver, ela nem
       // oferece, para nao prometer um e-mail que o servidor vai recusar a mandar
       return res.end(TPL_ENTRAR.replace('__CODIGO__', LOGIN_CODIGO ? 'true' : 'false'));
+    }
+
+    // ---- o OK do creator: "quero participar" (fluxo B passo 5, Gabriel 07/11) ----
+    // O OK grava o aceite e ENFILEIRA a amostra — não emite pedido nem NF: emissão fiscal
+    // continua no despacho humano (limite do F3, decisão do Gabriel 02/11). Idempotente nas
+    // duas pontas: o UPDATE só pega aceite_em NULL, e a amostra só nasce se não existir
+    // envio tipo 'amostra' pra pessoa. Clicar duas vezes não cria dois envios.
+    if (u.pathname === '/creator/aceite' && req.method === 'POST') {
+      try {
+        const { rowCount } = await pool.query(`
+          UPDATE creator.parceiro
+             SET aceite_em = now(),
+                 estagio = coalesce(estagio, 'onboarding'),
+                 estagio_desde = coalesce(estagio_desde, now())
+           WHERE parceiro_id = $1 AND coalesce(comunidade, false) AND aceite_em IS NULL`, [pid]);
+        if (rowCount) {
+          await pool.query(`
+            INSERT INTO creator.envio (parceiro_id, tipo, itens, status, obs, criado_por)
+            SELECT $1, 'amostra', '10 sachês', 'solicitado',
+                   'aceite do creator no portal — aguardando despacho', 'portal:aceite'
+             WHERE NOT EXISTS (SELECT 1 FROM creator.envio
+                                WHERE parceiro_id = $1 AND tipo = 'amostra')`, [pid]);
+          invalida();
+        }
+        // grupo volta na resposta pra tela atualizar sem recarregar
+        const { rows: [g] } = await pool.query(
+          `SELECT valor FROM creator.config WHERE chave='grupo_whatsapp'`);
+        return json(200, { ok: true, ja_tinha: !rowCount, grupo: g?.valor || null });
+      } catch (e) {
+        console.error('[aceite]', e.message);
+        return json(500, { erro: 'não consegui registrar agora — tenta de novo' });
+      }
     }
 
     // ---- salvar perfil ----

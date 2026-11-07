@@ -430,6 +430,31 @@ const painel = {
     ORDER BY p.nome
   `,
 
+  // ---- RÉGUA DO KIT (Gabriel, 07/11): um envio por linha, com o degrau calculado na tela ----
+  // Toda mensagem sai pela Rafa no WhatsApp (zero automacao de envio); aqui nasce a FILA do
+  // dia com o texto pronto. 'solicitado' tambem entra: e a amostra aguardando despacho.
+  regua: `
+    SELECT e.envio_id::int, e.parceiro_id::int, p.nome, p.instagram_handle, p.telefone_e164,
+           e.tipo, e.itens, e.status, e.rastreio,
+           to_char(e.solicitado_em AT TIME ZONE 'America/Sao_Paulo','YYYY-MM-DD') AS solicitado,
+           to_char(e.enviado_em  AT TIME ZONE 'America/Sao_Paulo','YYYY-MM-DD') AS enviado,
+           to_char(e.entregue_em AT TIME ZONE 'America/Sao_Paulo','YYYY-MM-DD') AS entregue,
+           CASE WHEN e.entregue_em IS NOT NULL THEN
+             ((now() AT TIME ZONE 'America/Sao_Paulo')::date
+              - (e.entregue_em AT TIME ZONE 'America/Sao_Paulo')::date)::int END AS dias,
+           (e.enviado_em IS NOT NULL AND (e.enviado_em AT TIME ZONE 'America/Sao_Paulo')::date
+              = (now() AT TIME ZONE 'America/Sao_Paulo')::date) AS enviado_hoje,
+           EXISTS (SELECT 1 FROM creator.publicacao pu
+                    WHERE pu.parceiro_id = e.parceiro_id
+                      AND pu.publicado_em >= coalesce(e.entregue_em, e.enviado_em, e.solicitado_em)) AS postou
+      FROM creator.envio e
+      JOIN creator.parceiro p USING (parceiro_id)
+     WHERE p.comunidade AND p.status = 'ativo' AND NOT coalesce(p.arquivado, false)
+       AND (e.status = 'solicitado'
+            OR coalesce(e.entregue_em, e.enviado_em, e.solicitado_em) >= now() - interval '25 days')
+     ORDER BY (e.status = 'solicitado') DESC, e.entregue_em DESC NULLS FIRST, e.envio_id DESC
+  `,
+
   // ---- notas da gestão (histórico de contato por membro) ----
   gestao_notas: `
     SELECT n.nota_id::int, n.parceiro_id::int, n.autor, n.tipo, n.texto, n.criado_em
