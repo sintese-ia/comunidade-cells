@@ -1010,7 +1010,7 @@ async function dadosDoCreator(parceiroId) {
   let grupo = null;
   if (pa.aceite_em) {
     const [g] = await q(`SELECT valor FROM creator.config WHERE chave='grupo_whatsapp'`);
-    grupo = g?.valor || null;
+    grupo = g?.valor || COMUNIDADE_WPP || null;   // mesma fonte do e-mail de aprovação
   }
 
   return { parceiro: pa, cupons, vendas: v, extrato: extratoCom, publicacoes, envios, jogos, campanhas,
@@ -1480,7 +1480,7 @@ http.createServer(async (req, res) => {
         // grupo volta na resposta pra tela atualizar sem recarregar
         const { rows: [g] } = await pool.query(
           `SELECT valor FROM creator.config WHERE chave='grupo_whatsapp'`);
-        return json(200, { ok: true, ja_tinha: !rowCount, grupo: g?.valor || null });
+        return json(200, { ok: true, ja_tinha: !rowCount, grupo: g?.valor || COMUNIDADE_WPP || null });
       } catch (e) {
         console.error('[aceite]', e.message);
         return json(500, { erro: 'não consegui registrar agora — tenta de novo' });
