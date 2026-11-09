@@ -455,6 +455,23 @@ const painel = {
      ORDER BY (e.status = 'solicitado') DESC, e.entregue_em DESC NULLS FIRST, e.envio_id DESC
   `,
 
+  // ---- degrau zero da régua (09/11): aprovado que ainda nao deu o OK no portal ----
+  // Primeira mensagem = link do portal + convite pro grupo; lembrete em D+7 sem OK.
+  // SO aprovados a partir de 07/11/26, quando o aceite nasceu: os membros antigos ja estao
+  // dentro ha meses e receber "voce foi aprovado!" agora seria disparo errado — a trava que
+  // o Gabriel pediu em 07/11 vale aqui tambem.
+  regua_aceite: `
+    SELECT p.parceiro_id::int, p.nome, p.instagram_handle, p.telefone_e164,
+           to_char(p.aprovado_em AT TIME ZONE 'America/Sao_Paulo','YYYY-MM-DD') AS aprovado,
+           ((now() AT TIME ZONE 'America/Sao_Paulo')::date
+            - (p.aprovado_em AT TIME ZONE 'America/Sao_Paulo')::date)::int AS dias
+      FROM creator.parceiro p
+     WHERE p.comunidade AND p.status = 'ativo' AND NOT coalesce(p.arquivado, false)
+       AND p.aceite_em IS NULL
+       AND p.aprovado_em >= timestamptz '2026-11-07 00:00-03'
+     ORDER BY p.aprovado_em DESC
+  `,
+
   // ---- notas da gestão (histórico de contato por membro) ----
   gestao_notas: `
     SELECT n.nota_id::int, n.parceiro_id::int, n.autor, n.tipo, n.texto, n.criado_em

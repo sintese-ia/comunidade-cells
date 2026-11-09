@@ -2933,7 +2933,7 @@ http.createServer(async (req, res) => {
     const d = await dados();
     res.writeHead(200, {'content-type':'text/html; charset=utf-8','cache-control':'no-store',
       'x-cc-cache': Math.round((Date.now() - cache.at) / 1000) + 's'});
-    res.end(TPL.replace('__DATA__', JSON.stringify({ ...d, desconto_padrao: DESCONTO_PADRAO })
+    res.end(TPL.replace('__DATA__', JSON.stringify({ ...d, desconto_padrao: DESCONTO_PADRAO, grupo_whatsapp: COMUNIDADE_WPP })
       .replace(/</g, '\\u003c')));
   } catch (e) {
     res.writeHead(503, {'content-type':'text/html; charset=utf-8'});

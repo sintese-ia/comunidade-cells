@@ -2691,6 +2691,8 @@ document.querySelectorAll('[data-cw]').forEach(b => b.addEventListener('click', 
 /* ============ GESTÃO: acompanhamento da Comunidade ============ */
 const GES = D.gestao || [];
 const REGUA = D.regua || [];
+const REGUA_ACEITE = D.regua_aceite || [];
+const GRUPO_WPP = D.grupo_whatsapp || '';
 let GNOTAS = D.gestao_notas || [];
 const dth = s => s ? dt(String(s)) + ' ' + String(s).slice(11,16) : '—';
 
@@ -2766,7 +2768,7 @@ function reguaDegrau(r){
     return { chip:'<span class="chip ok">postou ✓ régua parada</span>', hoje:false, msg:null };
   if (r.enviado && !r.entregue)
     return { chip:'<span class="chip ac">despachou</span>', hoje: !!r.enviado_hoje,
-      msg:'Oi ' + nome + '! ' + Coisa + ' da Cells foi despachado 🚀' + (r.rastreio ? ' Rastreio: ' + r.rastreio : '') };
+      msg:'Oi ' + nome + '! ' + Coisa + ' da Cells foi despachado 🚀' + (r.rastreio ? ' Acompanha aqui: https://melhorrastreio.com.br/rastreio/' + r.rastreio : '') };
   if (r.entregue == null)
     return { chip:'<span class="chip vo">sem data</span>', hoje:false, msg:null };
   const d = r.dias;
@@ -2781,9 +2783,20 @@ function reguaDegrau(r){
     msg:'Oi ' + nome + '! Vimos que ' + coisa + ' chegou! Estamos ansiosos para saber o que você achou. Marca a gente quando provar 💛' };
   return { chip:'<span class="chip vo">?</span>', hoje:false, msg:null };
 }
+function degrauAceite(a){
+  const nome = (a.nome||'').split(' ')[0];
+  if (a.dias >= 7) return { chip:'<span class="chip wa">sem OK há ' + a.dias + 'd · lembrete</span>', hoje:true,
+    msg:'Oi ' + nome + '! Vimos que você ainda não confirmou sua participação na Comunidade Cells. É rapidinho: entra em comunidade.cells.com.br e clica em OK, quero participar. Sua amostra sai assim que você confirmar. Qualquer dúvida me chama!' };
+  return { chip:'<span class="chip ac">aprovado · aguardando OK</span>', hoje: a.dias === 0,
+    msg:'Oi ' + nome + '! Você foi aprovado na Comunidade Cells 🎉 Seu painel: comunidade.cells.com.br. Entra lá e clica em OK, quero participar. Sua amostra sai assim que você confirmar.' + (GRUPO_WPP ? ' E já entra na nossa comunidade do WhatsApp: ' + GRUPO_WPP : '') };
+}
 let reguaTodos = false;
 function pintaRegua(){
-  const linhas = REGUA.map(r => ({ r, d: reguaDegrau(r) }));
+  const aceites = REGUA_ACEITE.map(a => ({
+    r: { ...a, tipo: 'aceite', itens: null, status: 'aguardando OK',
+         solicitado: a.aprovado, enviado: null, entregue: null },
+    d: degrauAceite(a) }));
+  const linhas = aceites.concat(REGUA.map(r => ({ r, d: reguaDegrau(r) })));
   const doDia = linhas.filter(x => x.d.hoje || x.r.status === 'solicitado');
   const mostra = reguaTodos ? linhas : doDia;
   document.getElementById('reguaHoje').textContent = doDia.length;
@@ -2796,7 +2809,7 @@ function pintaRegua(){
     + '<td style="font-size:12px">' + esc(r.tipo||'') + (r.itens ? ' · ' + esc(r.itens) : '')
       + '<br><span style="color:var(--fnt);font-size:11px">'
       + (r.entregue ? 'entregue ' + dt(r.entregue) : r.enviado ? 'despachado ' + dt(r.enviado)
-                    : 'solicitado ' + dt(r.solicitado)) + '</span></td>'
+                    : (r.tipo === 'aceite' ? 'aprovado ' : 'solicitado ') + dt(r.solicitado)) + '</span></td>'
     + '<td>' + d.chip + '</td>'
     + '<td style="font-size:12px;max-width:380px">' + (d.msg ? esc(d.msg)
         : '<span style="color:var(--fnt)">' + (r.status === 'solicitado' ? 'entra na régua no despacho' : 'sem mensagem hoje') + '</span>') + '</td>'
