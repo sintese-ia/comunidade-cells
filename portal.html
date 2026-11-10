@@ -5,17 +5,18 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@125,500..800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <title>Comunidade Cells — seu painel</title>
 <style>
   :root{
     /* identidade do site cells.com.br (09/11): papel quente, tinta quase preta, terracota */
-    --bg:#FFFFFF;--pg:#F2F0EC;--ink:#0D0D0D;--ink2:#3D3936;--mut:#6B6B6B;--fnt:#9A948C;
+    --bg:#FFFFFF;--pg:#FAFAF7;--ink:#0D0D0D;--ink2:#3D3936;--mut:#6B6B6B;--fnt:#9A948C;
     --line:#E3E0DA;--line2:#EFECE6;--ac:#D4541A;--ac-s:#FBEDE4;
     --ok:#217A4B;--ok-s:#E7F2EB;--wa:#9A6A12;--wa-s:#F8F0DD;--ng:#B03A2E;--ng-s:#F9E9E6;
     --vo:#9A948C;--vo-s:#F2F0EC;
     --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
     --sans:"DM Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;
+    --disp:"Archivo","DM Sans","Helvetica Neue",Arial,sans-serif;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--pg);color:var(--ink);font-family:var(--sans);font-size:15px;
@@ -25,15 +26,17 @@
   .app{display:flex;min-height:100vh;align-items:flex-start}
   .nav{position:sticky;top:0;flex:none;width:216px;height:100vh;background:var(--bg);
        border-right:1px solid var(--line);padding:22px 12px;display:flex;flex-direction:column}
-  .marca{font-weight:680;font-size:16px;letter-spacing:-.02em;padding:0 10px;margin-bottom:2px}
+  .marca{font-family:var(--disp);font-stretch:125%;font-weight:800;font-size:17px;
+    letter-spacing:-.01em;padding:0 10px;margin-bottom:2px;text-transform:lowercase}
   .marca em{font-style:normal;color:var(--ac)}
   .quem{padding:0 10px 18px;font-size:12px;color:var(--mut);line-height:1.45}
   .quem b{display:block;color:var(--ink);font-size:14px;font-weight:640}
-  .nav a{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:3px;
-         color:var(--ink2);text-decoration:none;font-size:13.5px;cursor:pointer;
-         border:0;background:none;font-family:inherit;width:100%;text-align:left}
+  .nav a{display:flex;align-items:center;gap:9px;padding:10px 12px;border-radius:999px;
+         color:var(--ink2);text-decoration:none;cursor:pointer;
+         font-family:var(--mono);font-size:11px;letter-spacing:.09em;text-transform:uppercase;
+         border:0;background:none;width:100%;text-align:left}
   .nav a:hover{background:var(--pg)}
-  .nav a.on{background:var(--ac-s);color:var(--ac);font-weight:640}
+  .nav a.on{background:var(--ink);color:#FAFAF7;font-weight:600}
   .nav a .ic{font-size:14px;width:17px;text-align:center;flex:none}
   .nav a .pt{margin-left:auto;width:6px;height:6px;border-radius:99px;background:var(--wa)}
   .nav .sep{flex:1}
@@ -52,26 +55,27 @@
     .conteudo{padding:18px 13px 70px}
   }
 
-  h1.tt{margin:0 0 16px;font-size:22px;letter-spacing:-.022em;font-weight:660}
-  h1.tt small{display:block;font-size:12.5px;color:var(--mut);font-weight:400;
-              letter-spacing:0;margin-top:3px}
+  h1.tt{margin:0 0 16px;font-family:var(--disp);font-stretch:125%;font-weight:700;
+        font-size:clamp(23px,4.5vw,30px);letter-spacing:-.01em;line-height:1.08}
+  h1.tt small{display:block;font-family:var(--sans);font-size:13px;color:var(--mut);font-weight:400;
+              letter-spacing:0;margin-top:6px}
 
   /* ---------- seletor de mês ---------- */
   .per{position:sticky;top:0;z-index:5;background:var(--bg);border:1px solid var(--line);
-       border-radius:4px;padding:9px 10px;display:flex;align-items:center;gap:8px}
+       border-radius:999px;padding:7px 10px;display:flex;align-items:center;gap:8px}
   @media(max-width:780px){.per{top:46px}}
   .per .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;
           color:var(--mut);padding-left:4px;flex:none}
-  .per select{flex:1;min-width:0;border:1px solid var(--line);border-radius:3px;background:var(--pg);
+  .per select{flex:1;min-width:0;border:1px solid var(--line);border-radius:999px;background:var(--pg);
               color:var(--ink);font-family:inherit;font-size:14.5px;font-weight:600;padding:8px 10px;
               text-align:center;text-align-last:center;-webkit-appearance:none;appearance:none;cursor:pointer}
-  .per button{flex:none;width:36px;height:36px;border:1px solid var(--line);border-radius:3px;
+  .per button{flex:none;width:36px;height:36px;border:1px solid var(--line);border-radius:999px;
               background:var(--bg);color:var(--ink);font-size:15px;line-height:1;cursor:pointer}
   .per button:disabled{color:var(--line);cursor:default}
   .per button:focus-visible,.per select:focus-visible{outline:2px solid var(--ac);outline-offset:1px}
 
   .dois{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);
-        border:1px solid var(--line);border-radius:4px;margin-top:14px;overflow:hidden}
+        border:1px solid var(--line);border-radius:14px;margin-top:14px;overflow:hidden}
   .dois > div{background:var(--bg);padding:20px 18px 18px}
   .dois .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut)}
   .dois .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:31px;font-weight:560;
@@ -85,7 +89,7 @@
   .delta.down{background:var(--ng-s);color:var(--ng)}
 
   .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1px;
-        background:var(--line);border:1px solid var(--line);border-radius:4px;margin-top:14px;overflow:hidden}
+        background:var(--line);border:1px solid var(--line);border-radius:14px;margin-top:14px;overflow:hidden}
   .cel{background:var(--bg);padding:14px 15px}
   .cel .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--mut)}
   .cel .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:23px;font-weight:520;
@@ -93,20 +97,22 @@
   .cel .v.din{font-size:18px}
   .cel .n{font-size:11px;color:var(--fnt);margin-top:5px}
 
-  section{background:var(--bg);border:1px solid var(--line);border-radius:4px;margin-top:14px;overflow:hidden}
+  section{background:var(--bg);border:1px solid var(--line);border-radius:14px;margin-top:14px;overflow:hidden}
   section:first-child{margin-top:0}
   .sh{padding:14px 18px 11px;border-bottom:1px solid var(--line2);display:flex;
       align-items:baseline;gap:10px;flex-wrap:wrap}
-  .sh h2{margin:0;font-size:15.5px;font-weight:640;letter-spacing:-.01em}
+  .sh h2{margin:0;font-family:var(--disp);font-stretch:125%;font-size:16px;font-weight:700;letter-spacing:0}
   .sh p{margin:4px 0 0;font-size:12.5px;color:var(--mut);flex-basis:100%}
   .sh .ct{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--fnt)}
   .sb{padding:14px 18px}
 
   .codigo{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-  .codigo input{flex:1;min-width:180px;border:1px solid var(--line);border-radius:3px;padding:10px 11px;
+  .codigo input{flex:1;min-width:180px;border:1px solid var(--line);border-radius:999px;padding:10px 16px;
                 font-family:var(--mono);font-size:13.5px;background:var(--pg);color:var(--ink)}
-  .cp{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;background:var(--ink);color:#fff;
-      border:0;border-radius:3px;padding:10px 14px;cursor:pointer}
+  .cp{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+      background:none;color:var(--ink);border:1px solid var(--ink);border-radius:999px;
+      padding:10px 18px;cursor:pointer}
+  .cp:hover{background:var(--ink);color:#FAFAF7}
   .cp:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
 
   .lin{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--line2);
@@ -138,7 +144,7 @@
   .medalha{font-size:26px;line-height:1}
   .niv .nm{font-size:17px;font-weight:660;letter-spacing:-.015em;text-transform:capitalize}
   .taxas{display:flex;gap:1px;background:var(--line);border:1px solid var(--line);
-         border-radius:3px;overflow:hidden;margin-top:13px;flex-wrap:wrap}
+         border-radius:12px;overflow:hidden;margin-top:13px;flex-wrap:wrap}
   .taxas div{background:var(--bg);padding:11px 13px;flex:1;min-width:120px}
   .taxas .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--mut)}
   .taxas .v{font-family:var(--mono);font-size:19px;font-weight:560;margin-top:6px;letter-spacing:-.02em}
@@ -151,28 +157,29 @@
   @media(max-width:560px){.cps{grid-template-columns:1fr}}
   .cp2 label{display:block;font-family:var(--mono);font-size:9.5px;font-weight:600;letter-spacing:.1em;
              text-transform:uppercase;color:var(--mut);margin-bottom:6px}
-  .cp2 input,.cp2 select{width:100%;border:1px solid var(--line);border-radius:3px;padding:10px 11px;
+  .cp2 input,.cp2 select{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;
                          font-size:14.5px;font-family:inherit;background:var(--bg);color:var(--ink)}
   .cp2 input:focus,.cp2 select:focus{outline:2px solid var(--ac);outline-offset:1px;border-color:var(--ac)}
   .cp2 input[readonly]{background:var(--pg);color:var(--mut)}
   .cp2 .aj{font-size:11.5px;color:var(--fnt);margin-top:5px;line-height:1.45}
   .acoes{display:flex;align-items:center;gap:12px;margin-top:16px;flex-wrap:wrap}
-  .sv{background:var(--ink);color:#fff;border:0;border-radius:3px;padding:11px 20px;
-      font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
+  .sv{background:var(--ink);color:#FAFAF7;border:0;border-radius:999px;padding:12px 26px;
+      font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;cursor:pointer}
   .sv[disabled]{opacity:.5;cursor:default}
   .msg{font-size:13px;font-weight:600}
   .msg.ok{color:var(--ok)} .msg.er{color:var(--ng)}
 
   .veu{position:fixed;inset:0;background:rgba(13,13,13,.55);display:grid;place-items:center;
     padding:18px;z-index:60}
-  .aceite{background:var(--bg);border-top:4px solid var(--ac);border-radius:10px;
-    padding:38px 34px;width:min(560px,94vw);box-shadow:0 24px 70px rgba(13,13,13,.35);text-align:center}
+  .aceite{background:var(--bg);border-top:4px solid var(--ac);border-radius:18px;
+    padding:40px 36px;width:min(560px,94vw);box-shadow:0 24px 70px rgba(13,13,13,.35);text-align:center}
   .aceite .tag{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;
     color:var(--ac);font-weight:600;margin-bottom:14px}
-  .aceite h2{margin:0 0 12px;font-size:clamp(23px,5vw,30px);line-height:1.15;letter-spacing:-.02em;font-weight:800}
+  .aceite h2{margin:0 0 12px;font-family:var(--disp);font-stretch:125%;font-size:clamp(24px,5vw,32px);line-height:1.1;letter-spacing:-.01em;font-weight:700}
   .aceite p{margin:0 auto 22px;font-size:15.5px;color:var(--ink2);line-height:1.6;max-width:42ch}
-  .aceite button{appearance:none;border:0;background:var(--ac);color:#fff;border-radius:6px;
-    padding:16px 34px;font-size:16.5px;font-weight:700;cursor:pointer;font-family:var(--sans);width:100%}
+  .aceite button{appearance:none;border:0;background:var(--ac);color:#fff;border-radius:999px;
+    padding:17px 34px;font-family:var(--mono);font-size:13px;letter-spacing:.09em;text-transform:uppercase;
+    font-weight:600;cursor:pointer;width:100%}
   .aceite button:hover{background:#B8460F}
   .aceite button:disabled{opacity:.6;cursor:default}
   .aceite .dps{display:inline-block;margin-top:14px;font-size:12.5px;color:var(--fnt);
@@ -180,8 +187,8 @@
   .aceite .sablab{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
     color:var(--mut);margin:4px 0 10px}
   .sabores{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:22px}
-  .sabores button{appearance:none;background:var(--bg);border:1.5px solid var(--line);border-radius:8px;
-    padding:14px 22px;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--sans);color:var(--ink)}
+  .sabores button{appearance:none;background:var(--bg);border:1.5px solid var(--line);border-radius:999px;
+    padding:14px 24px;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--sans);color:var(--ink)}
   .sabores button[aria-pressed="true"]{border-color:var(--ac);background:var(--ac-s);color:var(--ac)}
   .aceite .err{margin-top:10px;font-size:12.5px;color:var(--ng)}
   .passo{display:grid;grid-template-columns:26px 1fr;gap:10px;padding:10px 0;
@@ -346,7 +353,7 @@ function cardAceite(){
   if (!p.comunidade || aceiteEm || aceiteDepois) return '';
   return `<div class="veu" role="dialog" aria-modal="true" aria-labelledby="acTt"><div class="aceite">
     <div class="tag">Comunidade Cells</div>
-    <h2 id="acTt">Você foi aprovado 🎉</h2>
+    <h2 id="acTt">Você foi aprovado.</h2>
     <p>Falta um passo: confirmar que você topa participar. Com o seu OK, a sua caixa de
        15 sachês entra na fila de envio e o link da comunidade do WhatsApp aparece pra você.</p>
     ${(P.sabores||[]).length ? `<div class="sablab">Escolha o sabor da sua amostra</div>
@@ -489,7 +496,7 @@ ${blocoNivel()}`;
 // ---------------------------------------------------------------- Nível e metas
 function blocoNivel(){
   const nomes = {reels:'Reels',carrossel:'Carrossel',feed_imagem:'Foto',story:'Stories',venda:'Vendas',venda_assinatura:'Assinaturas vendidas'};
-  return `<h1 class="tt" style="margin-top:34px">Nível e metas
+  return `<h1 class="tt" style="margin-top:34px">Nível e metas.
     <small>Aqui é sempre o mês corrente — não segue o mês escolhido acima.</small></h1>
 ${nv ? `<section>
   <div class="sh"><h2>Seu nível e sua comissão</h2>
@@ -554,7 +561,7 @@ const ICONE = {'application/pdf':'PDF','image/jpeg':'JPG','image/png':'PNG','ima
 
 function telaCampanhas(){
   const viva = c => c.status === 'ativa';
-  return `<h1 class="tt">Campanhas<small>As campanhas em que a Cells te colocou.</small></h1>
+  return `<h1 class="tt">Campanhas.<small>As campanhas em que a Cells te colocou.</small></h1>
 ${camps.length ? camps.map(c => `<section>
   <div class="sh"><h2>${esc(c.nome)}</h2>
     <span class="ct">${viva(c)?'em andamento':esc(c.status)}</span>
@@ -578,7 +585,7 @@ ${camps.length ? camps.map(c => `<section>
 
 // ---------------------------------------------------------------- Conteúdos
 function telaConteudos(){
-  return `<h1 class="tt">Conteúdos e envios<small>Lista completa, não só o mês escolhido.</small></h1>
+  return `<h1 class="tt">Conteúdos e envios.<small>Lista completa, não só o mês escolhido.</small></h1>
 <section>
   <div class="sh"><h2>Seus conteúdos</h2><span class="ct">${pubs.length}</span>
     <p>O que a gente capturou do seu perfil.</p></div>
@@ -615,7 +622,7 @@ function telaPerfil(){
   const tel = String(p.telefone_e164||'').replace(/^\+55/,'');
   const temDoc = !!(p.cpf || p.cnpj), tipoDoc = p.cnpj ? 'cnpj' : 'cpf';
   const faltaReceber = !temDoc || !p.pix_chave;
-  return `<h1 class="tt">Meus dados<small>Na Cells desde ${dtc(p.desde)}. O que você preencheu
+  return `<h1 class="tt">Meus dados.<small>Na Cells desde ${dtc(p.desde)}. O que você preencheu
     na inscrição já está aqui — confira e corrija o que mudou.</small></h1>
 <section>
   <div class="sh"><h2>Informações pessoais</h2>
@@ -686,7 +693,7 @@ function telaPerfil(){
 // ---------------------------------------------------------------- Acesso
 function telaAcesso(){
   const entra = p.email || ('@' + (p.instagram_handle||''));
-  return `<h1 class="tt">Acesso<small>Como você entra neste painel.</small></h1>
+  return `<h1 class="tt">Acesso.<small>Como você entra neste painel.</small></h1>
 <section>
   <div class="sh"><h2>${p.senha_provisoria ? 'Crie sua senha definitiva' : p.tem_senha ? 'Trocar sua senha' : 'Criar sua senha'}</h2>
     <p>${p.senha_provisoria
