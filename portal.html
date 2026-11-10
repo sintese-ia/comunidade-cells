@@ -585,7 +585,10 @@ ${env.length ? `<section>
   <div class="sb">${env.map(e => `
     <div class="lin"><span class="tag">${esc(String(e.tipo).replace('_',' '))}</span>
       <span class="d">${dia(e.solicitado_em)}</span>
-      <span class="t">${esc(e.itens||'—')}${e.rastreio?' · '+esc(e.rastreio):''}</span>
+      <span class="t">${esc(e.itens||'—')}${e.rastreio
+        ? ' · <a href="https://melhorrastreio.com.br/rastreio/'+encodeURIComponent(e.rastreio)
+          +'" target="_blank" rel="noopener" style="color:var(--ac)">'+esc(e.rastreio)+'</a>'
+        : ''}</span>
       <span class="v" style="font-size:11px;font-weight:500">${esc(String(e.status).replace('_',' '))}</span></div>`).join('')}</div>
 </section>` : ''}`;
 }
