@@ -524,7 +524,19 @@
       </div>
       <div style="padding:7px 14px;font-size:11.5px;color:var(--fnt);border-bottom:1px solid var(--line2)">
         trava de segurança: <b>nada é enviado automaticamente</b> — o botão só abre o SEU WhatsApp
-        com o texto pronto; você confere o nome e o número antes de mandar. Quem postou sai da fila sozinho.</div>
+        com o texto pronto; você confere o nome e o número antes de mandar. Quem postou sai da fila sozinho.
+        <button class="lnk" id="reguaMapa" style="border:0;background:none;cursor:pointer;margin-left:8px">ver a régua inteira</button></div>
+      <div id="reguaMapaBox" hidden style="padding:10px 14px;border-bottom:1px solid var(--line2);font-size:12px;line-height:1.7">
+        <b style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut)">A régua, do começo ao fim — cada degrau tem mensagem pronta na fila</b><br>
+        <span class="chip ac">aprovado</span> no dia da aprovação → convite: portal + grupo do WhatsApp ·
+        <span class="chip wa">sem OK há 7d</span> lembrete de confirmar ·
+        <span class="chip ac">despachou</span> no dia da NF → rastreio clicável ·
+        <span class="chip ok">chegou</span> na entrega → "marca a gente" ·
+        <span class="chip wa">D+3</span> sem post → soft de feedback ·
+        <span class="chip wa">D+7</span> sem post → conteúdo + referências ·
+        <span class="chip cr">D+15</span> última mensagem ·
+        <span class="chip cr">fim</span> sem post depois do D+15 = candidato a sair ·
+        <span class="chip ok">postou ✓</span> a régua para sozinha, em qualquer ponto.</div>
       <div class="scroll"><table>
         <thead><tr><th>membro</th><th>envio</th><th>degrau</th><th>mensagem</th><th></th></tr></thead>
         <tbody id="reguaCorpo"></tbody>
@@ -2828,6 +2840,8 @@ function pintaRegua(){
     || '<tr><td colspan="5" style="color:var(--fnt);padding:14px">ninguém pra hoje — a régua está em dia</td></tr>';
 }
 document.getElementById('reguaVerTodos').addEventListener('click', () => { reguaTodos = !reguaTodos; pintaRegua(); });
+document.getElementById('reguaMapa').addEventListener('click', () => {
+  const b = document.getElementById('reguaMapaBox'); b.hidden = !b.hidden; });
 pintaRegua();
 
 document.getElementById('tbCad').addEventListener('click', e => {

@@ -1021,15 +1021,19 @@ async function dadosDoCreator(parceiroId) {
   // Link do grupo de WhatsApp: mora em creator.config (chave grupo_whatsapp) e SÓ vai pro
   // navegador de quem já deu o aceite — antes do OK o link não existe pra pessoa (fluxo B
   // passo 6, 04/11). Config ausente = portal mostra "link chega em instantes", sem quebrar.
-  let grupo = null;
+  let grupo = null, sabores = null;
   if (pa.aceite_em) {
     const [g] = await q(`SELECT valor FROM creator.config WHERE chave='grupo_whatsapp'`);
     grupo = g?.valor || COMUNIDADE_WPP || null;   // mesma fonte do e-mail de aprovação
+  } else if (pa.comunidade) {
+    // sabores do pop-up do aceite (10/11): o creator escolhe 1 e a amostra sai nele
+    const [sb] = await q(`SELECT valor FROM creator.config WHERE chave='sabores_amostra'`);
+    try { sabores = JSON.parse(sb?.valor || 'null'); } catch (e) { sabores = null; }
   }
 
   return { parceiro: pa, cupons, vendas: v, extrato: extratoCom, publicacoes, envios, jogos, campanhas,
            cliques: { ...cl, serie }, nivel: nv || null, faixas, comissao_mes: comissao3m,
-           taxas: { unica: pctU, assinatura: pctA }, hoje, meses, grupo };
+           taxas: { unica: pctU, assinatura: pctA }, hoje, meses, grupo, sabores };
 }
 
 const portalErro = (titulo, msg) => `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
@@ -1481,6 +1485,15 @@ http.createServer(async (req, res) => {
     // envio tipo 'amostra' pra pessoa. Clicar duas vezes não cria dois envios.
     if (u.pathname === '/creator/aceite' && req.method === 'POST') {
       try {
+        let corpo = {}; try { corpo = await corpoJSON(req); } catch (e) {}
+        // sabor: validado contra a lista do config — valor de navegador nunca entra cru
+        const { rows: [sb] } = await pool.query(
+          `SELECT valor FROM creator.config WHERE chave='sabores_amostra'`);
+        let sabores = null; try { sabores = JSON.parse(sb?.valor || 'null'); } catch (e) {}
+        const esc = Array.isArray(sabores)
+          ? sabores.find(x => x.sabor === String(corpo.sabor || '')) : null;
+        if (Array.isArray(sabores) && sabores.length && !esc)
+          return json(400, { erro: 'escolhe o sabor da sua amostra' });
         const { rowCount } = await pool.query(`
           UPDATE creator.parceiro
              SET aceite_em = now(),
@@ -1490,10 +1503,11 @@ http.createServer(async (req, res) => {
         if (rowCount) {
           await pool.query(`
             INSERT INTO creator.envio (parceiro_id, tipo, itens, status, obs, criado_por)
-            SELECT $1, 'amostra', '10 sachês', 'solicitado',
+            SELECT $1, 'amostra', $2, 'solicitado',
                    'aceite do creator no portal — aguardando despacho', 'portal:aceite'
              WHERE NOT EXISTS (SELECT 1 FROM creator.envio
-                                WHERE parceiro_id = $1 AND tipo = 'amostra')`, [pid]);
+                                WHERE parceiro_id = $1 AND tipo = 'amostra')`,
+            [pid, esc ? `10 sachês · ${esc.sabor} (2x ${esc.sku})` : '10 sachês']);
           invalida();
         }
         // grupo volta na resposta pra tela atualizar sem recarregar

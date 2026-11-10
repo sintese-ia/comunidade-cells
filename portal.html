@@ -177,6 +177,12 @@
   .aceite button:disabled{opacity:.6;cursor:default}
   .aceite .dps{display:inline-block;margin-top:14px;font-size:12.5px;color:var(--fnt);
     background:none;border:0;cursor:pointer;text-decoration:underline;font-family:var(--sans)}
+  .aceite .sablab{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--mut);margin:4px 0 10px}
+  .sabores{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:22px}
+  .sabores button{appearance:none;background:var(--bg);border:1.5px solid var(--line);border-radius:8px;
+    padding:14px 22px;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--sans);color:var(--ink)}
+  .sabores button[aria-pressed="true"]{border-color:var(--ac);background:var(--ac-s);color:var(--ac)}
   .aceite .err{margin-top:10px;font-size:12.5px;color:var(--ng)}
   .passo{display:grid;grid-template-columns:26px 1fr;gap:10px;padding:10px 0;
     border-bottom:1px solid var(--line2);font-size:13.5px;line-height:1.5;align-items:start}
@@ -335,6 +341,7 @@ function menu(){
 // O OK do creator (fluxo B passo 5): só aparece pra quem está na comunidade e ainda não
 // confirmou. Depois do OK vira o "Comece aqui" do onboarding — a visão simples do programa.
 let aceiteDepois = false;   // "ver o painel primeiro": fecha nesta visita, volta na proxima
+let sabEscolhido = null;    // sabor da amostra (escolha obrigatória quando a lista existe)
 function cardAceite(){
   if (!p.comunidade || aceiteEm || aceiteDepois) return '';
   return `<div class="veu" role="dialog" aria-modal="true" aria-labelledby="acTt"><div class="aceite">
@@ -342,6 +349,9 @@ function cardAceite(){
     <h2 id="acTt">Você foi aprovado 🎉</h2>
     <p>Falta um passo: confirmar que você topa participar. Com o seu OK, a sua amostra entra
        na fila de envio e o link da comunidade do WhatsApp aparece pra você.</p>
+    ${(P.sabores||[]).length ? `<div class="sablab">Escolha o sabor da sua amostra</div>
+    <div class="sabores">${P.sabores.map(x => `<button type="button" data-sabor="${esc(x.sabor)}"
+      aria-pressed="${sabEscolhido===x.sabor}">${esc(x.sabor)}</button>`).join('')}</div>` : ''}
     <button id="btnAceite">OK, quero participar</button>
     <div class="err" id="aceiteErr"></div>
     <button class="dps" id="aceiteDepois">ver meu painel primeiro</button>
@@ -739,12 +749,22 @@ document.addEventListener('click', async ev => {
   if (a){ ev.preventDefault(); aba = a.dataset.aba; location.hash = aba;
           window.scrollTo(0,0); return desenhar(); }
   if (ev.target.closest('#aceiteDepois')) { aceiteDepois = true; return desenhar(); }
+  const sb = ev.target.closest('[data-sabor]');
+  if (sb) { sabEscolhido = sb.dataset.sabor;
+    document.querySelectorAll('[data-sabor]').forEach(b =>
+      b.setAttribute('aria-pressed', b.dataset.sabor === sabEscolhido ? 'true' : 'false'));
+    return; }
   const ok = ev.target.closest('#btnAceite');
   if (ok){
     ok.disabled = true; ok.textContent = 'registrando…';
     try {
+      if ((P.sabores||[]).length && !sabEscolhido){
+        document.getElementById('aceiteErr').textContent = 'escolhe o sabor da sua amostra ali em cima';
+        ok.disabled = false; ok.textContent = 'OK, quero participar'; return;
+      }
       const r = await fetch('/creator/aceite', {method:'POST',
-        headers:{'content-type':'application/json'}, body:'{}'});
+        headers:{'content-type':'application/json'},
+        body: JSON.stringify({ sabor: sabEscolhido })});
       const j = await r.json().catch(() => ({}));
       if (r.ok && j.ok){ aceiteEm = P.hoje; grupoLink = j.grupo || grupoLink; return desenhar(); }
       document.getElementById('aceiteErr').textContent = j.erro || 'não deu certo — tenta de novo';
