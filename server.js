@@ -1071,7 +1071,7 @@ const login = err => shell('Comunidade Cells', `<form class="bx" method="POST" a
 <div class="lg">comunidade <em>cells</em></div><p>Painel interno de creators. Acesso restrito.</p>
 ${err ? '<div class="er">Nome ou senha incorretos.</div>' : ''}
 <label for="n">Quem é você</label>
-<input id="n" name="nome" type="text" autocomplete="username" autofocus aria-label="Seu nome de acesso" placeholder="Gabriel ou Rafaely">
+<input id="n" name="nome" type="text" autocomplete="username" autofocus aria-label="Seu nome de acesso" placeholder="seu primeiro nome">
 <label for="s" style="margin-top:12px">Senha</label>
 <input id="s" name="senha" type="password" required autocomplete="current-password" aria-label="Senha de acesso">
 <button type="submit">Entrar</button>
