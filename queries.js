@@ -581,10 +581,15 @@ const analise = {
         WHERE cu.competencia BETWEEN greatest(date_trunc('month',$1::date)::date, $4::date) AND $2::date) AS custo,
       -- COMISSAO: so existe onde alguem definiu percentual. Hoje e 1 cupom de 33 — o numero
       -- vai sair pequeno de proposito, porque a regra ainda nao foi decidida.
+      -- ⚠️ 10/11: este bloco era o UNICO do painel sem o filtro de creator ($3) — filtrando
+      -- a Lais, o card mostrava a comissao do PROGRAMA INTEIRO (R$ 183,20 de Alice+Duda+
+      -- Andressa) ao lado de um faturamento zerado. Mesmo filtro das outras colunas.
       (SELECT coalesce(round(sum(v.receita_liquida * c.comissao_pct / 100),2),0)
          FROM creator.vw_venda_valida v
          JOIN creator.cupom c ON c.cupom_id = v.cupom_id AND c.comissao_pct IS NOT NULL
-        WHERE v.pedido_em::date BETWEEN greatest($1::date, $4::date) AND $2)  AS comissoes,
+         JOIN creator.parceiro p ON p.parceiro_id = v.parceiro_id
+        WHERE v.pedido_em::date BETWEEN greatest($1::date, $4::date) AND $2
+          AND ($3 = '' OR ${CHAVE} = $3))  AS comissoes,
       -- CRIADORES ATIVOS: aprovados de verdade, e so os do formulario
       (SELECT count(*) FROM creator.parceiro p
         WHERE p.status='ativo' AND NOT p.arquivado AND p.lead_id IS NOT NULL)::int AS creators_ativos
