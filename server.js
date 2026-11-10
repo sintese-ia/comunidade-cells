@@ -50,6 +50,20 @@ const COOKIE  = 'cc_sess';
 const STATUS  = ["pendente", "ativo", "reprovado"];   // pausado saiu em 25/08
 const TOKEN   = require('crypto').createHash('sha256').update('cc|' + SENHA).digest('hex').slice(0, 32);
 
+// ---- admins por PESSOA (09/11): tabela creator.admin_usuario, cookie proprio ----
+// A assinatura inclui o hash da senha: trocar a senha derruba as sessoes antigas daquela
+// pessoa na hora. O TOKEN legado (senha unica) continua aceito como 'equipe' durante a
+// transicao — nota e aprovacao preferem sempre o nome da sessao individual.
+let ADMINS = [];
+async function carregaAdmins(p) {
+  try { ADMINS = (await p.query(
+    'SELECT admin_id, nome, senha_hash, ativo FROM creator.admin_usuario')).rows; }
+  catch (e) { console.error('[admins]', e.message); }
+}
+const COOKIE_ADM = 'cc_adm';
+const assinaAdmin = a => require('crypto').createHash('sha256')
+  .update('cca|' + SENHA + '|' + a.admin_id + '|' + a.senha_hash).digest('hex').slice(0, 32);
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: false, max: 4, idleTimeoutMillis: 30000, statement_timeout: 60000,
@@ -1032,16 +1046,19 @@ const esc = s => String(s).replace(/[<>&"]/g, m => ({'<':'&lt;','>':'&gt;','&':'
 
 const shell = (titulo, corpo) => `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>${titulo}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;
-background:#fff;color:#14181A;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif}
-.bx{border:1px solid #E2E7E6;border-radius:4px;padding:32px;width:min(390px,92vw)}
-.lg{font-weight:680;font-size:20px;letter-spacing:-.025em;margin:0 0 5px}
-.lg em{font-style:normal;color:#0B5FFF}
-p{color:#6C7679;font-size:13px;margin:0 0 20px;line-height:1.55}
+background:#F2F0EC;color:#0D0D0D;font-family:"DM Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif}
+.bx{background:#fff;border:1px solid #E3E0DA;border-top:3px solid #D4541A;border-radius:8px;padding:32px;width:min(390px,92vw)}
+.lg{font-weight:800;font-size:20px;letter-spacing:-.025em;margin:0 0 5px}
+.lg em{font-style:normal;color:#D4541A}
+p{color:#6B6B6B;font-size:13px;margin:0 0 20px;line-height:1.55}
 label{display:block;font-family:ui-monospace,Menlo,monospace;font-size:10px;font-weight:600;
 letter-spacing:.11em;text-transform:uppercase;color:#8C9497;margin-bottom:7px}
 input{width:100%;border:1px solid #E2E7E6;border-radius:3px;padding:10px 11px;font-size:14px;font-family:inherit}
-input:focus{outline:2px solid #0B5FFF;outline-offset:1px;border-color:#0B5FFF}
+input:focus{outline:2px solid #D4541A;outline-offset:1px;border-color:#D4541A}
 button{width:100%;margin-top:14px;background:#14181A;color:#fff;border:none;border-radius:3px;
 padding:11px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
 .er{background:#FBE9E6;color:#B23A2B;font-size:12.5px;padding:9px 11px;border-radius:3px;
@@ -1052,11 +1069,13 @@ font-family:ui-monospace,Menlo,monospace}</style></head><body>${corpo}</body></h
 
 const login = err => shell('Comunidade Cells', `<form class="bx" method="POST" autocomplete="off">
 <div class="lg">comunidade <em>cells</em></div><p>Painel interno de creators. Acesso restrito.</p>
-${err ? '<div class="er">Senha incorreta.</div>' : ''}
-<label for="s">Senha</label>
-<input id="s" name="senha" type="password" required autofocus aria-label="Senha de acesso">
+${err ? '<div class="er">Nome ou senha incorretos.</div>' : ''}
+<label for="n">Quem é você</label>
+<input id="n" name="nome" type="text" autocomplete="username" autofocus aria-label="Seu nome de acesso" placeholder="Gabriel ou Rafaely">
+<label for="s" style="margin-top:12px">Senha</label>
+<input id="s" name="senha" type="password" required autocomplete="current-password" aria-label="Senha de acesso">
 <button type="submit">Entrar</button>
-<div class="ft">Dado do Postgres + busca ao vivo na Graph API da Meta.</div></form>`);
+<div class="ft">Acesso individual: o que você aprovar e anotar fica assinado com o seu nome.</div></form>`);
 
 const erroPg = m => shell('Comunidade Cells', `<div class="bx" style="border-left:3px solid #B23A2B">
 <div class="lg">Não consegui ler o banco</div>
@@ -1660,12 +1679,33 @@ http.createServer(async (req, res) => {
     return json(404, { erro: 'rota não existe' });
   }
 
-  const autenticado = (req.headers.cookie || '').includes(`${COOKIE}=${TOKEN}`);
+  const biscoitos = req.headers.cookie || '';
+  let quem = null;                                   // nome do admin da sessao, ou 'equipe'
+  if (biscoitos.includes(`${COOKIE}=${TOKEN}`)) quem = 'equipe';
+  else {
+    const m = biscoitos.match(/(?:^|;\s*)cc_adm=(\d+)\.([a-f0-9]{32})/);
+    if (m) {
+      const a = ADMINS.find(x => String(x.admin_id) === m[1] && x.ativo);
+      if (a && assinaAdmin(a) === m[2]) quem = a.nome;
+    }
+  }
+  const autenticado = !!quem;
 
   if (req.method === 'POST' && u.pathname === '/') {
     let b = ''; req.on('data', c => { b += c; if (b.length > 4096) req.destroy(); });
     return req.on('end', () => {
-      if (new URLSearchParams(b).get('senha') === SENHA) {
+      const f = new URLSearchParams(b);
+      const nome = String(f.get('nome') || '').trim();
+      const senha = f.get('senha') || '';
+      // login individual: nome + senha da pessoa (creator.admin_usuario)
+      const adm = nome && ADMINS.find(x => x.ativo && x.nome.toLowerCase() === nome.toLowerCase());
+      if (adm && confereSenha(senha, adm.senha_hash)) {
+        res.writeHead(303, { Location: veioPorAdmin ? '/admin' : '/', 'Set-Cookie':
+          `${COOKIE_ADM}=${adm.admin_id}.${assinaAdmin(adm)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000` });
+        return res.end();
+      }
+      // transicao: a senha unica antiga continua entrando, como 'equipe'
+      if (!nome && senha === SENHA) {
         res.writeHead(303, { Location: veioPorAdmin ? '/admin' : '/', 'Set-Cookie':
           `${COOKIE}=${TOKEN}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000` });
         return res.end();
@@ -1913,7 +1953,8 @@ http.createServer(async (req, res) => {
   // aba Gestão: a Rafa registra contato ("cobranca") ou observação ("nota") por membro
   if (u.pathname === '/api/gestao/nota' && req.method === 'POST') {
     let d; try { d = await corpoJSON(req, 4096); } catch (e) { return json(e.grande ? 413 : 400, { erro: e.message }); }
-    const pid = +d.parceiro_id, autor = String(d.autor || '').trim().slice(0, 40);
+    const pid = +d.parceiro_id,
+          autor = (quem && quem !== 'equipe') ? quem : String(d.autor || '').trim().slice(0, 40);
     const tipo = d.tipo === 'cobranca' ? 'cobranca' : 'nota';
     const texto = String(d.texto || '').trim().slice(0, 2000) || null;
     if (!pid)   return json(400, { erro: 'parceiro_id ausente' });
@@ -2405,7 +2446,7 @@ http.createServer(async (req, res) => {
                  email=$4,
                  reprovado_em=NULL, reprovado_motivo=NULL, atualizado_em=now()
            WHERE parceiro_id=$1 RETURNING *`,
-          [id, slug, (d.por || 'painel').slice(0, 60), emailNovo])).rows[0];
+          [id, slug, ((quem && quem !== 'equipe') ? quem : (d.por || 'painel')).slice(0, 60), emailNovo])).rows[0];
 
         // registra no legado também, para o inventário não ficar desatualizado no dia seguinte
         await cli.query(`
@@ -2952,6 +2993,8 @@ http.createServer(async (req, res) => {
     .catch(e => console.error('  [FALHA GRAVE] o app NÃO consegue gravar no Postgres:', e.message,
                               '\n  Nenhum job vai funcionar. Confira o usuário em DATABASE_URL.'));
 
+  carregaAdmins(pool);
+  setInterval(() => carregaAdmins(pool), 300000).unref();
   J.agendar(pool, { META_TOKEN: META, APIFY_TOKEN: APIFY, aoRegistrar: eventoRegistro,
                     onMudanca: () => { invalida(); } });
   if (!APP_SECRET) console.log('  [aviso] META_APP_SECRET vazio — webhook de story recusa POST');

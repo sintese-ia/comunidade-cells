@@ -3,18 +3,22 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <title>Comunidade Cells</title>
 <!-- favicon inline: sem isso o console fica com um 404 permanente, e um console sujo esconde o erro seguinte -->
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%230B5FFF%27/%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%276%27 fill=%27white%27/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%23D4541A%27/%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%276%27 fill=%27white%27/%3E%3C/svg%3E">
 <style>
   :root{
-    --bg:#FFFFFF; --sub:#FAFBFB; --ink:#14181A; --ink2:#3E4749; --mut:#6C7679; --fnt:#98A0A2;
-    --line:#E4E9E8; --line2:#F0F3F2;
-    --ac:#0B5FFF; --ac-s:#EEF4FF;
-    --ok:#0F7A4E; --ok-s:#E6F5EE; --wa:#8F5B00; --wa-s:#FCF2DF; --cr:#B23A2B; --cr-s:#FBEAE7;
-    --vo:#98A0A2; --vo-s:#F2F5F4;
-    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
-    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;
+    /* identidade do site cells.com.br (09/11): papel quente, tinta quase preta, terracota */
+    --bg:#FFFFFF; --sub:#FAFAF7; --ink:#0D0D0D; --ink2:#3D3936; --mut:#6B6B6B; --fnt:#9A948C;
+    --line:#E3E0DA; --line2:#EFECE6;
+    --ac:#D4541A; --ac-s:#FBEDE4;
+    --ok:#217A4B; --ok-s:#E7F2EB; --wa:#9A6A12; --wa-s:#F8F0DD; --cr:#B03A2E; --cr-s:#F9E9E6;
+    --vo:#9A948C; --vo-s:#F2F0EC;
+    --mono:"IBM Plex Mono",ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:"DM Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);

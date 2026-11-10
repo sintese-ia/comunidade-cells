@@ -3,15 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <title>Comunidade Cells — seu painel</title>
 <style>
   :root{
-    --bg:#FFFFFF;--pg:#F6F8F7;--ink:#14181A;--ink2:#3E4749;--mut:#6C7679;--fnt:#98A0A2;
-    --line:#E3E8E7;--line2:#EFF3F2;--ac:#0B5FFF;--ac-s:#EDF3FF;
-    --ok:#0F7A4E;--ok-s:#E5F4ED;--wa:#8A5800;--wa-s:#FBF1DC;--ng:#B23A2B;--ng-s:#FBE9E6;
-    --vo:#98A0A2;--vo-s:#F1F4F3;
-    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
-    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;
+    /* identidade do site cells.com.br (09/11): papel quente, tinta quase preta, terracota */
+    --bg:#FFFFFF;--pg:#F2F0EC;--ink:#0D0D0D;--ink2:#3D3936;--mut:#6B6B6B;--fnt:#9A948C;
+    --line:#E3E0DA;--line2:#EFECE6;--ac:#D4541A;--ac-s:#FBEDE4;
+    --ok:#217A4B;--ok-s:#E7F2EB;--wa:#9A6A12;--wa-s:#F8F0DD;--ng:#B03A2E;--ng-s:#F9E9E6;
+    --vo:#9A948C;--vo-s:#F2F0EC;
+    --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --sans:"DM Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--pg);color:var(--ink);font-family:var(--sans);font-size:15px;
@@ -159,13 +163,20 @@
   .msg{font-size:13px;font-weight:600}
   .msg.ok{color:var(--ok)} .msg.er{color:var(--ng)}
 
-  .aceite{background:var(--bg);border:1px solid var(--line);border-left:3px solid var(--ok);
-    border-radius:4px;margin-top:14px;padding:20px 18px}
-  .aceite h2{margin:0 0 6px;font-size:17px;letter-spacing:-.01em}
-  .aceite p{margin:0 0 14px;font-size:13.5px;color:var(--ink2);line-height:1.55;max-width:56ch}
-  .aceite button{appearance:none;border:0;background:var(--ok);color:#fff;border-radius:4px;
-    padding:12px 22px;font-size:14.5px;font-weight:640;cursor:pointer;font-family:var(--sans)}
+  .veu{position:fixed;inset:0;background:rgba(13,13,13,.55);display:grid;place-items:center;
+    padding:18px;z-index:60}
+  .aceite{background:var(--bg);border-top:4px solid var(--ac);border-radius:10px;
+    padding:38px 34px;width:min(560px,94vw);box-shadow:0 24px 70px rgba(13,13,13,.35);text-align:center}
+  .aceite .tag{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--ac);font-weight:600;margin-bottom:14px}
+  .aceite h2{margin:0 0 12px;font-size:clamp(23px,5vw,30px);line-height:1.15;letter-spacing:-.02em;font-weight:800}
+  .aceite p{margin:0 auto 22px;font-size:15.5px;color:var(--ink2);line-height:1.6;max-width:42ch}
+  .aceite button{appearance:none;border:0;background:var(--ac);color:#fff;border-radius:6px;
+    padding:16px 34px;font-size:16.5px;font-weight:700;cursor:pointer;font-family:var(--sans);width:100%}
+  .aceite button:hover{background:#B8460F}
   .aceite button:disabled{opacity:.6;cursor:default}
+  .aceite .dps{display:inline-block;margin-top:14px;font-size:12.5px;color:var(--fnt);
+    background:none;border:0;cursor:pointer;text-decoration:underline;font-family:var(--sans)}
   .aceite .err{margin-top:10px;font-size:12.5px;color:var(--ng)}
   .passo{display:grid;grid-template-columns:26px 1fr;gap:10px;padding:10px 0;
     border-bottom:1px solid var(--line2);font-size:13.5px;line-height:1.5;align-items:start}
@@ -323,15 +334,18 @@ function menu(){
 // ---------------------------------------------------------------- Resultados
 // O OK do creator (fluxo B passo 5): só aparece pra quem está na comunidade e ainda não
 // confirmou. Depois do OK vira o "Comece aqui" do onboarding — a visão simples do programa.
+let aceiteDepois = false;   // "ver o painel primeiro": fecha nesta visita, volta na proxima
 function cardAceite(){
-  if (!p.comunidade || aceiteEm) return '';
-  return `<div class="aceite">
-    <h2>Você foi aprovado na Comunidade Cells 🎉</h2>
-    <p>Falta um passo: confirma que você topa participar. Com o seu OK, a sua amostra entra
-       na fila de envio e o link da comunidade do WhatsApp aparece aqui.</p>
+  if (!p.comunidade || aceiteEm || aceiteDepois) return '';
+  return `<div class="veu" role="dialog" aria-modal="true" aria-labelledby="acTt"><div class="aceite">
+    <div class="tag">Comunidade Cells</div>
+    <h2 id="acTt">Você foi aprovado 🎉</h2>
+    <p>Falta um passo: confirmar que você topa participar. Com o seu OK, a sua amostra entra
+       na fila de envio e o link da comunidade do WhatsApp aparece pra você.</p>
     <button id="btnAceite">OK, quero participar</button>
     <div class="err" id="aceiteErr"></div>
-  </div>`;
+    <button class="dps" id="aceiteDepois">ver meu painel primeiro</button>
+  </div></div>`;
 }
 function cardComece(){
   if (!p.comunidade || !aceiteEm) return '';
@@ -721,6 +735,7 @@ document.addEventListener('click', async ev => {
   const a = ev.target.closest('[data-aba]');
   if (a){ ev.preventDefault(); aba = a.dataset.aba; location.hash = aba;
           window.scrollTo(0,0); return desenhar(); }
+  if (ev.target.closest('#aceiteDepois')) { aceiteDepois = true; return desenhar(); }
   const ok = ev.target.closest('#btnAceite');
   if (ok){
     ok.disabled = true; ok.textContent = 'registrando…';
