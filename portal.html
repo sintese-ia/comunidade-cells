@@ -347,8 +347,8 @@ function cardAceite(){
   return `<div class="veu" role="dialog" aria-modal="true" aria-labelledby="acTt"><div class="aceite">
     <div class="tag">Comunidade Cells</div>
     <h2 id="acTt">Você foi aprovado 🎉</h2>
-    <p>Falta um passo: confirmar que você topa participar. Com o seu OK, a sua amostra entra
-       na fila de envio e o link da comunidade do WhatsApp aparece pra você.</p>
+    <p>Falta um passo: confirmar que você topa participar. Com o seu OK, a sua caixa de
+       15 sachês entra na fila de envio e o link da comunidade do WhatsApp aparece pra você.</p>
     ${(P.sabores||[]).length ? `<div class="sablab">Escolha o sabor da sua amostra</div>
     <div class="sabores">${P.sabores.map(x => `<button type="button" data-sabor="${esc(x.sabor)}"
       aria-pressed="${sabEscolhido===x.sabor}">${esc(x.sabor)}</button>`).join('')}</div>` : ''}
@@ -378,7 +378,7 @@ function cardComece(){
     <div class="passo"><span class="pn">04</span><span><b>A meta do mês: 1 Reels + 4 Stories</b>
       marcando a @cellsoficial. Story marcado conta sozinho, em segundos; reels conta no dia
       seguinte. A barra fica em Nível e metas.</span></div>
-    <div class="passo"><span class="pn">05</span><span><b>Sua amostra.</b> ${amostra
+    <div class="passo"><span class="pn">05</span><span><b>Sua caixa de 15 sachês.</b> ${amostra
       ? (amostra.rastreio ? 'Despachada — rastreio na aba Envios.' : 'Está na fila de envio; o rastreio aparece na aba Envios.')
       : 'Entra na fila de envio com o seu OK.'} Chegou? Prova, conta pra gente e marca a @cellsoficial.</span></div>
   </div>

@@ -1507,7 +1507,7 @@ http.createServer(async (req, res) => {
                    'aceite do creator no portal — aguardando despacho', 'portal:aceite'
              WHERE NOT EXISTS (SELECT 1 FROM creator.envio
                                 WHERE parceiro_id = $1 AND tipo = 'amostra')`,
-            [pid, esc ? `10 sachês · ${esc.sabor} (2x ${esc.sku})` : '10 sachês']);
+            [pid, esc ? `1 caixa de 15 sachês · ${esc.sabor} (${esc.sku})` : '1 caixa de 15 sachês']);
           invalida();
         }
         // grupo volta na resposta pra tela atualizar sem recarregar
