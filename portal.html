@@ -351,7 +351,7 @@ function menu(){
 let aceiteDepois = false;   // "ver o painel primeiro": fecha nesta visita, volta na proxima
 let sabEscolhido = null;    // sabor da amostra (escolha obrigatória quando a lista existe)
 function cardAceite(){
-  if (!p.comunidade || aceiteEm || aceiteDepois) return '';
+  if (!p.pede_aceite || aceiteEm || aceiteDepois) return '';
   return `<div class="veu" role="dialog" aria-modal="true" aria-labelledby="acTt"><div class="aceite">
     <div class="tag">Comunidade Cells</div>
     <h2 id="acTt">Você foi aprovado.</h2>

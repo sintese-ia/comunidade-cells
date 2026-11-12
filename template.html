@@ -2918,7 +2918,9 @@ const MODULOS = [
   ['busca',     'Buscar creator', () => null],
   ['cadastros', 'Criadores',      () => CAD.filter(f => !f.arquivado && f.status==='pendente').length || null],
   ['analises',  'Dashboard',      () => null],
-  ['campanhas', 'Campanhas',      () => CAMP.filter(c => c.status==='ativa').length || null],
+  // Campanhas escondida por enquanto (Gabriel, 11/11): a tela dependia da
+  // vw_campanha_resultado (>60s) e vivia estourando o teto — o modulo continua no codigo,
+  // o hash #campanhas ainda abre pra quem souber, e volta ao menu quando a view tiver dono.
   ['mencoes',   'Extrações',      () => GAL.length || null],
   ['gestao',    'Gestão',         () => GES.filter(g => !g.cobrado_em).length || null],
 ];

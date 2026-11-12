@@ -195,43 +195,8 @@ const painel = {
   `,
 
   // ---- CAMPANHAS: uma linha por campanha, já com resultado ----
-  campanhas: `
-    SELECT c.*,
-           (SELECT json_agg(json_build_object(
-                     'acao', m.tipo_conteudo, 'pontos', m.pontos, 'meta', m.meta_qtd)
-                     ORDER BY m.ordem, m.missao_id)
-              FROM creator.jogo j JOIN creator.missao m ON m.jogo_id=j.jogo_id
-             WHERE j.campanha_id=c.campanha_id AND j.ativo) AS acoes,
-           (SELECT json_agg(json_build_object(
-                     'parceiro_id', p.parceiro_id, 'nome', p.nome,
-                     'handle', p.instagram_handle) ORDER BY p.nome)
-              FROM creator.campanha_parceiro cp
-              JOIN creator.parceiro p ON p.parceiro_id=cp.parceiro_id
-             WHERE cp.campanha_id=c.campanha_id AND cp.saiu_em IS NULL) AS participantes,
-           -- anexos (item 4). A coluna conteudo NUNCA sai daqui: sao ate 10 MB por arquivo e este
-           -- resultado vai serializado dentro do HTML do painel. So metadado; o arquivo vem
-           -- pela rota de download, que confere o vinculo com a campanha.
-           -- (sem crase neste comentario: o SQL mora em template literal)
-           coalesce((SELECT json_agg(json_build_object(
-                       'anexo_id', x.anexo_id, 'nome', x.nome, 'mime', x.mime,
-                       'bytes', x.bytes, 'baixados', x.baixados) ORDER BY x.criado_em)
-                       FROM creator.campanha_anexo x
-                      WHERE x.campanha_id = c.campanha_id), '[]'::json) AS anexos
-    FROM creator.vw_campanha_resultado c
-    ORDER BY (c.status='ativa') DESC, c.inicio DESC
-  `,
 
   // ---- placar por creator dentro de cada campanha de pontuação ----
-  placar: `
-    SELECT campanha_id, parceiro_id, nome, instagram_handle,
-           sum(pontos_unitarios * feito)::int AS pontos,
-           sum(feito)::int AS entregas,
-           string_agg(tipo_conteudo || ' ' || feito, ' · ' ORDER BY tipo_conteudo) AS detalhe
-    FROM creator.vw_pontuacao
-    GROUP BY 1,2,3,4
-    HAVING sum(feito) > 0
-    ORDER BY 5 DESC
-  `,
 
   // ---- MENÇÕES: todo conteúdo com mídia coletada ----
   // A URL de mídia vem do payload do Apify e EXPIRA. Não guardamos o arquivo: o job semanal

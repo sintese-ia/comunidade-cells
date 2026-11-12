@@ -830,6 +830,12 @@ async function dadosDoCreator(parceiroId) {
            coalesce(p.senha_provisoria, false) AS senha_provisoria,
            coalesce(p.comunidade, false) AS comunidade, p.estagio,
            to_char(p.aceite_em AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD') AS aceite_em,
+           -- ⚠️ 11/11: o pop-up do aceite e SO para aprovados a partir de 07/11, quando o
+           -- fluxo nasceu. Sem este corte, os 47 membros antigos (aceite_em NULL de berco)
+           -- viam "voce foi aprovado" ao entrar e cada OK criava amostra nova — aconteceu
+           -- com 6 pessoas entre 08 e 11/11, amostras apagadas na limpeza do mesmo dia.
+           (coalesce(p.comunidade, false) AND p.aceite_em IS NULL
+            AND p.aprovado_em >= timestamptz '2026-11-07 00:00-03') AS pede_aceite,
            to_char(p.criado_em AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD') AS desde,
            c.codigo AS cupom, c.link_redirect_id, c.link_path,
            l.idade AS idade_declarada
@@ -1499,7 +1505,8 @@ http.createServer(async (req, res) => {
              SET aceite_em = now(),
                  estagio = coalesce(estagio, 'onboarding'),
                  estagio_desde = coalesce(estagio_desde, now())
-           WHERE parceiro_id = $1 AND coalesce(comunidade, false) AND aceite_em IS NULL`, [pid]);
+           WHERE parceiro_id = $1 AND coalesce(comunidade, false) AND aceite_em IS NULL
+             AND aprovado_em >= timestamptz '2026-11-07 00:00-03'`, [pid]);
         if (rowCount) {
           await pool.query(`
             INSERT INTO creator.envio (parceiro_id, tipo, itens, status, obs, criado_por)
