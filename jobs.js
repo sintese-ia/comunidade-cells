@@ -1003,6 +1003,43 @@ async function guardarMensagem(pool, m) {
      meu ? null : m.remetente, m.ts, resumo, m.tipo === 'texto' ? m.texto : null, meu]);
 }
 
+// ---------------------------------------------------------------- rastreio dos envios
+// Pergunta ao Bling se os envios 'enviado' ja chegaram e marca entregue_em.
+// Nasceu da varredura de 12/11: 20 dos 29 "a caminho" ja estavam entregues — sem este job
+// a tela mente ate alguem lembrar de conferir, e a regua nunca dispara o degrau "chegou".
+// O token e o mesmo do despacho (crm.bling_tokens id=1), renovado pelos fluxos de la; se
+// estiver vencido o job falha UMA vez no log e tenta de novo no proximo ciclo.
+async function rastreioEnvios(pool) {
+  const { rows: [t] } = await pool.query('SELECT access_token FROM crm.bling_tokens WHERE id=1');
+  if (!t?.access_token) throw new Error('sem token do Bling em crm.bling_tokens');
+  const bling = p => req('https://api.bling.com.br/Api/v3' + p,
+    { headers: { Authorization: 'Bearer ' + t.access_token, Accept: 'application/json' } });
+  const { rows: alvos } = await pool.query(`
+    SELECT envio_id, bling_pedido_id FROM creator.envio
+     WHERE status = 'enviado' AND bling_pedido_id IS NOT NULL ORDER BY envio_id`);
+  let entregues = 0, transito = 0, falhas = 0;
+  for (const a of alvos) {
+    await sleep(1100);                          // limite do Bling e 3/s
+    let desc = '', cod = null;
+    try {
+      const ped = (await bling('/pedidos/vendas/' + a.bling_pedido_id)).data || {};
+      const vol = ((ped.transporte || {}).volumes || [])[0];
+      if (!vol) { falhas++; continue; }
+      await sleep(1100);
+      const obj = (await bling('/logisticas/objetos/' + vol.id)).data || {};
+      desc = ((obj.rastreamento || {}).descricao || '').toLowerCase();
+      cod = (obj.rastreamento || {}).codigo || obj.codigoRastreamento || null;
+    } catch (e) { falhas++; continue; }
+    if (desc.includes('entreg') && !desc.includes('não') && !desc.includes('nao')) {
+      await pool.query(`UPDATE creator.envio SET status='entregue', entregue_em=now(),
+                               rastreio=coalesce(rastreio,$2)
+                         WHERE envio_id=$1 AND status='enviado'`, [a.envio_id, cod]);
+      entregues++;
+    } else transito++;
+  }
+  return { conferidos: alvos.length, entregues, transito, falhas };
+}
+
 // ---------------------------------------------------------------- agendador
 // Um replica só, então basta um lock em memória. Se um dia virar 2+, trocar por advisory lock
 // do Postgres (pg_try_advisory_lock) — senão os dois batem na Meta ao mesmo tempo.
@@ -1085,6 +1122,11 @@ function agendar(pool, env) {
   setInterval(() => roda('vendas', () => syncVendas(pool)), HORA).unref();
   setTimeout(() => roda('vendas', () => syncVendas(pool)), 30000).unref();
 
+  // rastreio: 2x ao dia (6h e 15h BRT) — e o que faz "a caminho" virar "chegou" sozinho e
+  // dispara o degrau "chegou" da regua no dia certo. Le o token do Bling do banco.
+  diarioAs(HORA_UTC + 1, 'rastreio', () => rastreioEnvios(pool));
+  diarioAs(HORA_UTC + 9, 'rastreio', () => rastreioEnvios(pool));
+
   // ficha: mesma regra do vendas — só lê o Postgres da casa, então não depende de token e
   // não pode cair junto com a Meta. É ele que leva CPF, PIX e endereço do formulário de
   // inscrição para a ficha que o portal mostra. Roda 45s depois do boot para não competir
@@ -1095,7 +1137,7 @@ function agendar(pool, env) {
   return { roda, syncTags, syncPerfis, syncApify, syncVendas, fichaDoCadastro };
 }
 
-module.exports = { syncTags, syncPerfis, syncApify, syncCadastros, syncVendas, fichaDoCadastro,
+module.exports = { syncTags, syncPerfis, syncApify, syncCadastros, syncVendas, fichaDoCadastro, rastreioEnvios,
                    avisarRegistro, perfilDe, salvarPerfil,
                    guardarStory, guardarVideo, buscarVideoDe, limparMidia,
                    extrairStories, agendar, logJob, extrairMensagens, guardarMensagem };
