@@ -508,11 +508,22 @@
   </section>
 
   <!-- ============ 06 GESTÃO ============ -->
-  <section class="mod" data-mod="gestao">
+  <!-- ============ ENVIOS (11/11): a logística mora aqui ============ -->
+  <section class="mod" data-mod="envios">
     <div class="topo">
-      <div><h1>Gestão</h1>
-        <p class="lede">Um membro por linha: kit, produção do mês e o histórico de contato. <b>Anote cada cobrança aqui</b> — quem falou, quando e o que foi combinado fica registrado pra equipe toda.</p></div>
-      <div class="stamp" id="stampGes"></div>
+      <div><h1>Envios</h1>
+        <p class="lede">O que precisa ser despachado e a régua de mensagens do kit. <b>Nada é enviado automaticamente</b> — nem produto, nem mensagem.</p></div>
+      <div class="stamp" id="stampEnv"></div>
+    </div>
+
+    <div class="panel" style="margin-bottom:14px">
+      <div class="barra"><b style="font-size:13px">Despachos pendentes <span class="chip wa" id="pendN">0</span></b></div>
+      <div class="scroll"><table>
+        <thead><tr><th>membro</th><th>o que vai</th><th>solicitado</th><th>espera</th></tr></thead>
+        <tbody id="pendCorpo"></tbody>
+      </table></div>
+      <div class="empty"><span class="tg">como despachar</span>
+        <p>A emissão de pedido e NF continua no fluxo de despacho (Bling) — esta fila diz <b>o que</b> está aguardando, com o sabor escolhido no aceite. Despachou, a linha muda de degrau sozinha.</p></div>
     </div>
 
     <!-- régua do kit (Gabriel, 07/11): a fila do dia, com o texto pronto pro WhatsApp.
@@ -543,23 +554,38 @@
       </table></div>
     </div>
 
+  </section>
+
+  <section class="mod" data-mod="gestao">
+    <div class="topo">
+      <div><h1>Gestão</h1>
+        <p class="lede">Um membro por linha: kit, produção do mês e o histórico de contato. <b>Anote cada cobrança aqui</b> — quem falou, quando e o que foi combinado fica registrado pra equipe toda.</p></div>
+      <div class="stamp" id="stampGes"></div>
+    </div>
+
     <div class="panel">
       <div class="barra">
         <button class="aba" data-gf="todos" aria-pressed="true">todos <b id="g-todos">0</b></button>
+        <button class="aba" data-gf="vendeu" aria-pressed="false">vendeu <b id="g-vendeu">0</b></button>
         <button class="aba" data-gf="ativos" aria-pressed="false">ativos <b id="g-ativos">0</b></button>
+        <button class="aba" data-gf="esfriando" aria-pressed="false">esfriando <b id="g-esfriando">0</b></button>
         <button class="aba" data-gf="inativos" aria-pressed="false">inativos <b id="g-inativos">0</b></button>
-        <button class="aba" data-gf="zerados" aria-pressed="false">sem publicação <b id="g-zerados">0</b></button>
-        <button class="aba" data-gf="semcobranca" aria-pressed="false">nunca cobrados <b id="g-semcobranca">0</b></button>
-        <button class="aba" data-gf="kit" aria-pressed="false">kit com problema <b id="g-kit">0</b></button>
+        <button class="aba" data-gf="acaminho" aria-pressed="false">kit a caminho <b id="g-acaminho">0</b></button>
+        <button class="aba" data-gf="semkit" aria-pressed="false">sem kit <b id="g-semkit">0</b></button>
       </div>
       <div class="scroll"><table>
-        <thead><tr><th>membro</th><th>ciclo</th><th>envio</th><th>vendas no cupom</th><th>publicações</th>
+        <thead><tr><th>membro</th><th>status</th><th>kit</th><th>vendas no cupom</th><th>publicações no mês</th>
           <th>última publi</th><th>último contato</th><th></th></tr></thead>
         <tbody id="gesCorpo"></tbody>
       </table></div>
       <div class="empty">
-        <span class="tg">de onde vêm os números</span>
-        <p><b>Ativo</b> é quem recebeu produto nos últimos 30 dias; <b>inativo</b> é quem não recebeu neste ciclo mas continua na plataforma. Sai do registro de envio, então se corrige sozinho quando o despacho do mês entra. Kit é o rastreio do Bling. Story, reels e post entram sozinhos pela coleta de marcações da @cellsoficial, aprovada pela Meta em outubro — o que a pessoa postar aparece aqui em minutos.</p>
+        <span class="tg">como ler os status (regra do Gabriel, 11/11)</span>
+        <p><b>Vendeu</b> = venda no cupom este mês. <b>Ativo</b> = postou nos últimos 7 dias.
+        <b>Esfriando</b> = kit chegou e está sem postar há 8 a 21 dias — o relógio conta do que
+        for mais recente: a chegada do kit ou a última postagem. <b>Inativo</b> = mais de 21 dias
+        nesse relógio. <b>Kit a caminho</b> = despachado e ainda não entregue. <b>Sem kit</b> =
+        nada despachado ainda (os solicitados estão na aba Envios). Publicação entra sozinha
+        pela marcação da @cellsoficial.</p>
       </div>
     </div>
   </section>
@@ -2721,20 +2747,44 @@ function gesAcao(g){
   if (!g.reels_mes)                return ['vo', 'pedir o reels obrigatório'];
   return ['ok', 'no ritmo — reforçar metas'];
 }
+// kit: diz se CHEGOU e ha quantos dias (pedido do Gabriel, 11/11) — nao so "enviado"
 function gesKit(g){
-  if (!g.envio_status)              return '<span class="chip wa">sem envio</span>';
-  if (g.envio_status === 'entregue')return '<span class="chip ok">entregue ' + dt(g.entregue_em) + '</span>';
-  return '<span class="chip wa">' + esc(g.envio_status) + (g.envio_em ? ' ' + dt(g.envio_em) : '') + '</span>';
+  if (g.envio_status === 'entregue' && g.entregue_em)
+    return '<span class="chip ok">chegou ' + dt(g.entregue_em) + '</span>';
+  if (g.envio_status === 'enviado')
+    return '<span class="chip wa">a caminho' + (g.dias_envio != null ? ' há ' + g.dias_envio + 'd' : '')
+      + '</span><br><span style="color:var(--fnt);font-size:10.5px">despachado ' + dt(g.envio_em) + '</span>';
+  if (g.envio_status === 'solicitado')
+    return '<span class="chip wa">aguardando despacho</span>';
+  if (!g.envio_status) return '<span class="chip vo">sem envio</span>';
+  return '<span class="chip wa">' + esc(g.envio_status) + '</span>';
+}
+// clusters de 11/11: vendas + postagens mandam. O relogio (dias_ref) conta do mais recente
+// entre a chegada do kit e a ultima postagem.
+function gesCluster(g){
+  if (g.vendas_mes > 0)
+    return { k:'vendeu', html:'<span class="chip ok">vendeu</span>' };
+  if (g.dias_post != null && g.dias_post <= 7)
+    return { k:'ativos', html:'<span class="chip ac">ativo</span><br><span style="color:var(--fnt);font-size:10.5px">'
+      + (g.dias_post === 0 ? 'postou hoje' : 'postou há ' + g.dias_post + 'd') + '</span>' };
+  if (g.envio_status === 'enviado')
+    return { k:'acaminho', html:'<span class="chip vo">kit a caminho</span>' };
+  if (g.entregue_em && g.dias_ref != null && g.dias_ref <= 21)
+    return { k:'esfriando', html:'<span class="chip wa">esfriando</span><br><span style="color:var(--fnt);font-size:10.5px">'
+      + g.dias_ref + 'd no relógio</span>' };
+  if (g.entregue_em)
+    return { k:'inativos', html:'<span class="chip cr">inativo</span><br><span style="color:var(--fnt);font-size:10.5px">'
+      + g.dias_ref + 'd no relógio</span>' };
+  if (g.dias_post != null)
+    return { k: g.dias_post <= 21 ? 'esfriando' : 'inativos',
+      html:'<span class="chip ' + (g.dias_post <= 21 ? 'wa">esfriando' : 'cr">inativo')
+      + '</span><br><span style="color:var(--fnt);font-size:10.5px">' + g.dias_post + 'd sem post · sem kit</span>' };
+  return { k:'semkit', html:'<span class="chip vo">sem kit</span>' };
 }
 let gesFiltro = 'todos';
 function gesPassa(g){
-  const publicou = (g.stories_mes + g.reels_mes + g.outros_mes) > 0;
-  if (gesFiltro === 'zerados')     return !publicou;
-  if (gesFiltro === 'semcobranca') return !g.cobrado_em;
-  if (gesFiltro === 'kit')         return g.envio_status !== 'entregue';
-  if (gesFiltro === 'ativos')      return !!g.ativo_ciclo;
-  if (gesFiltro === 'inativos')    return !g.ativo_ciclo;
-  return true;
+  if (gesFiltro === 'todos') return true;
+  return gesCluster(g).k === gesFiltro;
 }
 function pintaGestao(){
   const linhas = GES.filter(gesPassa).map(g => {
@@ -2748,9 +2798,7 @@ function pintaGestao(){
         + (g.telefone_e164 ? ' · ' + fone(g.telefone_e164) : '') + '</span>'
         + (g.email ? '<br><a class="lnk" style="font-size:11px" href="mailto:' + esc(g.email) + '">' + esc(g.email) + '</a>'
                    : '<br><span class="chip cr" style="font-size:10px">sem e-mail</span>') + '</td>'
-      + '<td>' + (g.ativo_ciclo
-            ? '<span class="chip ok" title="recebeu produto nos ultimos 30 dias">ativo</span>'
-            : '<span class="chip wa" title="nao recebeu no ultimo ciclo, mas continua na plataforma">inativo</span>') + '</td>'
+      + '<td>' + gesCluster(g).html + '</td>'
       + '<td>' + gesKit(g) + '</td>'
       + '<td>' + (g.vendas_mes ? '<b>' + g.vendas_mes + '</b> · ' + rs(g.receita_mes)
                                : '<span style="color:var(--fnt)">nenhuma</span>') + '</td>'
@@ -2765,12 +2813,11 @@ function pintaGestao(){
   document.getElementById('gesCorpo').innerHTML =
     linhas || '<tr><td colspan="8" style="color:var(--fnt);padding:18px">ninguém neste filtro</td></tr>';
   const publicaram = GES.filter(g => (g.stories_mes + g.reels_mes + g.outros_mes) > 0).length;
+  const porK = {};
+  GES.forEach(g => { const k = gesCluster(g).k; porK[k] = (porK[k] || 0) + 1; });
   document.getElementById('g-todos').textContent = GES.length;
-  document.getElementById('g-ativos').textContent = GES.filter(g => g.ativo_ciclo).length;
-  document.getElementById('g-inativos').textContent = GES.filter(g => !g.ativo_ciclo).length;
-  document.getElementById('g-zerados').textContent = GES.length - publicaram;
-  document.getElementById('g-semcobranca').textContent = GES.filter(g => !g.cobrado_em).length;
-  document.getElementById('g-kit').textContent = GES.filter(g => g.envio_status !== 'entregue').length;
+  ['vendeu','ativos','esfriando','inativos','acaminho','semkit'].forEach(k => {
+    const el = document.getElementById('g-' + k); if (el) el.textContent = porK[k] || 0; });
   document.getElementById('stampGes').textContent = publicaram + '/' + GES.length + ' publicaram no mês';
 }
 // ---- régua do kit: degrau + texto pronto (regras duras: sem travessão, frases curtas) ----
@@ -2839,6 +2886,21 @@ function pintaRegua(){
     + '</tr>').join('')
     || '<tr><td colspan="5" style="color:var(--fnt);padding:14px">ninguém pra hoje — a régua está em dia</td></tr>';
 }
+function pintaPend(){
+  const pend = REGUA.filter(r => r.status === 'solicitado');
+  document.getElementById('pendN').textContent = pend.length;
+  document.getElementById('stampEnv').textContent = pend.length + ' a despachar';
+  document.getElementById('pendCorpo').innerHTML = pend.map(r => {
+    const dias = r.solicitado ? Math.max(0, Math.round((Date.now() - new Date(r.solicitado + 'T12:00:00-03:00')) / 86400000)) : null;
+    return '<tr><td><b>' + esc(r.nome) + '</b><br><span style="color:var(--fnt);font-size:11px">@'
+      + esc(r.instagram_handle || '') + '</span></td>'
+      + '<td>' + esc(r.itens || r.tipo || '') + '</td>'
+      + '<td class="num2">' + dt(r.solicitado) + '</td>'
+      + '<td>' + (dias == null ? '' : dias === 0 ? '<span class="chip ok">hoje</span>'
+          : '<span class="chip ' + (dias > 3 ? 'cr' : 'wa') + '">há ' + dias + 'd</span>') + '</td></tr>';
+  }).join('') || '<tr><td colspan="4" style="color:var(--fnt);padding:14px">nada aguardando despacho 🎉</td></tr>';
+}
+pintaPend();
 document.getElementById('reguaVerTodos').addEventListener('click', () => { reguaTodos = !reguaTodos; pintaRegua(); });
 document.getElementById('reguaMapa').addEventListener('click', () => {
   const b = document.getElementById('reguaMapaBox'); b.hidden = !b.hidden; });
@@ -2922,6 +2984,7 @@ const MODULOS = [
   // vw_campanha_resultado (>60s) e vivia estourando o teto — o modulo continua no codigo,
   // o hash #campanhas ainda abre pra quem souber, e volta ao menu quando a view tiver dono.
   ['mencoes',   'Extrações',      () => GAL.length || null],
+  ['envios',    'Envios',         () => REGUA.filter(r => r.status === 'solicitado').length || null],
   ['gestao',    'Gestão',         () => GES.filter(g => !g.cobrado_em).length || null],
 ];
 

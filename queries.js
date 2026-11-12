@@ -359,6 +359,23 @@ const painel = {
            pb.ultima::date          AS ultima_pub,
            gn.criado_em             AS cobrado_em,
            gn.autor                 AS cobrado_por,
+           -- ---- clusters de 11/11 (Gabriel): vendas + postagens mandam, nao o envio ----
+           -- dias_post: ha quantos dias foi a ultima postagem (qualquer epoca, nao so o mes).
+           -- dias_ref: o relogio do esfriamento — conta do evento mais RECENTE entre a
+           -- entrega do kit e a ultima postagem (GREATEST ignora NULL no Postgres).
+           to_char(pg.ultima_geral AT TIME ZONE 'America/Sao_Paulo','YYYY-MM-DD') AS ultima_pub_geral,
+           CASE WHEN pg.ultima_geral IS NOT NULL THEN
+             ((now() AT TIME ZONE 'America/Sao_Paulo')::date
+              - (pg.ultima_geral AT TIME ZONE 'America/Sao_Paulo')::date)::int END AS dias_post,
+           CASE WHEN pg.ultima_geral IS NOT NULL OR e.entregue_em IS NOT NULL THEN
+             ((now() AT TIME ZONE 'America/Sao_Paulo')::date
+              - greatest((pg.ultima_geral AT TIME ZONE 'America/Sao_Paulo')::date,
+                         (e.entregue_em  AT TIME ZONE 'America/Sao_Paulo')::date))::int END AS dias_ref,
+           CASE WHEN e.enviado_em IS NOT NULL THEN
+             ((now() AT TIME ZONE 'America/Sao_Paulo')::date
+              - (e.enviado_em AT TIME ZONE 'America/Sao_Paulo')::date)::int END AS dias_envio,
+           EXISTS (SELECT 1 FROM creator.envio ep
+                    WHERE ep.parceiro_id = p.parceiro_id AND ep.status = 'solicitado') AS despacho_pendente,
            -- ATIVO x INATIVO do ciclo (20/10): ativo e quem recebeu produto no ultimo mes.
            -- Sai do registro de envio, nao de tag escrita na mao — tag vira mentira no mes
            -- seguinte se alguem esquecer de atualizar; isto se corrige sozinho quando o
@@ -388,6 +405,9 @@ const painel = {
       SELECT n.criado_em, n.autor FROM creator.gestao_nota n
       WHERE n.parceiro_id = p.parceiro_id AND n.tipo = 'cobranca'
       ORDER BY n.criado_em DESC LIMIT 1) gn ON true
+    LEFT JOIN LATERAL (
+      SELECT max(pub2.publicado_em) AS ultima_geral
+      FROM creator.publicacao pub2 WHERE pub2.parceiro_id = p.parceiro_id) pg ON true
     -- so quem e da COMUNIDADE: cadastrou no formulario e foi aprovado, ou entrou por pedido
     -- explicito do Gabriel. A marca vive em parceiro.comunidade (18/09) — seeding legado,
     -- nutris e time Turbo ficam fora desta tela.
