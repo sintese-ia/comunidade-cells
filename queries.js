@@ -420,6 +420,9 @@ const painel = {
   // dia com o texto pronto. 'solicitado' tambem entra: e a amostra aguardando despacho.
   regua: `
     SELECT e.envio_id::int, e.parceiro_id::int, p.nome, p.instagram_handle, p.telefone_e164,
+           -- sem endereço o despacho trava (NF nasce sem destino — caso de 24/09); o painel avisa antes
+           (p.end_cep IS NOT NULL AND p.end_logradouro IS NOT NULL
+             AND p.end_cidade IS NOT NULL) AS tem_endereco,
            e.tipo, e.itens, e.status, e.rastreio,
            to_char(e.solicitado_em AT TIME ZONE 'America/Sao_Paulo','YYYY-MM-DD') AS solicitado,
            to_char(e.enviado_em  AT TIME ZONE 'America/Sao_Paulo','YYYY-MM-DD') AS enviado,

@@ -2893,7 +2893,8 @@ function pintaPend(){
   document.getElementById('pendCorpo').innerHTML = pend.map(r => {
     const dias = r.solicitado ? Math.max(0, Math.round((Date.now() - new Date(r.solicitado + 'T12:00:00-03:00')) / 86400000)) : null;
     return '<tr><td><b>' + esc(r.nome) + '</b><br><span style="color:var(--fnt);font-size:11px">@'
-      + esc(r.instagram_handle || '') + '</span></td>'
+      + esc(r.instagram_handle || '') + '</span>'
+      + (r.tem_endereco === false ? ' <span class="chip cr" title="não despacha sem endereço — peça pra preencher em Meus dados no portal">sem endereço</span>' : '') + '</td>'
       + '<td>' + esc(r.itens || r.tipo || '') + '</td>'
       + '<td class="num2">' + dt(r.solicitado) + '</td>'
       + '<td>' + (dias == null ? '' : dias === 0 ? '<span class="chip ok">hoje</span>'

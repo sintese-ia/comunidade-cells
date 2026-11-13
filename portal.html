@@ -348,7 +348,8 @@ const ABAS = [
 // não via a outra, e ficava sem PIX sem saber. O hash antigo continua funcionando porque
 // ele já circulou em link.
 const pendente = id =>
-  (id === 'perfil' && (!p.email || !p.pix_chave || !(p.cpf || p.cnpj))) ||
+  // endereço entra na régua do ponto (13/11): sem ele a amostra não tem pra onde ir
+  (id === 'perfil' && (!p.email || !p.pix_chave || !(p.cpf || p.cnpj) || !p.end_cep)) ||
   (id === 'acesso' && !p.tem_senha);
 
 function menu(){
@@ -395,7 +396,9 @@ function cardAceite(){
     <h2 id="acTt">Sua meta do mês.</h2>
     <p>Poste pelo menos <b>4 stories</b> e <b>1 reels</b> marcando a <b>@cellsoficial</b> para
        bater a sua meta de publicações no mês.</p>
-    <button id="btnFimOnb">Ir para o meu painel</button>
+    ${!p.end_cep ? `<div class="mini">Só falta o seu endereço — a amostra precisa dele pra ser
+       enviada. O botão abaixo já te leva pra preencher.</div>` : ''}
+    <button id="btnFimOnb">${!p.end_cep ? 'Preencher meu endereço' : 'Ir para o meu painel'}</button>
   </div></div>`;
   if (!p.pede_aceite || aceiteEm) return '';
   return `<div class="veu" role="dialog" aria-modal="true" aria-labelledby="acTt"><div class="aceite">
@@ -771,7 +774,9 @@ document.addEventListener('click', async ev => {
   if (ev.target.closest('#btnGrupoOnb')) { passoOnb = 'cupom'; setTimeout(desenhar, 50); return; }
   if (ev.target.closest('#pulaGrupo'))   { passoOnb = 'cupom'; return desenhar(); }
   if (ev.target.closest('#btnCupomOk'))  { passoOnb = 'meta';  return desenhar(); }
-  if (ev.target.closest('#btnFimOnb'))   { passoOnb = null;    return desenhar(); }
+  if (ev.target.closest('#btnFimOnb'))   { passoOnb = null;
+    if (!p.end_cep){ aba = 'perfil'; location.hash = 'perfil'; window.scrollTo(0,0); }
+    return desenhar(); }
   const sb = ev.target.closest('[data-sabor]');
   if (sb) { sabEscolhido = sb.dataset.sabor;
     document.querySelectorAll('[data-sabor]').forEach(b =>
