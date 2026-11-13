@@ -444,7 +444,7 @@ function cardComece(){
 function telaInicio(){
   const m = doMes(sel), ant = doMes(ymAntes(sel)), i = meses.indexOf(sel);
   return `
-${cardAceite()}${cardComece()}
+${cardComece()}
 <div class="per">
   <span class="k">Mês</span>
   <button id="ant" ${i >= meses.length-1 ? 'disabled' : ''} aria-label="mês anterior">‹</button>
@@ -717,6 +717,9 @@ function telaAcesso(){
       : 'Hoje você só entra pelo link pessoal que a Cells te manda. Com senha, você entra quando quiser, mesmo depois de o link expirar.'}</p></div>
   <div class="sb">
     <div class="aviso info">Você vai entrar com <b>${esc(entra)}</b> e a senha que criar aqui.
+      ${p.senha_provisoria && p.email ? `<br>Sua senha atual (provisória) é
+        <b style="font-family:var(--mono)">${esc(p.email.split('@')[0])}</b> — digite ela no
+        primeiro campo abaixo.` : ''}
       ${p.email ? '' : 'Preencha seu e-mail em <b>Meus dados</b> se quiser entrar pelo e-mail.'}</div>
     <div class="cps">
       ${p.tem_senha ? campo('sAtual','Senha atual', '', {attr:'type="password" autocomplete="current-password"', full:true}) : ''}
@@ -753,7 +756,9 @@ function desenhar(){
   if (p.senha_provisoria && aba !== 'acesso') aba = 'acesso';
   if (!TELAS[aba]) aba = 'inicio';
   document.getElementById('menu').innerHTML = menu();
-  document.getElementById('tela').innerHTML = TELAS[aba]();
+  // o pop-up do aceite cobre QUALQUER tela — inclusive a trava da senha provisória,
+  // senão quem entra travado em Acesso nunca vê o onboarding (bug do Adilson, 13/11)
+  document.getElementById('tela').innerHTML = TELAS[aba]() + cardAceite();
   if (aba === 'inicio'){
     const i = meses.indexOf(sel);
     document.getElementById('mes').onchange = e => { sel = e.target.value; desenhar(); };
