@@ -186,10 +186,26 @@
     background:none;border:0;cursor:pointer;text-decoration:underline;font-family:var(--sans)}
   .aceite .sablab{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
     color:var(--mut);margin:4px 0 10px}
-  .sabores{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:22px}
-  .sabores button{appearance:none;background:var(--bg);border:1.5px solid var(--line);border-radius:999px;
-    padding:14px 24px;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--sans);color:var(--ink)}
-  .sabores button[aria-pressed="true"]{border-color:var(--ac);background:var(--ac-s);color:var(--ac)}
+  .sabores{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:0 auto 22px;max-width:400px}
+  .sabores button{appearance:none;background:var(--bg);border:2px solid var(--line);border-radius:16px;
+    padding:14px 12px 16px;cursor:pointer;font-family:var(--sans);color:var(--ink);
+    display:grid;gap:10px;justify-items:center;width:auto;text-transform:none;letter-spacing:0}
+  .sabores button:hover{background:var(--bg);border-color:var(--mut)}
+  .sabores button img{width:100%;max-width:140px;aspect-ratio:1;object-fit:contain;border-radius:10px}
+  .sabores button .nm{font-size:14.5px;font-weight:700;line-height:1.25}
+  .sabores button .ck{width:22px;height:22px;border-radius:50%;border:2px solid var(--line);
+    display:grid;place-items:center;font-size:13px;line-height:1;color:transparent}
+  .sabores button[aria-pressed="true"]{border-color:var(--ac);background:var(--ac-s)}
+  .sabores button[aria-pressed="true"]:hover{border-color:var(--ac)}
+  .sabores button[aria-pressed="true"] .ck{background:var(--ac);border-color:var(--ac);color:#fff}
+  .aceite .cupBox{font-family:var(--mono);font-size:clamp(20px,4.5vw,26px);font-weight:600;
+    letter-spacing:.06em;border:2px dashed var(--ac);border-radius:14px;padding:16px 20px;
+    margin:0 auto 14px;max-width:340px;color:var(--ink)}
+  .aceite .mini{font-size:12.5px;color:var(--mut);margin:0 auto 20px;max-width:40ch;line-height:1.5}
+  .aceite a.btn{display:block;background:var(--ac);color:#fff;border-radius:999px;text-decoration:none;
+    padding:17px 34px;font-family:var(--mono);font-size:13px;letter-spacing:.09em;text-transform:uppercase;
+    font-weight:600}
+  .aceite a.btn:hover{background:#B8460F}
   .aceite .err{margin-top:10px;font-size:12.5px;color:var(--ng)}
   .passo{display:grid;grid-template-columns:26px 1fr;gap:10px;padding:10px 0;
     border-bottom:1px solid var(--line2);font-size:13.5px;line-height:1.5;align-items:start}
@@ -348,21 +364,50 @@ function menu(){
 // ---------------------------------------------------------------- Resultados
 // O OK do creator (fluxo B passo 5): só aparece pra quem está na comunidade e ainda não
 // confirmou. Depois do OK vira o "Comece aqui" do onboarding — a visão simples do programa.
-let aceiteDepois = false;   // "ver o painel primeiro": fecha nesta visita, volta na proxima
+// O onboarding é um fluxo de 4 passos (pedido do Gabriel, 13/11): sabor → grupo → cupom → meta.
+// O passo 1 (sabor) só existe pra quem o servidor mandou pede_aceite — primeira aprovação, nunca
+// repete. Os passos 2-4 são desta visita: se a pessoa fechar no meio, o grupo e o cupom já estão
+// no painel ("Comece aqui"), então nada se perde.
+let passoOnb = null;        // 'grupo' | 'cupom' | 'meta' — telas pós-aceite desta visita
 let sabEscolhido = null;    // sabor da amostra (escolha obrigatória quando a lista existe)
 function cardAceite(){
-  if (!p.pede_aceite || aceiteEm || aceiteDepois) return '';
+  if (passoOnb === 'grupo') return `<div class="veu" role="dialog" aria-modal="true" aria-labelledby="acTt"><div class="aceite">
+    <div class="tag">Comunidade Cells · 2 de 4</div>
+    <h2 id="acTt">Amostra solicitada.</h2>
+    <p>Sua caixa de 15 sachês${sabEscolhido ? ' no sabor <b>'+esc(sabEscolhido)+'</b>' : ''} entrou
+       na fila de envio. Agora entra no grupo — é lá que a comunidade acontece.</p>
+    ${grupoLink ? `<a class="btn" id="btnGrupoOnb" href="${esc(grupoLink)}" target="_blank" rel="noopener">Entrar no grupo do WhatsApp</a>` :
+      `<p>O link do grupo aparece no seu painel em instantes.</p>`}
+    <button class="dps" id="pulaGrupo">${grupoLink ? 'já estou no grupo — continuar' : 'continuar'}</button>
+  </div></div>`;
+  if (passoOnb === 'cupom') return `<div class="veu" role="dialog" aria-modal="true" aria-labelledby="acTt"><div class="aceite">
+    <div class="tag">Comunidade Cells · 3 de 4</div>
+    <h2 id="acTt">Seu cupom.</h2>
+    <p>Atinja <b>R$ 350 em compras no seu cupom</b> para ter comissão de <b>15%</b> nas
+       suas vendas!</p>
+    <div class="cupBox">${esc(p.cupom || 'chega em instantes')}</div>
+    <div class="mini">Caso queira solicitar troca do código, envie um e-mail para
+      <b>contato@cells.com.br</b>.</div>
+    <button id="btnCupomOk">Continuar</button>
+  </div></div>`;
+  if (passoOnb === 'meta') return `<div class="veu" role="dialog" aria-modal="true" aria-labelledby="acTt"><div class="aceite">
+    <div class="tag">Comunidade Cells · 4 de 4</div>
+    <h2 id="acTt">Sua meta do mês.</h2>
+    <p>Poste pelo menos <b>4 stories</b> e <b>1 reels</b> marcando a <b>@cellsoficial</b> para
+       bater a sua meta de publicações no mês.</p>
+    <button id="btnFimOnb">Ir para o meu painel</button>
+  </div></div>`;
+  if (!p.pede_aceite || aceiteEm) return '';
   return `<div class="veu" role="dialog" aria-modal="true" aria-labelledby="acTt"><div class="aceite">
-    <div class="tag">Comunidade Cells</div>
+    <div class="tag">Comunidade Cells · 1 de 4</div>
     <h2 id="acTt">Você foi aprovado.</h2>
-    <p>Falta um passo: confirmar que você topa participar. Com o seu OK, a sua caixa de
-       15 sachês entra na fila de envio e o link da comunidade do WhatsApp aparece pra você.</p>
-    ${(P.sabores||[]).length ? `<div class="sablab">Escolha o sabor da sua amostra</div>
-    <div class="sabores">${P.sabores.map(x => `<button type="button" data-sabor="${esc(x.sabor)}"
-      aria-pressed="${sabEscolhido===x.sabor}">${esc(x.sabor)}</button>`).join('')}</div>` : ''}
-    <button id="btnAceite">OK, quero participar</button>
+    <p>Escolha o sabor da sua amostra — uma caixa de 15 sachês que entra na fila de envio
+       com o seu pedido.</p>
+    ${(P.sabores||[]).length ? `<div class="sabores">${P.sabores.map(x => `<button type="button" data-sabor="${esc(x.sabor)}"
+      aria-pressed="${sabEscolhido===x.sabor}">${x.foto ? '<img src="'+esc(x.foto)+'" alt="Cells sabor '+esc(x.sabor)+'" loading="lazy">' : ''}
+      <span class="nm">${esc(x.sabor)}</span><span class="ck">✓</span></button>`).join('')}</div>` : ''}
+    <button id="btnAceite">Solicitar amostra</button>
     <div class="err" id="aceiteErr"></div>
-    <button class="dps" id="aceiteDepois">ver meu painel primeiro</button>
   </div></div>`;
 }
 function cardComece(){
@@ -721,7 +766,12 @@ document.addEventListener('click', async ev => {
   const a = ev.target.closest('[data-aba]');
   if (a){ ev.preventDefault(); aba = a.dataset.aba; location.hash = aba;
           window.scrollTo(0,0); return desenhar(); }
-  if (ev.target.closest('#aceiteDepois')) { aceiteDepois = true; return desenhar(); }
+  // passos 2-4 do onboarding: o clique no link do grupo abre o WhatsApp em outra aba
+  // E avança o pop-up (sem preventDefault de propósito)
+  if (ev.target.closest('#btnGrupoOnb')) { passoOnb = 'cupom'; setTimeout(desenhar, 50); return; }
+  if (ev.target.closest('#pulaGrupo'))   { passoOnb = 'cupom'; return desenhar(); }
+  if (ev.target.closest('#btnCupomOk'))  { passoOnb = 'meta';  return desenhar(); }
+  if (ev.target.closest('#btnFimOnb'))   { passoOnb = null;    return desenhar(); }
   const sb = ev.target.closest('[data-sabor]');
   if (sb) { sabEscolhido = sb.dataset.sabor;
     document.querySelectorAll('[data-sabor]').forEach(b =>
@@ -729,20 +779,21 @@ document.addEventListener('click', async ev => {
     return; }
   const ok = ev.target.closest('#btnAceite');
   if (ok){
-    ok.disabled = true; ok.textContent = 'registrando…';
+    ok.disabled = true; ok.textContent = 'solicitando…';
     try {
       if ((P.sabores||[]).length && !sabEscolhido){
         document.getElementById('aceiteErr').textContent = 'escolhe o sabor da sua amostra ali em cima';
-        ok.disabled = false; ok.textContent = 'OK, quero participar'; return;
+        ok.disabled = false; ok.textContent = 'Solicitar amostra'; return;
       }
       const r = await fetch('/creator/aceite', {method:'POST',
         headers:{'content-type':'application/json'},
         body: JSON.stringify({ sabor: sabEscolhido })});
       const j = await r.json().catch(() => ({}));
-      if (r.ok && j.ok){ aceiteEm = P.hoje; grupoLink = j.grupo || grupoLink; return desenhar(); }
+      if (r.ok && j.ok){ aceiteEm = P.hoje; grupoLink = j.grupo || grupoLink;
+        passoOnb = 'grupo'; return desenhar(); }
       document.getElementById('aceiteErr').textContent = j.erro || 'não deu certo — tenta de novo';
     } catch(e){ document.getElementById('aceiteErr').textContent = 'sem conexão — tenta de novo'; }
-    ok.disabled = false; ok.textContent = 'OK, quero participar';
+    ok.disabled = false; ok.textContent = 'Solicitar amostra';
     return;
   }
   const b = ev.target.closest('.cp'); if (!b) return;
