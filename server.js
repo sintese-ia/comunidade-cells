@@ -484,7 +484,7 @@ async function eventoCodigo({ email, nome, codigo, minutos, sexo }) {
 }
 
 async function eventoAprovacao({ email, nome, cupom, link, desconto, comissao,
-                                comissao_assinatura, nivel, sexo }) {
+                                comissao_assinatura, nivel, sexo, senha_provisoria }) {
   if (!KLAVIYO) throw new Error('KLAVIYO_KEY não configurada');
   if (!email) throw new Error('esta pessoa não tem e-mail no cadastro');
   // A saudação é decidida AQUI, não no template: o Klaviyo não tem como consultar o `sexo`
@@ -499,6 +499,11 @@ async function eventoAprovacao({ email, nome, cupom, link, desconto, comissao,
                       comissao_assinatura_pct: comissao_assinatura ?? null,
                       nivel: nivel || null,
                       comunidade_whatsapp: COMUNIDADE_WPP,
+                      // O acesso: com o que ela entra e a senha provisória. Vai NULO para
+                      // quem já tinha senha (reaprovação, reenvio) — o template esconde o
+                      // bloco e não promete uma senha que não vale mais.
+                      entrar_com: email,
+                      senha_provisoria: senha_provisoria || null,
                       nome_creator: G.primeiroNome(nome) || null,
                       saudacao: G.saudacaoDe(nome, sexo) },
         metric: { data: { type: 'metric', attributes: { name: METRICA_APROVACAO } } },
@@ -510,7 +515,11 @@ async function eventoAprovacao({ email, nome, cupom, link, desconto, comissao,
   const r = await postJSON('https://a.klaviyo.com/api/events/',
     { Authorization: 'Klaviyo-API-Key ' + KLAVIYO, revision: '2024-10-15' }, corpo);
   if (r.status !== 202) throw new Error('Klaviyo HTTP ' + r.status + ' ' + String(r.txt).slice(0, 200));
-  return corpo.data.attributes.properties;
+  // devolve SEM a senha: este objeto vira `email_log.payload`, e senha dentro do log é senha
+  // guardada em texto — o oposto do que `senha_hash` existe para fazer. Mesma regra do código
+  // de acesso logo acima. No rastro fica o FATO de ter ido uma provisória, não o valor.
+  const { senha_provisoria: _senha, ...semSenha } = corpo.data.attributes.properties;
+  return { ...semSenha, senha_provisoria_enviada: !!senha_provisoria };
 }
 
 // ---------------------------------------------------------------- o link do creator
@@ -2456,6 +2465,20 @@ http.createServer(async (req, res) => {
           [id, codigo, desconto, comissao, !!d.combinavel, shopifyId, shopifyErro,
            redirectId, redirectPath])).rows[0];
 
+        // ---- a CONTA nasce aqui (Gabriel, 19/11) ----
+        // Aprovar criava cupom, link e e-mail e NAO criava acesso: `senha_hash` ficava nulo.
+        // O e-mail manda "entre em comunidade.cells.com.br e atualize sua senha", a tela de
+        // login diz que senha se define DENTRO do painel, e a porta do codigo por e-mail
+        // nasce desligada (LOGIN_CODIGO). Resultado: porta trancada nas tres entradas, e nos
+        // 170 de 13/11 quem criou as senhas foi um script por fora do app.
+        //
+        // A provisoria e a parte do e-mail antes do @ — nao e escolha nova, e a convencao que
+        // `portal.html` ja imprime na tela Acesso e que ja forca a troca no primeiro login.
+        // ⚠️ Previsivel de proposito (a pessoa precisa adivinhar sozinha se perder o e-mail),
+        // e por isso vale ENQUANTO for provisoria: o portal manda trocar antes de liberar o
+        // resto. Trocar por senha aleatoria exige mexer em portal.html no mesmo commit.
+        const senhaProv = pa.senha_hash ? null : (emailNovo.split('@')[0] || null);
+
         etapa = 'atualizando o cadastro';
         const novo = (await cli.query(`
           UPDATE creator.parceiro SET status='ativo', utm_slug=$2, aprovado_em=now(),
@@ -2465,9 +2488,23 @@ http.createServer(async (req, res) => {
                  -- depois de alguem ter digitado — e sem e-mail na ficha ela nao consegue
                  -- entrar pelo codigo. Agora fica.
                  email=$4,
+                 -- coalesce, nao atribuicao: reaprovar alguem NAO pode derrubar a senha que a
+                 -- pessoa ja criou. O lado direito le o valor ANTIGO da linha, entao as tres
+                 -- colunas decidem juntas e so mexem em quem chega sem senha.
+                 senha_hash = coalesce(senha_hash, $5),
+                 senha_em = CASE WHEN senha_hash IS NULL AND $5 IS NOT NULL
+                                 THEN now() ELSE senha_em END,
+                 senha_provisoria = CASE WHEN senha_hash IS NULL AND $5 IS NOT NULL
+                                         THEN true ELSE coalesce(senha_provisoria, false) END,
+                 -- comunidade nunca foi escrito por nenhuma linha deste app: era sempre
+                 -- script. E e ele que libera o pop-up do aceite (pede_aceite) e o UPDATE que
+                 -- enfileira a amostra no aceite. Sem isso a pessoa entra e os passos 02 e 04
+                 -- do mesmo e-mail que ela acabou de receber nao existem na tela dela.
+                 comunidade = true,
                  reprovado_em=NULL, reprovado_motivo=NULL, atualizado_em=now()
            WHERE parceiro_id=$1 RETURNING *`,
-          [id, slug, ((quem && quem !== 'equipe') ? quem : (d.por || 'painel')).slice(0, 60), emailNovo])).rows[0];
+          [id, slug, ((quem && quem !== 'equipe') ? quem : (d.por || 'painel')).slice(0, 60),
+           emailNovo, senhaProv ? hashSenha(senhaProv) : null])).rows[0];
 
         // registra no legado também, para o inventário não ficar desatualizado no dia seguinte
         await cli.query(`
@@ -2492,7 +2529,10 @@ http.createServer(async (req, res) => {
                                                   desconto,
                                                   comissao: comissaoEfetiva,
                                                   comissao_assinatura: comissaoAssinat,
-                                                  nivel: regra.nivel, sexo: pa.sexo });
+                                                  nivel: regra.nivel, sexo: pa.sexo,
+                                                  // só vai se a conta nasceu AGORA; quem já
+                                                  // tinha senha recebe o e-mail sem o bloco
+                                                  senha_provisoria: senhaProv });
             envio = { estado: 'evento_enviado', detalhe: null };
             await pool.query(`
               INSERT INTO creator.email_log (parceiro_id,para,assunto,tipo,estado,payload)

@@ -241,7 +241,7 @@ const p = P.parceiro, vida = P.vendas||{}, ex = P.extrato||[], pubs = P.publicac
       cl = P.cliques||{}, nv = P.nivel||null, faixas = P.faixas||[], camps = P.campanhas||[],
       cupons = P.cupons||[];
 
-const MEDALHA = {ouro:'🥇', prata:'🥈', bronze:'🥉'};
+// MEDALHA (🥉🥈🥇) saiu em 21/11: o programa virou comissão única de 15%, sem tier.
 const MES = ['janeiro','fevereiro','março','abril','maio','junho',
              'julho','agosto','setembro','outubro','novembro','dezembro'];
 
@@ -501,7 +501,7 @@ ${m.receita || m.cliquesTot ? `<section>
   <div class="sh"><h2>Seus pedidos em ${rotulo(sel)}</h2>
     <span class="ct">${m.valem.length} ${m.valem.length===1?'pedido':'pedidos'}${
       m.cancelados ? ' · '+m.cancelados+' fora' : ''}</span>
-    <p>Cada compra feita com o seu cupom, com a comissão na taxa do seu nível de hoje.</p></div>
+    <p>Cada compra feita com o seu cupom, com a sua comissão de 15%.</p></div>
   <div class="sb">${m.pedidos.length ? m.pedidos.map(e => {
     const fora = e.valida === false;
     return `<div class="lin"${fora?' style="opacity:.55"':''}><span class="d">${dtc(e.dia)}</span>
@@ -697,8 +697,8 @@ function telaPerfil(){
       <div class="aviso info" style="margin-bottom:10px">O desenho do pagamento — janela para
         pedir e data para receber — ainda está sendo fechado pela Cells. Assim que estiver,
         aparece aqui com as datas.</div>
-      <p class="nota">A comissão que você vê em <b>Resultados</b> é calculada na taxa do seu
-        nível de hoje. Ela é a sua referência do mês, não um saldo já liberado.</p>
+      <p class="nota">A comissão que você vê em <b>Resultados</b> é calculada com a sua
+        comissão de 15%. Ela é a sua referência do mês, não um saldo já liberado.</p>
     </div>
   </div>
 </section>`;
