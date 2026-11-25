@@ -282,6 +282,20 @@
   #mplayer{background:#0C0F10;display:grid;place-items:center;min-height:240px}
   #mplayer video,#mplayer img{max-width:100%;max-height:min(64vh,600px);display:block}
   #mplayer .aviso{color:#E8ECEB;font-size:13px;padding:34px 22px;text-align:center;line-height:1.7;max-width:44ch}
+
+  /* ---------------- gestão do funil ---------------- */
+  .fun{display:flex;flex-direction:column;gap:15px;padding:16px 16px 18px}
+  .fun .cab{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
+  .fun .num{font-family:var(--mono);font-size:10px;color:var(--fnt);width:18px;flex:none}
+  .fun .rot{font-size:13px;font-weight:600}
+  .fun .qt{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:17px;font-weight:560;
+           margin-left:auto}
+  .fun .pct{font-family:var(--mono);font-size:10.5px;color:var(--fnt);font-variant-numeric:tabular-nums}
+  .fun .bar{height:15px;background:var(--sub);border:1px solid var(--line2);border-radius:2px;
+            overflow:hidden;margin:5px 0 0 27px}
+  .fun .bar i{display:block;height:100%;background:var(--ac)}
+  .fun .sub{font-size:11px;color:var(--fnt);margin:4px 0 0 27px}
+  .fun .fchips{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:8px 0 0 27px}
 </style>
 </head>
 <body>
@@ -586,6 +600,29 @@
         nesse relógio. <b>Kit a caminho</b> = despachado e ainda não entregue. <b>Sem kit</b> =
         nada despachado ainda (os solicitados estão na aba Envios). Publicação entra sozinha
         pela marcação da @cellsoficial.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- gestão do funil (Gabriel, 25/11): quantas PESSOAS já passaram por cada etapa.
+       Só leitura — nenhum botão dispara nada daqui. Visão de admin: este arquivo inteiro
+       só é servido depois do login de admin. -->
+  <section class="mod" data-mod="funil">
+    <div class="topo">
+      <div><h1>Gestão do funil</h1>
+        <p class="lede">Quantas pessoas já passaram por cada etapa do programa, do cadastro à publicação.
+        Cada número conta <b>pessoas</b>, não envios — quem tem dois envios conta uma vez.</p></div>
+      <div class="stamp" id="stampFun"></div>
+    </div>
+
+    <div class="panel">
+      <div id="funCorpo"></div>
+      <div class="empty"><span class="tg">como ler</span>
+        <p>A barra compara cada etapa com o total de cadastros; o percentual à direita compara com a
+        <b>etapa anterior</b>. O funil mostra quem <b>já passou</b> por cada ponto, não uma sequência
+        travada — membro antigo pode ter recebido amostra antes do e-mail de acesso existir, por isso
+        uma etapa pode destoar da vizinha. A quebra da última etapa usa o mesmo relógio da tela
+        Gestão: <b>ativo</b> postou há até 7 dias, <b>esfriando</b> entre 8 e 21, <b>inativo</b> acima disso.</p>
       </div>
     </div>
   </section>
@@ -2977,6 +3014,52 @@ document.getElementById('gesForm').addEventListener('submit', async e => {
 });
 pintaGestao();
 
+/* ---------------- gestão do funil (Gabriel, 25/11) ---------------- */
+// Etapas 1-7 vem prontas do servidor (query `funil`); a quebra da etapa 8 nasce AQUI, do
+// mesmo GES da tela Gestao, com o mesmo relogio (7/21 dias) — um numero so pode ter uma
+// definicao, senao Funil e Gestao discordam e ninguem confia em nenhum dos dois.
+const FUN = (D.funil||[])[0] || null;
+function pintaFunil(){
+  const box = document.getElementById('funCorpo');
+  if (!FUN){ box.innerHTML =
+    '<p style="color:var(--fnt);padding:16px">a query do funil falhou nesta carga — recarregue a página.</p>'; return; }
+  const q8 = { ativo:0, esfriando:0, inativo:0 };
+  GES.forEach(g => { if (g.dias_post != null)
+    q8[g.dias_post <= 7 ? 'ativo' : g.dias_post <= 21 ? 'esfriando' : 'inativo']++; });
+  const ET = [
+    ['cadastros no programa',      FUN.cadastros,          'todo mundo que preencheu o formulário (sem os arquivados) · ' + n(FUN.pendentes) + ' ainda aguardando decisão'],
+    ['aprovados no programa',      FUN.aprovados,          'comunidade com status ativo — a mesma população da tela Gestão'],
+    ['e-mail de cadastro enviado', FUN.email_enviado,      'recebeu o e-mail de aprovação, com cupom e acesso ao portal'],
+    ['amostras solicitadas',       FUN.amostra_solicitada, 'tem envio registrado — o OK no portal (escolha do sabor) cria o pedido'],
+    ['envio realizado',            FUN.envio_realizado,    'amostra despachada: data de envio preenchida'],
+    ['código de rastreio chegou',  FUN.com_rastreio,       'envio com código de rastreio gravado'],
+    ['amostra chegou',             FUN.entregue,           'entrega confirmada'],
+    ['publicação realizada',       FUN.publicou,           'pelo menos uma publicação marcando a @cellsoficial'],
+  ];
+  const max = Math.max(+FUN.cadastros || 1, 1);
+  box.innerHTML = '<div class="fun">' + ET.map(([rot, v, sub], i) => {
+    const ant = i ? +ET[i-1][1] : null;
+    const pct = ant ? Math.round(+v / Math.max(ant, 1) * 100) : null;
+    const extra = i === 7
+      ? '<div class="fchips"><span class="chip ac">ativo <b>' + q8.ativo + '</b></span>'
+        + '<span class="chip wa">esfriando <b>' + q8.esfriando + '</b></span>'
+        + '<span class="chip cr">inativo <b>' + q8.inativo + '</b></span></div>'
+      : '';
+    return '<div class="et">'
+      + '<div class="cab"><span class="num">' + String(i+1).padStart(2,'0') + '</span>'
+      + '<span class="rot">' + rot + '</span>'
+      + '<span class="qt">' + n(v) + '</span>'
+      + (pct != null ? '<span class="pct">' + pct + '% da anterior</span>' : '')
+      + '</div>'
+      + '<div class="bar"><i style="width:' + Math.max(+v / max * 100, 0.8) + '%"></i></div>'
+      + '<div class="sub">' + sub + '</div>' + extra
+      + '</div>';
+  }).join('') + '</div>';
+  document.getElementById('stampFun').textContent = FUN.aprovados
+    ? Math.round(+FUN.publicou / +FUN.aprovados * 100) + '% dos aprovados já publicaram' : '';
+}
+pintaFunil();
+
 const MODULOS = [
   ['busca',     'Buscar creator', () => null],
   ['cadastros', 'Criadores',      () => CAD.filter(f => !f.arquivado && f.status==='pendente').length || null],
@@ -2987,6 +3070,7 @@ const MODULOS = [
   ['mencoes',   'Extrações',      () => GAL.length || null],
   ['envios',    'Envios',         () => REGUA.filter(r => r.status === 'solicitado').length || null],
   ['gestao',    'Gestão',         () => GES.filter(g => !g.cobrado_em).length || null],
+  ['funil',     'Gestão do funil',() => null],
 ];
 
 document.getElementById('navLista').innerHTML = MODULOS.map(([k,rot,cont],i) => {

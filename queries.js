@@ -465,6 +465,43 @@ const painel = {
     SELECT n.nota_id::int, n.parceiro_id::int, n.autor, n.tipo, n.texto, n.criado_em
     FROM creator.gestao_nota n ORDER BY n.criado_em DESC LIMIT 500
   `,
+
+  // ---- FUNIL DO PROGRAMA (Gabriel, 25/11): quantas PESSOAS ja passaram por cada etapa ----
+  // Cada numero conta parceiro DISTINTO, nunca envio: a pergunta e "quantos creators chegaram
+  // ate aqui", e quem tem dois envios nao pode contar duas vezes. A etapa 1 e todo mundo que
+  // se cadastrou (pendente, ativo e reprovado, sem os arquivados); da 2 em diante a populacao
+  // e a mesma da tela Gestao — comunidade + ativo — para os numeros das duas telas baterem.
+  // Envio cancelado nao conta em etapa nenhuma. A ultima etapa (publicou) quebra em
+  // ativo/esfriando/inativo NA TELA, reusando o relogio da Gestao (7/21 dias), nao aqui.
+  funil: `
+    WITH com AS (
+      SELECT p.parceiro_id FROM creator.parceiro p
+       WHERE p.comunidade AND p.status = 'ativo' AND NOT coalesce(p.arquivado, false)
+    )
+    SELECT
+      (SELECT count(*) FROM creator.parceiro
+        WHERE NOT coalesce(arquivado, false))::int                       AS cadastros,
+      (SELECT count(*) FROM creator.parceiro
+        WHERE NOT coalesce(arquivado, false) AND status='pendente')::int AS pendentes,
+      (SELECT count(*) FROM com)::int                                    AS aprovados,
+      (SELECT count(*) FROM com c WHERE EXISTS (SELECT 1 FROM creator.email_log el
+          WHERE el.parceiro_id = c.parceiro_id AND el.tipo = 'aprovacao'
+            AND el.estado = 'evento_enviado'))::int                      AS email_enviado,
+      (SELECT count(*) FROM com c WHERE EXISTS (SELECT 1 FROM creator.envio e
+          WHERE e.parceiro_id = c.parceiro_id
+            AND e.status <> 'cancelado'))::int                           AS amostra_solicitada,
+      (SELECT count(*) FROM com c WHERE EXISTS (SELECT 1 FROM creator.envio e
+          WHERE e.parceiro_id = c.parceiro_id AND e.status <> 'cancelado'
+            AND e.enviado_em IS NOT NULL))::int                          AS envio_realizado,
+      (SELECT count(*) FROM com c WHERE EXISTS (SELECT 1 FROM creator.envio e
+          WHERE e.parceiro_id = c.parceiro_id AND e.status <> 'cancelado'
+            AND e.rastreio IS NOT NULL))::int                            AS com_rastreio,
+      (SELECT count(*) FROM com c WHERE EXISTS (SELECT 1 FROM creator.envio e
+          WHERE e.parceiro_id = c.parceiro_id AND e.status <> 'cancelado'
+            AND e.entregue_em IS NOT NULL))::int                         AS entregue,
+      (SELECT count(*) FROM com c WHERE EXISTS (SELECT 1 FROM creator.publicacao pu
+          WHERE pu.parceiro_id = c.parceiro_id))::int                    AS publicou
+  `,
 };
 
 // ------------------------------------------------------------------ ANÁLISE
